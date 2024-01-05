@@ -38,22 +38,21 @@ int main(int argc, const char **argv) {
     char reg = '0';
 
     int c;
-    _Bool exit = 0;
     while (1) {
         int c = fgetc(source_file);
-        if (c == '\n') {
-            reg = '0';
-            continue;
-        }
-        if (c != ' ' && c != ',' && c != EOF) {
+        int is_newline = c == '\n';
+        if (c != ' ' && c != ',' && !is_newline && c != EOF) {
             token[token_buf_idx++] = c;
             continue;
         }
-        if (token_buf_idx == 0)
+        if (token_buf_idx == 0) {
+            if (c == EOF)
+                break;
             continue;
+        }
 
         token[token_buf_idx++] = '\0';
-        // printf("[%s]", token);
+        printf("[%s]\n", token);
         switch (next_token) {
         case None:
             if (token[0] >= '0' && token[0] <= '9') {
@@ -85,12 +84,14 @@ int main(int argc, const char **argv) {
         if (c == EOF)
             break;
         token_buf_idx = 0;
+        if (is_newline)
+            reg = '0';
     }
     char *object_path = malloc(source_path_len);
     strcpy(object_path, source_path);
     object_path[source_path_len - 2] = 's';
     object_path[source_path_len - 1] = '\0';
-    buffer_write_to_file(object_path);
+    buffer_write_to_file("a.s");
     fclose(source_file);
     free(buffer);
     free(token);
