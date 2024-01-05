@@ -11,7 +11,7 @@ const char *ins_add = "add w";
 const char *ins_ret = "ret";
 
 enum TokenType {
-    None, Fn, Number
+    None, Fn
 };
 
 int main(int argc, const char **argv) {
@@ -65,6 +65,8 @@ int main(int argc, const char **argv) {
                 buffer_write(ins_add);
                 buffer_putc(reg);
                 buffer_write(", w0, w1\n");
+            } else if (strcmp(token, "->") == 0) {
+                reg = '0';
             } else if (strcmp(token, "fn") == 0) {
                 next_token = Fn;
             } else if (strcmp(token, "ret") == 0) {
@@ -77,8 +79,6 @@ int main(int argc, const char **argv) {
             buffer_write(token);
             buffer_putc('\n');
             next_token = None;
-            break;
-        case Number:
             break;
         }
         if (c == EOF)
