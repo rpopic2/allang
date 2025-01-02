@@ -1,0 +1,10 @@
+[x] variable names
+[ ] ldr
+
+subroutine && calls
+structs
+arrays
+generics
+
+io
+

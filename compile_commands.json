@@ -1,0 +1,7 @@
+[
+    {
+        "directory": "/Users/rpopic2/allang",
+        "file": "*.c",
+        "command": "/usr/bin/clang -Wall -std=c11 -I /opt/homebrew/include -I."
+    }
+]

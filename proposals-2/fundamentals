@@ -1,0 +1,21 @@
+allows first-class inline assembly.
+
+_main:
+    # mov x0, #0
+    ret
+
+
+easily write multi isa code
+
+_main:
+# x64       mov eax, #0
+#           ret ; test for multi-line asm
+# aarch64   mov w0, #0
+# arm       mov r0, #0
+    ret
+
+has defer keyword. will happen exiting scope
+_main:
+    # sub sp, sp, #0x10
+    defer # add sp, sp, #0x10
+    ret

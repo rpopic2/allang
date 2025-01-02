@@ -34,3 +34,48 @@ fn inc:
     =>[i]
     ret
 
+fn main:
+    a, b -> scan(i32, i32)
+    [a], [b]; + => [sum]
+    "%d", [sum] -> fmt -> print
+    0 <-
+
+fn print:
+    :: str (char span)
+    1, [str.ptr], [str.size], 4~>$16
+    syscall
+    ret
+
+
+    [i]
+
+    8 (i32) ::= size
+    :: p (8 bytes)
+
+struct span:
+    span
+
+literal         mov
+ascii names     alias to memory address
+=>              store to memory address operator
+->              jump
+~>              w
+::>             move operator
+:>              t
+|>
+$>              move to named register
+_               preserve register
+
+@>
+!>
+#>
+%>
+&>
+*>
++>
+
+[]              dereference memory address operator
++               add operator
+-               sub operator
+
+

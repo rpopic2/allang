@@ -4,7 +4,6 @@ fn main:
     a, b, sum -> f "sum of % and % is %\n" -> print
     0 -> ret
 
-
 //EOF
 in c:
 
