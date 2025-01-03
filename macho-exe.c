@@ -50,7 +50,7 @@ int main(void) {
 // # lc segload text
     struct segment_command_64 segload;
     segload.cmd = LC_SEGMENT_64;
-    segload.cmdsize = sizeof segload + sizeof (struct section_64);
+    segload.cmdsize = sizeof segload;// + sizeof (struct section_64);
     LC_REG(segload);
 
 #define STR(dst, src) \
@@ -61,13 +61,12 @@ int main(void) {
     memcpy(segload.segname, GPNAME, sizeof segload.segname);
     segload.vmaddr = segload_pz.vmsize;
 
-    segload.vmsize = textsect_size;
-
-    segload.filesize = textsect_size;
-    segload.maxprot = 0x5;
+    segload.vmsize = 0xb8;
+    segload.filesize = 0xb8;
+    segload.maxprot = 0x7;
     segload.initprot = 0x5;
 
-    segload.nsects = 0x1;
+    segload.nsects = 0x0;
     segload.flags = 0x0;
 
     // ## sect
@@ -92,7 +91,7 @@ int main(void) {
 
     ver.cmd = LC_BUILD_VERSION;
     ver.cmdsize = sizeof ver;
-    LC_REG(ver);
+    // LC_REG(ver);
 
     ver.platform = PLATFORM_MACOS;
     ver.minos = 0x000e0000;
@@ -103,7 +102,7 @@ int main(void) {
     struct symtab_command symtab;
     symtab.cmd = LC_SYMTAB;
     symtab.cmdsize = sizeof symtab;
-    LC_REG(symtab);
+    // LC_REG(symtab);
     symtab.nsyms = 0x2;
     symtab.strsize = 0x10;
 
@@ -112,7 +111,7 @@ int main(void) {
     memset(&dysymtab, 0, sizeof dysymtab);
     dysymtab.cmd = LC_DYSYMTAB;
     dysymtab.cmdsize = sizeof dysymtab;
-    LC_REG(dysymtab);
+    // LC_REG(dysymtab);
 
     dysymtab.ilocalsym = 0x0;
     dysymtab.nlocalsym = 0x1;
@@ -127,11 +126,11 @@ int main(void) {
     lddyld.cmd = LC_LOAD_DYLINKER;
     lddyld.cmdsize = sizeof lddyld;
     lddyld.name.offset = 0x0c;
-    LC_REG(lddyld);
+    // LC_REG(lddyld);
 
     // ## dyld path
     const char dyldpath[0x14] = "/usr/lib/dyld";
-    load_cmds_size += sizeof dyldpath;
+    // load_cmds_size += sizeof dyldpath;
 
 // # header
     struct mach_header_64 header;
@@ -144,17 +143,21 @@ int main(void) {
 
     header.ncmds = load_cmds_num;
     header.sizeofcmds = load_cmds_size; //0x118?
-    header.flags = 0x0;
+    header.flags = 0x200085;
     header.reserved = 0x0;
 
-    sect.offset = segload.fileoff = sizeof header + header.sizeofcmds;
+    sizeof (struct dylib_command)
+
+    sect.offset = sizeof header + header.sizeofcmds;
     symtab.symoff = sect.offset + textsect_size;
     symtab.stroff = symtab.symoff + sizeof symbols;
     total_size += load_cmds_size;
 
 // buffer
 
+    total_size = 0x4100;
     void *buf = malloc(total_size);
+    // void *buf = malloc(0x4000);
     void *buf_base = buf;
 
 #define ADD(value)\
@@ -164,15 +167,15 @@ int main(void) {
     ADD(header)
     ADD(segload_pz)
     ADD(segload)
-    ADD(sect)
-    ADD(ver)
-    ADD(symtab)
-    ADD(dysymtab)
-    ADD(lddyld)
-    ADD(dyldpath)
+    // ADD(sect)
+    // ADD(ver)
+    // ADD(symtab)
+    // ADD(dysymtab)
+    // ADD(lddyld)
+    // ADD(dyldpath)
     ADD(opc)
-    ADD(symbols)
-    ADD(strtab)
+    // ADD(symbols)
+    // ADD(strtab)
 
     FILE *file = fopen("machoexe.out", "w");
     fwrite(buf_base, sizeof (char), total_size, file);

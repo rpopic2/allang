@@ -1,26 +1,136 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <mach-o/loader.h>
 
+#include "symbols.c"
+#define OPC_RET 0xd65f03c0
+
+#define compile_err(s) printf(s); \
+    exit(1);\
+
 int main(void) {
     size_t total_size = 0;
     uint64_t textsect_size = 0;
 
+// #parser
+    FILE *src = fopen("src.al", "r");
+    if (src == NULL) {
+        return 1;
+    }
+    fseek(src, 0L, SEEK_END);
+    size_t filelen = ftell(src);
+    fseek(src, 0L, SEEK_SET);
+
+    char *srcbuf = malloc(filelen);
+    if (srcbuf == NULL) {
+        return 2;
+    }
+    fread(srcbuf, sizeof (char), filelen, src);
+    fclose(src);
+
+    struct list_uint32_t opc;
+    list_new_uint32_t(&opc);
+
+    symbols_new(&symbols);
+    int cur_pc = 0;
+    int reg = 0;
+
+    printf(":: sym parse start\n");
+    for (size_t i = 0; i < filelen - 1; ++i) {
+        char c = srcbuf[i];
+        // printf("%zd ", i);
+        bool isLetter = c >= 'A' && c <= 'z';
+        if (isLetter) {
+            size_t tok_start = i;
+            while ((c = srcbuf[i])) {
+                if (c == ' ' || c == '\n') {
+                    size_t count = i - tok_start + 1;
+                    char tmp[count];
+                    strlcpy(tmp, srcbuf + tok_start, count);
+                    printf("(%s)", tmp);
+                    if (strcmp(tmp, "ret") == 0) {
+                        list_add_uint32_t(&opc, OPC_RET);
+                    }
+                    break;
+                } else if (c != ':') {
+                    ++i;
+                    continue;
+                }
+                srcbuf[i] = '\0';
+                struct symbol s;
+                s.p = srcbuf + tok_start;
+                s.addr = cur_pc;
+                symbols_add(&symbols, s);
+                printf("sym(%s @0x%x) ", s.p, s.addr);
+                break;
+            }
+        }
+#define IS_DIGIT(c) c >= '0' && c <= '9'
+        if (IS_DIGIT(c)) {
+            size_t tok_start = i;
+            while ((c = srcbuf[i])) {
+                if (IS_DIGIT(c)) {
+                    ++i;
+                    continue;
+                }
+                if (srcbuf[i] == ',') {
+                    if (reg >= 8) {
+                        compile_err("used up all registers.\n");
+                    }
+                    ++reg;
+                }
+                srcbuf[i] = '\0';
+                long lit = strtol(srcbuf + tok_start, NULL, 10);
+                uint32_t op = 0x52800000 | lit << 5 | reg;
+                printf("mov(w0 %ld->%x) ", lit, op);
+                list_add_uint32_t(&opc, op);
+                cur_pc += sizeof (uint32_t);
+                break;
+            }
+        }
+    }
+
+    printf("\n:: sym parse end\n");
+
+    struct list_uint64_t symtab_data;
+    list_new_uint64_t(&symtab_data);
+
+
+    int strtab_size = 0x10;
+    char *strtab = malloc(strtab_size * sizeof (char));
+    strtab[0] = '\0';
+    int idx = 1;
+
+    for (int i = 0; i < symbols.count; ++i) {
+        struct symbol data = symbols.data[i];
+        char *s = data.p;
+        strlcpy(strtab + idx, s, strtab_size - idx);\
+        uint64_t flag = 0x010f00000000;
+        list_add_uint64_t(&symtab_data, flag | idx);
+        list_add_uint64_t(&symtab_data, data.addr);
+        idx += strlen(s) + 1;
+    }
+
+    int symtab_data_size = symtab_data.count * sizeof (uint64_t);
+
+    free(srcbuf);
+
 // # opc
-    uint32_t opc[] = { 0x52800000, 0xd65f03c0 };
-    total_size += sizeof opc;
-    textsect_size += sizeof opc;
+    int opc_size = opc.count * sizeof (uint32_t);
+    total_size += opc_size;
+    textsect_size += opc_size;
+    printf("textsect %llx", textsect_size);
 
 // # symtab data
-    uint64_t symbols[] = {
-        0x010e00000007, 0x0,
-        0x010f00000001, 0x0,
-    };
-    total_size += sizeof symbols;
+    /* uint64_t symtab_data[] = { */
+    /*     0x010e00000007, 0x0, */
+    /*     0x010f00000001, 0x0, */
+    /* }; */
+    total_size += symtab_data_size;
 
-    const char strtab[0x10] = "\0_main\0ltmp0";
-    total_size += sizeof strtab;
+    total_size += strtab_size;
 
 
     uint32_t load_cmds_num = 0;
@@ -72,7 +182,7 @@ int main(void) {
 
     ver.cmd = LC_BUILD_VERSION;
     ver.cmdsize = sizeof ver;
-    // LC_REG(ver);
+    LC_REG(ver);
 
     ver.platform = PLATFORM_MACOS;
     ver.minos = 0x000e0000;
@@ -84,8 +194,8 @@ int main(void) {
     symtab.cmd = LC_SYMTAB;
     symtab.cmdsize = sizeof symtab;
     LC_REG(symtab);
-    symtab.nsyms = 0x2;
-    symtab.strsize = 0x10;
+    symtab.nsyms = symbols.count;
+    symtab.strsize = strtab_size;
 
 // # lc dysymtab
     struct dysymtab_command dysymtab;
@@ -116,9 +226,10 @@ int main(void) {
     header.flags = 0x0;
     header.reserved = 0x0;
 
+// calc offsets
     sect.offset = segload.fileoff = sizeof header + header.sizeofcmds;
     symtab.symoff = sect.offset + textsect_size;
-    symtab.stroff = symtab.symoff + sizeof symbols;
+    symtab.stroff = symtab.symoff + symtab_data_size;
     total_size += load_cmds_size;
 
 // buffer
@@ -129,19 +240,30 @@ int main(void) {
 #define ADD(value)\
     memcpy(buf, &value, sizeof value); \
     buf += sizeof value;
+    // printf(#value" %p (+%zd)\n", buf, sizeof value);
 
     ADD(header)
     ADD(segload)
     ADD(sect)
-    // ADD(ver)
+    ADD(ver)
     ADD(symtab)
     ADD(dysymtab)
-    ADD(opc)
-    ADD(symbols)
-    ADD(strtab)
+    for (int i = 0; i < opc.count; ++i) {
+        uint32_t *ptr = (uint32_t *)buf;
+        *ptr = opc.data[i];
+        buf += sizeof (uint32_t);
+    }
+    memcpy(buf, symtab_data.data, symtab_data_size);
+    buf += symtab_data_size;
+    memcpy(buf, strtab, strtab_size);
+    buf += strtab_size;
 
     FILE *file = fopen("machoreloc.out", "w");
     fwrite(buf_base, sizeof (char), total_size, file);
     fclose(file);
     free(buf_base);
+    symbols_delete(&symbols);
+    list_delete_uint32_t(&opc);
+    list_delete_uint64_t(&symtab_data);
 }
+
