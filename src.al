@@ -1,11 +1,9 @@
 _main:
-    =>sub
-    1
+    =>test
+    hello
+    0 ret
+
+hello: "Hello World!"
+
 test:
-    =>sub
-    ret
-
-sub:
-    0
-    ret
-
+    1 ret

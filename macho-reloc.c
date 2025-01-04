@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,13 +8,23 @@
 #include "symbols.c"
 #include "opcode.c"
 
-#define compile_err(s, ...) printf(s, __VA_ARGS__); \
+void compile_err(const char *s, ...) { 
+    va_list argptr;
+    va_start(argptr, s);
+    vfprintf(stderr, s, argptr);
+    va_end(argptr);
     exit(1);
+}
 #define IS_DIGIT(c) (c >= '0' && c <= '9')
 #define IS_LETTER(c) (c >= 'A' && c <= 'z')
+#define OPC(o, op) list_add_uint32_t(o, op); cur_pc += sizeof (uint32_t);
+
 
 // parser context
 struct list_uint32_t opc_all;
+char *strlits;
+int strlit_idx = 0;
+int strlit_cap = INIT_CAP;
 struct _symbols symbols;
 struct list_resolve_data to_resolve;
 char *srcbuf;
@@ -55,13 +66,18 @@ void letter(void) {
     size_t tok_start = i;
     while ((c = srcbuf[i])) {
         if (c == ' ' || c == '\n') {
-            size_t count = i - tok_start + 1;
-            char tmp[count];
-            strlcpy(tmp, srcbuf + tok_start, count);
-            printf("(%s) ", tmp);
+            srcbuf[i] = '\0';
+            char *tmp = srcbuf + tok_start;
             if (strcmp(tmp, "ret") == 0) {
                 list_add_uint32_t(&rtinfo.opc, RET);
                 cur_pc += sizeof (uint32_t);
+                printf("ret ");
+            } else {
+                OPC(&rtinfo.opc, ADRP);
+                struct _resolve_data rd = { .addr = cur_pc, .str = tmp };
+                list_add_resolve_data(&to_resolve, rd);
+                OPC(&rtinfo.opc, ADD_IMM);
+                printf("adrpadd(%s) ", tmp);
             }
             break;
         } else if (c != ':') {
@@ -93,14 +109,13 @@ void digit(void) {
             continue;
         }
         if (c == ',') {
-            if (reg >= 8) {
+            if (reg >= 8)
                 compile_err("%s", "used up all registers.\n");
-            }
             ++reg;
         }
         srcbuf[i] = '\0';
         long lit = strtol(srcbuf + tok_start, NULL, 10);
-        uint32_t op = 0x52800000 | lit << 5 | reg;
+        uint32_t op = MOV | lit << 5 | reg;
         printf("mov(w0 %ld->%x) ", lit, op);
         list_add_uint32_t(&rtinfo.opc, op);
         cur_pc += sizeof (uint32_t);
@@ -138,12 +153,12 @@ void hyphen(bool linked) {
         char *str = srcbuf + start_pos;
         uint32_t op;
         if (linked) {
-            op = 0x94000000;
+            op = BL;
             printf("bl(%s) ", str);
             check_callsub();
 
         } else {
-            op = 0x14000000;
+            op = B;
             printf("b(%s) ", str);
         }
         list_add_uint32_t(&rtinfo.opc, op);
@@ -151,6 +166,31 @@ void hyphen(bool linked) {
         list_add_resolve_data(&to_resolve, tmp);
         cur_pc += sizeof (uint32_t);
     }
+}
+
+void strlit_add(void) {
+    c = srcbuf[i++];
+    size_t start_pos = i;
+    while ((c = srcbuf[i])) {
+        if (c != '"') {
+            ++i; continue;
+        }
+        break;
+    }
+    if (c != '"')
+        compile_err("%s", "string literal not terminated\n");
+    srcbuf[i] = '\0';
+    const char *s = srcbuf + start_pos;
+    printf("string lit (%s) ", s);
+    unsigned long len = strlen(s);
+    size_t nitems = (len + 1) / (sizeof (uint32_t));
+    list_addrang_uint32_t(&rtinfo.opc, (uint32_t *)s, nitems);
+    /* if (strlit_idx + len > strlit_cap) { */
+    /*     strlit_cap += 0x4; */
+    /*     strlits = reallocf(strlits, strlit_cap); */
+    /* } */
+    /* strlcpy(strlits + strlit_idx, s, strlit_cap - strlit_idx); */
+    cur_pc += nitems * sizeof (uint32_t);
 }
 
 void parse(void) {
@@ -162,6 +202,8 @@ void parse(void) {
             digit();
         } else if (c == '-' || c == '=') {
             hyphen(c == '=');
+        } else if (c == '"') {
+            strlit_add();
         }
     }
 }
@@ -185,9 +227,21 @@ void resolve_symbols(void) {
             return;
         }
         size_t idx = d.addr / sizeof (uint32_t);
-        uint32_t dif = s->addr - d.addr;
-        opc_all.data[idx] = opc_all.data[idx] | (dif / sizeof (uint32_t));
-        printf("resolv(%s->%x, %x) ", d.str, dif, opc_all.data[idx]);
+        switch (opc_all.data[idx]) {
+        case B:
+        case BL:;
+            uint32_t dif = s->addr - d.addr;
+            opc_all.data[idx] = opc_all.data[idx] | (dif / sizeof (uint32_t));
+            printf("resolv(%s->%x, %x) ", d.str, dif, opc_all.data[idx]);
+            break;
+        case ADD_IMM:
+            opc_all.data[idx] |= ((s->addr + 0xf80) << 10);
+            printf("resolv(%s, %x) ", d.str, opc_all.data[idx]);
+            break;
+        default:
+            compile_err("undefined opcode %x\n", opc_all.data[idx]);
+            break;
+        }
     }
 }
 
@@ -215,6 +269,7 @@ int main(void) {
     list_new_uint32_t(&rtinfo.opc);
     list_new_resolve_data(&to_resolve);
     symbols_new(&symbols);
+    strlits = malloc(INIT_CAP);
 
     printf(":: parse start\n");
     parse();
@@ -222,6 +277,8 @@ int main(void) {
     printf("\n:: parse end\n");
     resolve_symbols();
     printf("\n:: resolv end\n");
+    total_size += strlit_cap;
+    textsect_size += strlit_cap;
 
     struct list_uint64_t symtab_data;
     list_new_uint64_t(&symtab_data);
@@ -376,13 +433,19 @@ int main(void) {
     ADD(ver)
     ADD(symtab)
     ADD(dysymtab)
+    // add opc
     for (int i = 0; i < opc_all.count; ++i) {
         uint32_t *ptr = (uint32_t *)buf;
         *ptr = opc_all.data[i];
         buf += sizeof (uint32_t);
     }
+    // add strlits
+    memcpy(buf, strlits, strlit_cap);
+    buf += strlit_cap;
+    // add symtab data
     memcpy(buf, symtab_data.data, symtab_data_size);
     buf += symtab_data_size;
+    // add strtab
     memcpy(buf, strtab, strtab_size);
     buf += strtab_size;
 
@@ -392,6 +455,7 @@ int main(void) {
     free(buf_base);
     symbols_delete(&symbols);
     list_delete_uint32_t(&opc_all);
+    list_delete_resolve_data(&to_resolve);
     list_delete_uint64_t(&symtab_data);
 }
 
