@@ -34,8 +34,6 @@ struct symbol {
     uint32_t addr;
 };
 
-typedef struct symbol symbol;
-// list(symbol)
 list(uint32_t)
 list(uint64_t)
 
@@ -43,10 +41,17 @@ struct _symbols {
     struct symbol *data;
     int count;
     int cap;
-} symbols ;
+};
+
+typedef struct _resolve_data {
+    uint32_t addr;
+    char *str;
+} resolve_data;
+list(resolve_data)
+
 
 void symbols_new(struct _symbols *self) {
-    self->data = malloc(INIT_CAP * sizeof symbols);
+    self->data = malloc(INIT_CAP * sizeof (struct _symbols));
     self->cap = INIT_CAP;
     self->count = 0;
 }
