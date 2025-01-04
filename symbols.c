@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define INIT_CAP 8
 
@@ -10,23 +11,31 @@
         int cap; \
     }; \
     void list_new_##T(struct list_ ## T *self) { \
-        self->data = malloc(INIT_CAP * sizeof (struct list_ ## T)); \
+        self->data = malloc(INIT_CAP * sizeof (T)); \
         self->cap = INIT_CAP; \
         self->count = 0; \
     } \
-    void list_add_##T(struct list_ ## T *self, T value) { \
-        int cap = self->cap; \
-        if (self->count >= cap) { \
+    void list_reserv_##T(struct list_ ## T *self, size_t newcap) { \
+        while (self->cap < newcap) { \
+            printf("realloc cap (%d -> %zx)\n", self->cap, newcap); \
             void *tmp = self->data; \
             self->cap *= 2; \
-            self->data = reallocf(self->data, cap * sizeof (struct list_##T)); \
+            self->data = reallocf(self->data, self->cap * sizeof (T)); \
             printf("realloc (%p -> %p)\n", tmp, self->data); \
         } \
+    } \
+    void list_add_##T(struct list_ ## T *self, T value) { \
+        list_reserv_##T(self, self->count + 1); \
         self->data[self->count] = value; \
         self->count += 1; \
     } \
     void list_delete_##T(struct list_ ## T *self) { \
         free(self->data); \
+    } \
+    void list_addrang_##T(struct list_## T *restrict self, T *restrict ptr, size_t nitems) { \
+        list_reserv_##T(self, self->count + nitems); \
+        memcpy(self->data + self->count, ptr, nitems * sizeof (T)); \
+        self->count += nitems; \
     } \
 
 struct symbol {
@@ -34,8 +43,8 @@ struct symbol {
     uint32_t addr;
 };
 
-list(uint32_t)
-list(uint64_t)
+list (uint32_t)
+list (uint64_t)
 
 struct _symbols {
     struct symbol *data;

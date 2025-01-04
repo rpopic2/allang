@@ -5,24 +5,51 @@
 #include <mach-o/loader.h>
 
 #include "symbols.c"
-#define RET 0xd65f03c0
-#define NOP 0xd503201f
+#include "opcode.c"
 
 #define compile_err(s, ...) printf(s, __VA_ARGS__); \
     exit(1);
-#define IS_DIGIT(c) c >= '0' && c <= '9'
-#define IS_LETTER(c) c >= 'A' && c <= 'z'
+#define IS_DIGIT(c) (c >= '0' && c <= '9')
+#define IS_LETTER(c) (c >= 'A' && c <= 'z')
 
 // parser context
-struct list_uint32_t opc;
+struct list_uint32_t opc_all;
 struct _symbols symbols;
+struct list_resolve_data to_resolve;
 char *srcbuf;
 size_t filelen;
 uint64_t cur_pc = 0;
 int reg = 0;
 size_t i;
 char c;
+struct {
+    size_t stacksiz;
+    bool callsub;
+    struct list_uint32_t opc;
+    bool inrt;
+} rtinfo;
 // end
+
+void rst_rtinfo(void) {
+    rtinfo.opc.count = 0;
+    rtinfo.callsub = false;
+    rtinfo.stacksiz = 0;
+}
+
+void endofrt(void) {
+    if (rtinfo.stacksiz == 0 && rtinfo.callsub) {
+        uint32_t *last = rtinfo.opc.data + rtinfo.opc.count - 1;
+        if (*last == RET) {
+            *last = LDP_PREL;
+            list_add_uint32_t(&rtinfo.opc, RET);
+        } else {
+            list_add_uint32_t(&rtinfo.opc, LDP_PREL);
+        }
+        cur_pc += sizeof (uint32_t);
+    }
+    list_addrang_uint32_t(&opc_all, rtinfo.opc.data, rtinfo.opc.count);
+    printf("\nend of routine, stacksiz %zu\n", rtinfo.stacksiz);
+}
 
 void letter(void) {
     size_t tok_start = i;
@@ -31,21 +58,29 @@ void letter(void) {
             size_t count = i - tok_start + 1;
             char tmp[count];
             strlcpy(tmp, srcbuf + tok_start, count);
-            printf("(%s)", tmp);
+            printf("(%s) ", tmp);
             if (strcmp(tmp, "ret") == 0) {
-                list_add_uint32_t(&opc, RET);
+                list_add_uint32_t(&rtinfo.opc, RET);
+                cur_pc += sizeof (uint32_t);
             }
             break;
         } else if (c != ':') {
             ++i;
             continue;
         }
+        if (rtinfo.inrt) {
+            endofrt();
+            rtinfo.inrt = false;
+        }
         srcbuf[i] = '\0';
         struct symbol s;
         s.p = srcbuf + tok_start;
         s.addr = cur_pc;
         symbols_add(&symbols, s);
-        printf("sym(%s @0x%x) ", s.p, s.addr);
+        printf("\nsym(%s @0x%x) ", s.p, s.addr);
+        printf("start of routine\n");
+        rst_rtinfo();
+        rtinfo.inrt = true;
         break;
     }
 }
@@ -67,32 +102,51 @@ void digit(void) {
         long lit = strtol(srcbuf + tok_start, NULL, 10);
         uint32_t op = 0x52800000 | lit << 5 | reg;
         printf("mov(w0 %ld->%x) ", lit, op);
-        list_add_uint32_t(&opc, op);
+        list_add_uint32_t(&rtinfo.opc, op);
         cur_pc += sizeof (uint32_t);
         break;
     }
 }
 
-void readchars() {
+void readsym() {
+    c = srcbuf[i++];
+    if (!(IS_LETTER(c))) {
+        compile_err("a symbol must start with a letter: '%s'\n", srcbuf + i - 3);
+    }
     while ((c = srcbuf[i])) {
-        if (IS_LETTER(c)) {
+        if (IS_LETTER(c) || IS_DIGIT(c)) {
             ++i; continue;
         }
         break;
     }
 }
 
-struct list_resolve_data to_resolve;
+void check_callsub(void) {
+    if (!rtinfo.callsub) {
+        list_add_uint32_t(&opc_all, STP_PREL);
+        cur_pc += sizeof (uint32_t);
+        rtinfo.callsub = true;
+    }
+}
 
-void hyphen(void) {
+void hyphen(bool linked) {
     char next = srcbuf[++i];
     if (next == '>') {
         size_t start_pos = ++i;
-        readchars();
+        readsym();
         srcbuf[i] = '\0';
         char *str = srcbuf + start_pos;
-        printf("b(%s) ", str);
-        list_add_uint32_t(&opc, 0x14000000);
+        uint32_t op;
+        if (linked) {
+            op = 0x94000000;
+            printf("bl(%s) ", str);
+            check_callsub();
+
+        } else {
+            op = 0x14000000;
+            printf("b(%s) ", str);
+        }
+        list_add_uint32_t(&rtinfo.opc, op);
         struct _resolve_data tmp = { .addr = cur_pc, .str = str };
         list_add_resolve_data(&to_resolve, tmp);
         cur_pc += sizeof (uint32_t);
@@ -106,8 +160,8 @@ void parse(void) {
             letter();
         } else if (IS_DIGIT(c)) {
             digit();
-        } else if (c == '-') {
-            hyphen();
+        } else if (c == '-' || c == '=') {
+            hyphen(c == '=');
         }
     }
 }
@@ -127,14 +181,13 @@ void resolve_symbols(void) {
             }
         }
         if (!found) {
-            compile_err("could not find symbol %s\n", d.str);
+            compile_err("could not find symbol '%s'\n", d.str);
             return;
         }
         size_t idx = d.addr / sizeof (uint32_t);
         uint32_t dif = s->addr - d.addr;
-        dif /= sizeof (uint32_t);
-        opc.data[idx] = opc.data[idx] | dif;
-        printf("resolv(%s->%x, %x) ", d.str, dif, opc.data[idx]);
+        opc_all.data[idx] = opc_all.data[idx] | (dif / sizeof (uint32_t));
+        printf("resolv(%s->%x, %x) ", d.str, dif, opc_all.data[idx]);
     }
 }
 
@@ -158,19 +211,20 @@ int main(void) {
     fread(srcbuf, sizeof (char), filelen, src);
     fclose(src);
 
-    list_new_uint32_t(&opc);
+    list_new_uint32_t(&opc_all);
+    list_new_uint32_t(&rtinfo.opc);
     list_new_resolve_data(&to_resolve);
     symbols_new(&symbols);
 
     printf(":: parse start\n");
     parse();
+    endofrt();
     printf("\n:: parse end\n");
     resolve_symbols();
     printf("\n:: resolv end\n");
 
     struct list_uint64_t symtab_data;
     list_new_uint64_t(&symtab_data);
-
 
     int strtab_size = 0x10;
     char *strtab = malloc(strtab_size * sizeof (char));
@@ -199,9 +253,9 @@ int main(void) {
     free(srcbuf);
 
 // # opc
-    if (opc.count % 2 == 1)
-        list_add_uint32_t(&opc, 0);
-    int opc_size = opc.count * sizeof (uint32_t);
+    if (opc_all.count % 2 == 1)
+        list_add_uint32_t(&opc_all, 0);
+    int opc_size = opc_all.count * sizeof (uint32_t);
     total_size += opc_size;
     textsect_size += opc_size;
     printf("textsect %llx", textsect_size);
@@ -322,9 +376,9 @@ int main(void) {
     ADD(ver)
     ADD(symtab)
     ADD(dysymtab)
-    for (int i = 0; i < opc.count; ++i) {
+    for (int i = 0; i < opc_all.count; ++i) {
         uint32_t *ptr = (uint32_t *)buf;
-        *ptr = opc.data[i];
+        *ptr = opc_all.data[i];
         buf += sizeof (uint32_t);
     }
     memcpy(buf, symtab_data.data, symtab_data_size);
@@ -337,7 +391,7 @@ int main(void) {
     fclose(file);
     free(buf_base);
     symbols_delete(&symbols);
-    list_delete_uint32_t(&opc);
+    list_delete_uint32_t(&opc_all);
     list_delete_uint64_t(&symtab_data);
 }
 

@@ -1,6 +1,11 @@
 _main:
-    0
-    ->test
+    =>sub
     1
 test:
+    =>sub
     ret
+
+sub:
+    0
+    ret
+
