@@ -40,7 +40,7 @@
 struct symbol {
     char *p;
     uint32_t addr;
-    bool ext;
+    bool undef;
 };
 
 list (uint32_t)

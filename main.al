@@ -1,4 +1,6 @@
 _main:
-    =>_getchar
+    hello =>_printf
     0 ret
 
+hello:
+    "Hello World"

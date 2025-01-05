@@ -104,7 +104,7 @@ void letter(void) {
         struct symbol s = {
             .p = srcbuf + tok_start,
             .addr = cur_pc,
-            .ext = false,
+            .undef = false,
         };
         symbols_add(&symbols, s);
         printf("\nsym(%s @0x%x) ", s.p, s.addr);
@@ -240,12 +240,16 @@ void resolve_symbols(void) {
             }
         }
         if (!found) {
-            printf("could not find symbol '%s', putting it into undef\n", d.str);
+            printf("could not find symbol '%s', treating as undef\n", d.str);
             struct symbol tmp = {
                 .addr = 0,
                 .p = d.str,
-                .ext = true,
+                .undef = true,
             };
+            list_add_uint32_t(&relocent, d.addr);
+            int idx = symbols.count;
+            list_add_uint32_t(&relocent, 0x2d000000 | idx);
+
             symbols_add(&symbols, tmp);
             ++nundefsyms;
             continue;
@@ -259,8 +263,12 @@ void resolve_symbols(void) {
             printf("resolv(%s->%x, %x) ", d.str, dif, opc_all.data[idx]);
             break;
         case ADD_IMM:
-            opc_all.data[idx] |= ((s->addr + 0xf68) << 10);
-            printf("resolv(%s, %x) ", d.str, opc_all.data[idx]);
+            list_add_uint32_t(&relocent, d.addr);
+            int idx = j;
+            list_add_uint32_t(&relocent, 0x4c000000 | idx);
+
+            // opc_all.data[idx] |= (0xf88) << 10;
+            printf("will be done by ld(%s, %x) ", d.str, opc_all.data[idx]);
             break;
         default:
             printf("undefined opcode %x\n", opc_all.data[idx]);
@@ -321,7 +329,7 @@ int main(void) {
         }
         strlcpy(strtab + strtab_idx, s, strtab_size - strtab_idx);
         uint64_t flag;
-        if (data.ext) {
+        if (data.undef) {
             flag = 0x0100000000;
         } else {
             flag = 0x010f00000000;
@@ -441,9 +449,6 @@ int main(void) {
     header.reserved = 0x0;
 
 // calc offsets
-
-    list_add_uint32_t(&relocent, 0x4);
-    list_add_uint32_t(&relocent, 0x2d000001);
     unsigned long relocent_size = relocent.count * sizeof relocent.data[0];
     total_size += relocent_size;
 
