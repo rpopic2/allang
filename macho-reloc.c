@@ -5,7 +5,7 @@
 #include <string.h>
 #include <mach-o/loader.h>
 
-#include "symbols.c"
+#include "types.c"
 #include "opcode.c"
 
 void compile_err(const char *s, ...) { 

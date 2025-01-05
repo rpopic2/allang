@@ -1,4 +1,0 @@
-#!/bin/bash
-
-./compile.sh $1 && \
-clang $2

@@ -146,7 +146,6 @@ int main(void) {
     header.flags = 0x200085;
     header.reserved = 0x0;
 
-    sizeof (struct dylib_command)
 
     sect.offset = sizeof header + header.sizeofcmds;
     symtab.symoff = sect.offset + textsect_size;

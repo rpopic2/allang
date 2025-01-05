@@ -1,5 +1,11 @@
-a.out
+a.ot
 a.out.dSYM
 
 .DS_Store
 compile_commands.json
+
+macho-reloc
+machoreloc
+machoreloc.out
+machoexe.out
+
