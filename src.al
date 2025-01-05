@@ -1,9 +1,4 @@
 _main:
-    =>test
-    hello
+    =>_getchar
     0 ret
 
-hello: "Hello World!"
-
-test:
-    1 ret

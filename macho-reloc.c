@@ -19,6 +19,7 @@ void compile_err(const char *s, ...) {
 #define IS_LETTER(c) (c >= 'A' && c <= 'z')
 #define OPC(o, op) list_add_uint32_t(o, op); cur_pc += sizeof (uint32_t);
 
+struct list_uint32_t relocent;
 
 // parser context
 struct list_uint32_t opc_all;
@@ -26,6 +27,7 @@ char *strlits;
 int strlit_idx = 0;
 int strlit_cap = INIT_CAP;
 struct _symbols symbols;
+int nundefsyms = 0;
 struct list_resolve_data to_resolve;
 char *srcbuf;
 size_t filelen;
@@ -38,6 +40,7 @@ struct {
     bool callsub;
     struct list_uint32_t opc;
     bool inrt;
+    int to_resolve_start;
 } rtinfo;
 // end
 
@@ -49,6 +52,14 @@ void rst_rtinfo(void) {
 
 void endofrt(void) {
     if (rtinfo.stacksiz == 0 && rtinfo.callsub) {
+        list_add_uint32_t(&opc_all, STP_PREL);
+        cur_pc += sizeof (uint32_t);
+
+        for (int i = rtinfo.to_resolve_start; i < to_resolve.count; ++i) {
+            printf("add %s ", to_resolve.data[i].str);
+            to_resolve.data[i].addr += sizeof (uint32_t);
+        }
+
         uint32_t *last = rtinfo.opc.data + rtinfo.opc.count - 1;
         if (*last == RET) {
             *last = LDP_PREL;
@@ -58,8 +69,9 @@ void endofrt(void) {
         }
         cur_pc += sizeof (uint32_t);
     }
+    rtinfo.to_resolve_start = to_resolve.count;
     list_addrang_uint32_t(&opc_all, rtinfo.opc.data, rtinfo.opc.count);
-    printf("\nend of routine, stacksiz %zu\n", rtinfo.stacksiz);
+    printf("\nend of routine, stacksiz %zu, sub %i\n", rtinfo.stacksiz, rtinfo.callsub);
 }
 
 void letter(void) {
@@ -77,7 +89,7 @@ void letter(void) {
                 struct _resolve_data rd = { .addr = cur_pc, .str = tmp };
                 list_add_resolve_data(&to_resolve, rd);
                 OPC(&rtinfo.opc, ADD_IMM);
-                printf("adrpadd(%s) ", tmp);
+                printf("adrpadd(%s @%x) ", tmp, rd.addr);
             }
             break;
         } else if (c != ':') {
@@ -89,14 +101,18 @@ void letter(void) {
             rtinfo.inrt = false;
         }
         srcbuf[i] = '\0';
-        struct symbol s;
-        s.p = srcbuf + tok_start;
-        s.addr = cur_pc;
+        struct symbol s = {
+            .p = srcbuf + tok_start,
+            .addr = cur_pc,
+            .ext = false,
+        };
         symbols_add(&symbols, s);
         printf("\nsym(%s @0x%x) ", s.p, s.addr);
-        printf("start of routine\n");
         rst_rtinfo();
-        rtinfo.inrt = true;
+        if (srcbuf[i + 1] == '\n') {
+            printf("start of routine\n");
+            rtinfo.inrt = true;
+        }
         break;
     }
 }
@@ -138,8 +154,8 @@ void readsym() {
 
 void check_callsub(void) {
     if (!rtinfo.callsub) {
-        list_add_uint32_t(&opc_all, STP_PREL);
-        cur_pc += sizeof (uint32_t);
+        /* list_add_uint32_t(&opc_all, STP_PREL); */
+        /* cur_pc += sizeof (uint32_t); */
         rtinfo.callsub = true;
     }
 }
@@ -181,10 +197,11 @@ void strlit_add(void) {
         compile_err("%s", "string literal not terminated\n");
     srcbuf[i] = '\0';
     const char *s = srcbuf + start_pos;
-    printf("string lit (%s) ", s);
-    unsigned long len = strlen(s);
-    size_t nitems = (len + 1) / (sizeof (uint32_t));
-    list_addrang_uint32_t(&rtinfo.opc, (uint32_t *)s, nitems);
+    unsigned long len = strlen(s) + 1;
+    size_t nitems = (len) / (sizeof (uint32_t));
+    ++nitems;
+    printf("string lit (%s, len %lx, nitems %zu) ", s, len, nitems);
+    list_addrang_uint32_t(&opc_all, (uint32_t *)s, nitems);
     /* if (strlit_idx + len > strlit_cap) { */
     /*     strlit_cap += 0x4; */
     /*     strlits = reallocf(strlits, strlit_cap); */
@@ -223,23 +240,30 @@ void resolve_symbols(void) {
             }
         }
         if (!found) {
-            compile_err("could not find symbol '%s'\n", d.str);
-            return;
+            printf("could not find symbol '%s', putting it into undef\n", d.str);
+            struct symbol tmp = {
+                .addr = 0,
+                .p = d.str,
+                .ext = true,
+            };
+            symbols_add(&symbols, tmp);
+            ++nundefsyms;
+            continue;
         }
         size_t idx = d.addr / sizeof (uint32_t);
         switch (opc_all.data[idx]) {
         case B:
         case BL:;
             uint32_t dif = s->addr - d.addr;
-            opc_all.data[idx] = opc_all.data[idx] | (dif / sizeof (uint32_t));
+            opc_all.data[idx] |= (dif / sizeof (uint32_t));
             printf("resolv(%s->%x, %x) ", d.str, dif, opc_all.data[idx]);
             break;
         case ADD_IMM:
-            opc_all.data[idx] |= ((s->addr + 0xf80) << 10);
+            opc_all.data[idx] |= ((s->addr + 0xf68) << 10);
             printf("resolv(%s, %x) ", d.str, opc_all.data[idx]);
             break;
         default:
-            compile_err("undefined opcode %x\n", opc_all.data[idx]);
+            printf("undefined opcode %x\n", opc_all.data[idx]);
             break;
         }
     }
@@ -265,6 +289,7 @@ int main(void) {
     fread(srcbuf, sizeof (char), filelen, src);
     fclose(src);
 
+    list_new_uint32_t(&relocent);
     list_new_uint32_t(&opc_all);
     list_new_uint32_t(&rtinfo.opc);
     list_new_resolve_data(&to_resolve);
@@ -277,8 +302,6 @@ int main(void) {
     printf("\n:: parse end\n");
     resolve_symbols();
     printf("\n:: resolv end\n");
-    total_size += strlit_cap;
-    textsect_size += strlit_cap;
 
     struct list_uint64_t symtab_data;
     list_new_uint64_t(&symtab_data);
@@ -297,7 +320,12 @@ int main(void) {
             strtab = reallocf(strtab, strtab_size);
         }
         strlcpy(strtab + strtab_idx, s, strtab_size - strtab_idx);
-        uint64_t flag = 0x010f00000000;
+        uint64_t flag;
+        if (data.ext) {
+            flag = 0x0100000000;
+        } else {
+            flag = 0x010f00000000;
+        }
         list_add_uint64_t(&symtab_data, flag | strtab_idx);
         list_add_uint64_t(&symtab_data, data.addr);
         strtab_idx += strlen(s) + 1;
@@ -315,7 +343,7 @@ int main(void) {
     int opc_size = opc_all.count * sizeof (uint32_t);
     total_size += opc_size;
     textsect_size += opc_size;
-    printf("textsect %llx", textsect_size);
+    printf("textsect (%llx), opcsiz (%x)\n", textsect_size, opc_size);
 
 
     uint32_t load_cmds_num = 0;
@@ -381,6 +409,7 @@ int main(void) {
     LC_REG(symtab);
     symtab.nsyms = symbols.count;
     symtab.strsize = strtab_size;
+    printf("strtab (%x)\n", strtab_size);
 
 // # lc dysymtab
     struct dysymtab_command dysymtab;
@@ -390,12 +419,12 @@ int main(void) {
     LC_REG(dysymtab);
 
     dysymtab.ilocalsym = 0x0;
-    dysymtab.nlocalsym = symbols.count;
+    dysymtab.nlocalsym = symbols.count - nundefsyms;
     dysymtab.iextdefsym = dysymtab.ilocalsym + dysymtab.nlocalsym;
     dysymtab.nextdefsym = 0x0;
 
     dysymtab.iundefsym = dysymtab.iextdefsym + dysymtab.nextdefsym;
-    dysymtab.nundefsym = 0x0;
+    dysymtab.nundefsym = nundefsyms;
 
     // # header
     struct mach_header_64 header;
@@ -412,8 +441,16 @@ int main(void) {
     header.reserved = 0x0;
 
 // calc offsets
+
+    list_add_uint32_t(&relocent, 0x4);
+    list_add_uint32_t(&relocent, 0x2d000001);
+    unsigned long relocent_size = relocent.count * sizeof relocent.data[0];
+    total_size += relocent_size;
+
     sect.offset = segload.fileoff = sizeof header + header.sizeofcmds;
-    symtab.symoff = sect.offset + textsect_size;
+    sect.reloff = sect.offset + textsect_size;
+    sect.nreloc = relocent.count / 2;
+    symtab.symoff = sect.reloff + relocent_size;
     symtab.stroff = symtab.symoff + symtab_data_size;
     total_size += load_cmds_size;
 
@@ -421,6 +458,7 @@ int main(void) {
 
     void *buf = malloc(total_size);
     void *buf_base = buf;
+    printf("total (%zx)\n", total_size);
 
 #define ADD(value)\
     memcpy(buf, &value, sizeof value); \
@@ -440,8 +478,11 @@ int main(void) {
         buf += sizeof (uint32_t);
     }
     // add strlits
-    memcpy(buf, strlits, strlit_cap);
-    buf += strlit_cap;
+    /* memcpy(buf, strlits, strlit_cap); */
+    /* buf += strlit_cap; */
+    // add reloc entries
+    memcpy(buf, relocent.data, relocent_size);
+    buf += relocent_size;
     // add symtab data
     memcpy(buf, symtab_data.data, symtab_data_size);
     buf += symtab_data_size;
@@ -454,6 +495,7 @@ int main(void) {
     fclose(file);
     free(buf_base);
     symbols_delete(&symbols);
+    list_delete_uint32_t(&relocent);
     list_delete_uint32_t(&opc_all);
     list_delete_resolve_data(&to_resolve);
     list_delete_uint64_t(&symtab_data);

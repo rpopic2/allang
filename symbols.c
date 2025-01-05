@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,10 +19,8 @@
     void list_reserv_##T(struct list_ ## T *self, size_t newcap) { \
         while (self->cap < newcap) { \
             printf("realloc cap (%d -> %zx)\n", self->cap, newcap); \
-            void *tmp = self->data; \
             self->cap *= 2; \
             self->data = reallocf(self->data, self->cap * sizeof (T)); \
-            printf("realloc (%p -> %p)\n", tmp, self->data); \
         } \
     } \
     void list_add_##T(struct list_ ## T *self, T value) { \
@@ -41,6 +40,7 @@
 struct symbol {
     char *p;
     uint32_t addr;
+    bool ext;
 };
 
 list (uint32_t)
