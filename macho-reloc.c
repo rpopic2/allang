@@ -274,7 +274,7 @@ int main(void) {
     uint64_t textsect_size = 0;
 
 // #parser
-    FILE *src = fopen("src.al", "r");
+    FILE *src = fopen("main.al", "r");
     if (src == NULL) {
         return 1;
     }
