@@ -1,6 +1,9 @@
 _main:
-    hello =>_printf
+    filename, readmode =>_fopen
+    =>_fclose
     0 ret
 
-hello:
-    "Hello World"
+filename:
+    "main.al"
+readmode:
+    "r"

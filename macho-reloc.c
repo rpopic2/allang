@@ -74,10 +74,20 @@ void endofrt(void) {
     printf("\nend of routine, stacksiz %zu, sub %i\n", rtinfo.stacksiz, rtinfo.callsub);
 }
 
+void handle_reg(char c) {
+    if (c == ',') {
+        if (reg >= 8)
+            compile_err("%s", "used up all registers.\n");
+        ++reg;
+    } else if (c == '\n') {
+        reg = 0;
+    }
+}
+
 void letter(void) {
     size_t tok_start = i;
     while ((c = srcbuf[i])) {
-        if (c == ' ' || c == '\n') {
+        if (c == ' ' || c == '\n' || c == ',') {
             srcbuf[i] = '\0';
             char *tmp = srcbuf + tok_start;
             if (strcmp(tmp, "ret") == 0) {
@@ -85,10 +95,10 @@ void letter(void) {
                 cur_pc += sizeof (uint32_t);
                 printf("ret ");
             } else {
-                OPC(&rtinfo.opc, ADRP);
+                OPC(&rtinfo.opc, ADRP | reg);
                 struct _resolve_data rd = { .addr = cur_pc, .str = tmp };
                 list_add_resolve_data(&to_resolve, rd);
-                OPC(&rtinfo.opc, ADD_IMM);
+                OPC(&rtinfo.opc, ADD_IMM | (reg << 5) | reg);
                 printf("adrpadd(%s @%x) ", tmp, rd.addr);
             }
             break;
@@ -115,6 +125,7 @@ void letter(void) {
         }
         break;
     }
+    handle_reg(c);
 }
 
 void digit(void) {
@@ -124,17 +135,13 @@ void digit(void) {
             ++i;
             continue;
         }
-        if (c == ',') {
-            if (reg >= 8)
-                compile_err("%s", "used up all registers.\n");
-            ++reg;
-        }
         srcbuf[i] = '\0';
         long lit = strtol(srcbuf + tok_start, NULL, 10);
         uint32_t op = MOV | lit << 5 | reg;
-        printf("mov(w0 %ld->%x) ", lit, op);
+        printf("mov(w%d<-%ld) ", reg, lit);
         list_add_uint32_t(&rtinfo.opc, op);
         cur_pc += sizeof (uint32_t);
+        handle_reg(c);
         break;
     }
 }
@@ -182,6 +189,7 @@ void hyphen(bool linked) {
         list_add_resolve_data(&to_resolve, tmp);
         cur_pc += sizeof (uint32_t);
     }
+    handle_reg(c);
 }
 
 void strlit_add(void) {
@@ -240,7 +248,7 @@ void resolve_symbols(void) {
             }
         }
         if (!found) {
-            printf("could not find symbol '%s', treating as undef\n", d.str);
+            printf("could not find symbol '%s', reloc as undef b\n", d.str);
             struct symbol tmp = {
                 .addr = 0,
                 .p = d.str,
@@ -255,24 +263,20 @@ void resolve_symbols(void) {
             continue;
         }
         size_t idx = d.addr / sizeof (uint32_t);
-        switch (opc_all.data[idx]) {
-        case B:
-        case BL:;
+        uint32_t opcode = opc_all.data[idx];
+        if (opcode == B || opcode == BL) {
             uint32_t dif = s->addr - d.addr;
             opc_all.data[idx] |= (dif / sizeof (uint32_t));
             printf("resolv(%s->%x, %x) ", d.str, dif, opc_all.data[idx]);
-            break;
-        case ADD_IMM:
+        } else if ((opcode & 0xfffffc00) == ADD_IMM) {
             list_add_uint32_t(&relocent, d.addr);
-            int idx = j;
-            list_add_uint32_t(&relocent, 0x4c000000 | idx);
+            int index = j;
+            list_add_uint32_t(&relocent, 0x4c000000 | index);
 
             // opc_all.data[idx] |= (0xf88) << 10;
-            printf("will be done by ld(%s, %x) ", d.str, opc_all.data[idx]);
-            break;
-        default:
-            printf("undefined opcode %x\n", opc_all.data[idx]);
-            break;
+            printf("will be resolved by ld(%s, %x) ", d.str, opc_all.data[idx]);
+        } else {
+            printf("undefined opcode %x @%zx\n", opc_all.data[idx], idx);
         }
     }
 }
