@@ -56,7 +56,7 @@ void endofrt(void) {
         cur_pc += sizeof (uint32_t);
 
         for (int i = rtinfo.to_resolve_start; i < to_resolve.count; ++i) {
-            printf("add %s ", to_resolve.data[i].str);
+            // printf("add %s ", to_resolve.data[i].str);
             to_resolve.data[i].addr += sizeof (uint32_t);
         }
 
@@ -84,28 +84,39 @@ void handle_reg(char c) {
     }
 }
 
+void readsym() {
+    c = srcbuf[i++];
+    if (!(IS_LETTER(c))) {
+        compile_err("a symbol must start with a letter: (but was '%c') @'%s'\n", c, srcbuf + i - 3);
+    }
+    while ((c = srcbuf[i])) {
+        if (IS_LETTER(c) || IS_DIGIT(c)) {
+            ++i; continue;
+        }
+        break;
+    }
+}
+
 void letter(void) {
     size_t tok_start = i;
-    while ((c = srcbuf[i])) {
-        if (c == ' ' || c == '\n' || c == ',') {
-            srcbuf[i] = '\0';
-            char *tmp = srcbuf + tok_start;
-            if (strcmp(tmp, "ret") == 0) {
-                list_add_uint32_t(&rtinfo.opc, RET);
-                cur_pc += sizeof (uint32_t);
-                printf("ret ");
-            } else {
-                OPC(&rtinfo.opc, ADRP | reg);
-                struct _resolve_data rd = { .addr = cur_pc, .str = tmp };
-                list_add_resolve_data(&to_resolve, rd);
-                OPC(&rtinfo.opc, ADD_IMM | (reg << 5) | reg);
-                printf("adrpadd(%s @%x) ", tmp, rd.addr);
-            }
-            break;
-        } else if (c != ':') {
-            ++i;
-            continue;
+    readsym();
+    char end = srcbuf[i];
+    srcbuf[i] = '\0';
+
+    if (end == ' ' || end == '\n' || end == ',') {
+        char *tmp = srcbuf + tok_start;
+        if (strcmp(tmp, "ret") == 0) {
+            list_add_uint32_t(&rtinfo.opc, RET);
+            cur_pc += sizeof (uint32_t);
+            printf("ret ");
+        } else {
+            OPC(&rtinfo.opc, ADRP | reg);
+            struct _resolve_data rd = { .addr = cur_pc, .str = tmp };
+            list_add_resolve_data(&to_resolve, rd);
+            OPC(&rtinfo.opc, ADD_IMM | (reg << 5) | reg);
+            printf("adrpadd(%s @%x) ", tmp, rd.addr);
         }
+    } else if (end == ':') {
         if (rtinfo.inrt) {
             endofrt();
             rtinfo.inrt = false;
@@ -123,7 +134,8 @@ void letter(void) {
             printf("start of routine\n");
             rtinfo.inrt = true;
         }
-        break;
+    } else {
+        printf("unknown end (%c)", end);
     }
     handle_reg(c);
 }
@@ -142,19 +154,6 @@ void digit(void) {
         list_add_uint32_t(&rtinfo.opc, op);
         cur_pc += sizeof (uint32_t);
         handle_reg(c);
-        break;
-    }
-}
-
-void readsym() {
-    c = srcbuf[i++];
-    if (!(IS_LETTER(c))) {
-        compile_err("a symbol must start with a letter: '%s'\n", srcbuf + i - 3);
-    }
-    while ((c = srcbuf[i])) {
-        if (IS_LETTER(c) || IS_DIGIT(c)) {
-            ++i; continue;
-        }
         break;
     }
 }
@@ -218,6 +217,27 @@ void strlit_add(void) {
     cur_pc += nitems * sizeof (uint32_t);
 }
 
+void colons(void) {
+    c = srcbuf[++i];
+    if (c != ':') {
+        return;
+    }
+    c = srcbuf[++i];
+    if (c == ' ') {
+        c = srcbuf[++i];
+    }
+
+    printf("!(%c)\n", srcbuf[i]);
+    if (c == '$') {
+        printf("register ");
+        c = srcbuf[++i];
+    }
+    size_t start_pos = i;
+    readsym();
+    srcbuf[i] = '\0';
+    printf("assign to(%s) ", srcbuf + start_pos);
+}
+
 void parse(void) {
     for (i = 0; i < filelen - 1; ++i) {
         c = srcbuf[i];
@@ -229,6 +249,17 @@ void parse(void) {
             hyphen(c == '=');
         } else if (c == '"') {
             strlit_add();
+        } else if (c == '/') {
+            c = srcbuf[++i];
+            if (c == '/') {
+                printf("comment ");
+                while (c != '\n')
+                    c = srcbuf[++i];
+            }
+        } else if (c == ':') {
+            colons();
+        } else {
+            handle_reg(c);
         }
     }
 }
