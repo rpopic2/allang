@@ -11,7 +11,8 @@
 
 #define ADRP 0x90000000
 #define ADD_IMM 0x91000000
-#define MOV 0xD2800000
+#define MOV 0x52800000
+#define MOV_X 0xD2800000
 #define SUB 0xd1000000
 
 #define B 0x14000000

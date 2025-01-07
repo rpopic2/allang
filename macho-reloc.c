@@ -70,10 +70,11 @@ void endofrt(void) {
         if (last_ret)
             list_add_uint32_t(&rtinfo.opc, RET);
     } else if (rtinfo.stacksiz > 0) {
+        printf("original stack(%zx) ", rtinfo.stacksiz);
         int push = 4;
         if (rtinfo.callsub)
             rtinfo.stacksiz += 0x10;   // sizeof { fp, lr }
-        rtinfo.stacksiz += rtinfo.stacksiz % 0x10;
+        rtinfo.stacksiz += 0x10 - (rtinfo.stacksiz % 0x10);
         OPC(&opc_all, SUB | (rtinfo.stacksiz << 10) | (0b1111111111))
         int stpat = (rtinfo.stacksiz - 0x10) / 8;
         if (rtinfo.callsub) {
@@ -242,6 +243,7 @@ void str(void) {
     else
         op = STRW;
     op |= (0b11111 << 5);
+    op |= ((pobj->offset / pobj->size) << 10);
     OPC(&rtinfo.opc, op);
 }
 
@@ -268,6 +270,7 @@ void ldr(void) {
     else
         op = LDRW;
     op |= (0b11111 << 5);
+    op |= ((pobj->offset / pobj->size) << 10);
     OPC(&rtinfo.opc, op);
 }
 
@@ -377,7 +380,7 @@ void resolve_symbols(void) {
     for (int i = 0; i < to_resolve.count; ++i) {
         struct _resolve_data d = to_resolve.data[i];
         printf("try(%s, %x) ", d.str, d.addr);
-        struct symbol *s;
+        struct symbol *s = NULL;
         int j;
         bool found = false;
         for (j = 0; j < symbols.count; ++j) {
@@ -402,7 +405,11 @@ void resolve_symbols(void) {
             ++nundefsyms;
             continue;
         }
-        if (s->type == unknwon)
+        if (s->type == code_undef) {
+            list_add_uint32_t(&relocent, d.addr);
+            list_add_uint32_t(&relocent, 0x2d000000 | j);
+            continue;
+        } else if (s->type == unknwon)
             s->type = code;
         size_t idx = d.addr / sizeof (uint32_t);
         uint32_t opcode = opc_all.data[idx];
