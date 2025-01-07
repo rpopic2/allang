@@ -8,6 +8,9 @@
 #define LDRX 0xf9400000
 #define STRW 0xb9000000
 #define STRX 0xf9000000
+#define LDUR 0xf9400000 // bit 10, 11 must be 0
+#define LDURSW 0xb8800000
+#define STUR 0xf8000000 // bit 10, 11 must be 0
 
 #define ADRP 0x90000000
 #define ADD_IMM 0x91000000

@@ -5,6 +5,9 @@
 #include <string.h>
 #include <mach-o/loader.h>
 
+#define printf(...) \
+    printf(__VA_ARGS__) \
+
 #include "types.c"
 #include "opcode.c"
 
@@ -174,8 +177,10 @@ void letter(void) {
             srcbuf[i] = '\0';
             char *next_tok = srcbuf + tok_start2;
             int objsiz = 0;
+            bool sign = false;
             if (strcmp(next_tok, "i32") == 0) {
                 objsiz = 4;
+                sign = true;
             } else if (strcmp(next_tok, "addr") == 0) {
                 objsiz = 8;
             }
@@ -183,15 +188,15 @@ void letter(void) {
                 .name = label,
                 .offset = rtinfo.stacksiz,
                 .size = objsiz,
+                .sign = sign,
             };
             rtinfo.stacksiz += objsiz;
-            printf("stackobj (%s off %x, siz %x) ", label, obj.offset, obj.size);
+            printf("stackobj (%s off %x, siz %x, sign %x) ", label, obj.offset, obj.size, obj.sign);
             list_add_object(&objects, obj);
         }
     } else {
         printf("unknown end (%c)", end);
     }
-    handle_reg(c);
 }
 
 void digit(void) {
@@ -207,7 +212,6 @@ void digit(void) {
         printf("mov(w%d<-%ld) ", reg, lit);
         list_add_uint32_t(&rtinfo.opc, op);
         cur_pc += sizeof (uint32_t);
-        handle_reg(c);
         break;
     }
 }
@@ -220,7 +224,7 @@ void check_callsub(void) {
     }
 }
 
-void ldr_str(bool str) {
+void ldr_str(bool store) {
     int start_pos = i;
     readsym();
     srcbuf[i - 1] = '\0';
@@ -236,22 +240,26 @@ void ldr_str(bool str) {
         printf("could not find stack obj.\n");
         return;
     }
-    uint32_t op;
-    if (str) {
-        if (pobj->size == 8)
-            op = STRX;
-        else
-            op = STRW;
+    uint16_t offset = pobj->offset;
+    uint16_t size = pobj->size;
+    bool unscaled = offset % size != 0;
+    uint32_t op = 0xb8000000;
+    if (!store)
+        op |= 1 << 22;
+    if (!unscaled)
+        op |= 1 << 24;
+    if (size == 8)
+        op |= 1 << 30;
+    else if (size != 4)
+        printf("!!!unimpl size!!!");
+    char *opname = store ? "str" : "ldr";
+    printf("%s(obj %s(off %x siz %x) ", opname, name, offset, size);
+    if (unscaled) {
+        op |= offset << 12;
     } else {
-        if (pobj->size == 8)
-            op = LDRX;
-        else
-            op = LDRW;
+        op |= ((offset / size) << 10);
     }
-    char *opname = str ? "str" : "ldr";
-    printf("%s(obj %s(off %x siz %x) ", opname, name, pobj->offset, pobj->size);
     op |= (0b11111 << 5);
-    op |= ((pobj->offset / pobj->size) << 10);
     OPC(&rtinfo.opc, op);
 }
 
@@ -279,7 +287,6 @@ void hyphen(bool linked) {
     } else if (next == '[') {
         ldr_str(true);
     }
-    handle_reg(c);
 }
 
 void strlit_add(void) {
@@ -351,9 +358,8 @@ void parse(void) {
             }
         } else if (c == ':') {
             colons();
-        } else {
-            handle_reg(c);
         }
+        handle_reg(c);
     }
 }
 

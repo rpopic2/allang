@@ -9,6 +9,12 @@ _main:
     [file] =>_ftell =[filelen]
     [file], 0, 0 =>_fseek
 
+    srcbuf: addr
+    [filelen] =>_malloc =[srcbuf]
+
+    // , 1, [filelen], [file] =>fread
+    // [file] =>fclose
+
     0 ret
 
 filename:

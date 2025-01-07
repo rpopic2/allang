@@ -65,8 +65,9 @@ list (resolve_data)
 
 typedef struct _object {
     char *name;
-    int offset;
-    int size;
+    int16_t offset;
+    uint16_t size;
+    bool sign;
 } object;
 list (object)
 
