@@ -22,3 +22,5 @@
 #define B 0x14000000
 #define BL 0x94000000
 #define RET 0xd65f03c0
+
+#define CBNZ 0xb5000000

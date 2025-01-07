@@ -27,6 +27,7 @@ void compile_err(const char *s, ...) {
 struct list_uint32_t relocent;
 
 // parser context
+int ident = 0;
 struct list_uint32_t opc_all;
 char *strlits;
 int strlit_idx = 0;
@@ -224,6 +225,20 @@ void cmp(int lit) {
     cmpmode = false;
 }
 
+long readnum(void) {
+    size_t tok_start = i;
+    while ((c = srcbuf[i])) {
+        if (IS_DIGIT(c)) {
+            ++i;
+            continue;
+        }
+        break;
+    }
+    srcbuf[i] = '\0';
+    long lit = strtol(srcbuf + tok_start, NULL, 10);
+    return lit;
+}
+
 void digit(void) {
     size_t tok_start = i;
     while ((c = srcbuf[i])) {
@@ -357,15 +372,18 @@ void colons(void) {
         c = srcbuf[++i];
     }
 
-    printf("!(%c)\n", srcbuf[i]);
-    if (c == '$') {
-        printf("register ");
+    printf("\n(anoyn blk ");
+    if (c == ' ') {
         c = srcbuf[++i];
     }
-    size_t start_pos = i;
-    readsym();
-    srcbuf[i] = '\0';
-    printf("assign to(%s) ", srcbuf + start_pos);
+    if (c == '?') {
+        printf("cond) ");
+        int n = readnum();
+        if (n == 0) {
+            printf("tbnz ");
+            OPC(&rtinfo.opc, CBNZ | (6 << 5) | reg);
+        }
+    }
 }
 
 void parse(void) {
@@ -400,6 +418,23 @@ rerun_comment:
             colons();
         } else if (c == '?') {
             cmpmode = true;
+        } else if (c == ' ') {
+            char before = srcbuf[i - 1];
+            if (before != '\0' && before != '\n') {
+                printf("before! (%x)\n", before);
+                continue;
+            }
+            int space_count = 0;
+            while (c == ' ') {
+                c = srcbuf[++i];
+                // printf("~");
+                ++space_count;
+            }
+            c = srcbuf[--i];
+            if (space_count >= 4) {
+                ident = space_count / 4;
+                printf("\n\tsp(%d)%d ", space_count, ident);
+            }
         } else if (c > ' ') {
             printf("unknwon tok '%c'(%x) ", c, c);
         }
