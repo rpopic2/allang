@@ -179,13 +179,13 @@ void letter(void) {
             } else if (strcmp(next_tok, "addr") == 0) {
                 objsiz = 8;
             }
-            rtinfo.stacksiz += objsiz;
             struct _object obj = {
                 .name = label,
                 .offset = rtinfo.stacksiz,
                 .size = objsiz,
             };
-            printf("stackobj (%s) ", label);
+            rtinfo.stacksiz += objsiz;
+            printf("stackobj (%s off %x, siz %x) ", label, obj.offset, obj.size);
             list_add_object(&objects, obj);
         }
     } else {
@@ -220,12 +220,11 @@ void check_callsub(void) {
     }
 }
 
-void str(void) {
+void ldr_str(bool str) {
     int start_pos = i;
     readsym();
     srcbuf[i - 1] = '\0';
     char *name = srcbuf + start_pos + 1;
-    printf("str(obj %s) ", name);
 
     struct _object *pobj = NULL;
     for (int i = 0; i < objects.count; ++i) {
@@ -238,37 +237,19 @@ void str(void) {
         return;
     }
     uint32_t op;
-    if (pobj->size == 8)
-        op = STRX;
-    else
-        op = STRW;
-    op |= (0b11111 << 5);
-    op |= ((pobj->offset / pobj->size) << 10);
-    OPC(&rtinfo.opc, op);
-}
-
-void ldr(void) {
-    int start_pos = i;
-    readsym();
-    srcbuf[i - 1] = '\0';
-    char *name = srcbuf + start_pos + 1;
-    printf("ldr(obj %s) ", name);
-
-    struct _object *pobj = NULL;
-    for (int i = 0; i < objects.count; ++i) {
-        if (strcmp(name, objects.data[i].name) == 0) {
-            pobj = objects.data + i;
-        }
+    if (str) {
+        if (pobj->size == 8)
+            op = STRX;
+        else
+            op = STRW;
+    } else {
+        if (pobj->size == 8)
+            op = LDRX;
+        else
+            op = LDRW;
     }
-    if (pobj == NULL) {
-        printf("could not find stack obj.\n");
-        return;
-    }
-    uint32_t op;
-    if (pobj->size == 8)
-        op = LDRX;
-    else
-        op = LDRW;
+    char *opname = str ? "str" : "ldr";
+    printf("%s(obj %s(off %x siz %x) ", opname, name, pobj->offset, pobj->size);
     op |= (0b11111 << 5);
     op |= ((pobj->offset / pobj->size) << 10);
     OPC(&rtinfo.opc, op);
@@ -296,7 +277,7 @@ void hyphen(bool linked) {
         list_add_resolve_data(&to_resolve, tmp);
         cur_pc += sizeof (uint32_t);
     } else if (next == '[') {
-        str();
+        ldr_str(true);
     }
     handle_reg(c);
 }
@@ -352,7 +333,7 @@ void parse(void) {
     for (i = 0; i < filelen - 1; ++i) {
         c = srcbuf[i];
         if (c == '[') {
-            ldr();
+            ldr_str(false);
         } else if (IS_LETTER(c)) {
             letter();
         } else if (IS_DIGIT(c)) {
