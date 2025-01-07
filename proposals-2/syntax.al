@@ -120,10 +120,11 @@ foo:
     [i] =[k]    // k holds value of i32
 
 # structs
-    coord (x: i32, y: i32)
+    coord { x: i32, y: i32 }
 
-    start_pos: <coord>
+    start_pos: #coord
     3 =[coord.x], 4 =[coord.y]
+    { 3, 4 } =[coord]
 
 # arrays
     arr: i32 10

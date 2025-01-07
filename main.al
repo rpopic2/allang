@@ -1,10 +1,11 @@
 _main:
-    filename, readmode =>_fopen
-    =>_fclose
+    file: addr
+    filename, readmode =>_fopen =[file]
 
-    // .file: addr
-    // filename, readmode =>_fopen =[file]
-    // , 0, 2 =>_fseek =>_ftell
+    , 0, 2 =>_fseek
+    [file] =>_ftell
+    ret
+test:
     ret
 
 filename:

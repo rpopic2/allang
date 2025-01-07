@@ -37,10 +37,15 @@
         self->count += nitems; \
     } \
 
+
+enum symbol_type {
+    unknwon, code, code_undef, stack_obj
+};
+
 struct symbol {
     char *p;
     uint32_t addr;
-    bool undef;
+    enum symbol_type type;
 };
 
 list (uint32_t)
@@ -56,8 +61,14 @@ typedef struct _resolve_data {
     uint32_t addr;
     char *str;
 } resolve_data;
-list(resolve_data)
+list (resolve_data)
 
+typedef struct _object {
+    char *name;
+    int offset;
+    int size;
+} object;
+list (object)
 
 void symbols_new(struct _symbols *self) {
     self->data = malloc(INIT_CAP * sizeof (struct _symbols));

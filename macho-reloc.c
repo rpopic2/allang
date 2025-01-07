@@ -17,7 +17,7 @@ void compile_err(const char *s, ...) {
 }
 #define IS_DIGIT(c) (c >= '0' && c <= '9')
 #define IS_LETTER(c) (c >= 'A' && c <= 'z')
-#define OPC(o, op) list_add_uint32_t(o, op); cur_pc += sizeof (uint32_t);
+#define OPC(o, op) list_add_uint32_t(o, (op)); cur_pc += sizeof (uint32_t);
 
 struct list_uint32_t relocent;
 
@@ -35,6 +35,7 @@ uint64_t cur_pc = 0;
 int reg = 0;
 size_t i;
 char c;
+struct list_object objects;
 struct {
     size_t stacksiz;
     bool callsub;
@@ -48,30 +49,59 @@ void rst_rtinfo(void) {
     rtinfo.opc.count = 0;
     rtinfo.callsub = false;
     rtinfo.stacksiz = 0;
+    objects.count = 0;
 }
 
 void endofrt(void) {
     if (rtinfo.stacksiz == 0 && rtinfo.callsub) {
-        list_add_uint32_t(&opc_all, STP_PREL);
-        cur_pc += sizeof (uint32_t);
+        OPC(&opc_all, STPPRE_PREL)
+        OPC(&opc_all, ADD_IMM | (0x1f << 5) | (0x1d))
 
         for (int i = rtinfo.to_resolve_start; i < to_resolve.count; ++i) {
-            // printf("add %s ", to_resolve.data[i].str);
-            to_resolve.data[i].addr += sizeof (uint32_t);
+            to_resolve.data[i].addr += 8;
         }
 
         uint32_t *last = rtinfo.opc.data + rtinfo.opc.count - 1;
-        if (*last == RET) {
-            *last = LDP_PREL;
+        bool last_ret = *last == RET;
+        if (last_ret)
+            rtinfo.opc.count -= 1;
+
+        OPC(&rtinfo.opc, LDPPOST_PREL)
+        if (last_ret)
             list_add_uint32_t(&rtinfo.opc, RET);
-        } else {
-            list_add_uint32_t(&rtinfo.opc, LDP_PREL);
+    } else if (rtinfo.stacksiz > 0) {
+        int push = 4;
+        if (rtinfo.callsub)
+            rtinfo.stacksiz += 0x10;   // sizeof { fp, lr }
+        rtinfo.stacksiz += rtinfo.stacksiz % 0x10;
+        OPC(&opc_all, SUB | (rtinfo.stacksiz << 10) | (0b1111111111))
+        int stpat = (rtinfo.stacksiz - 0x10) / 8;
+        if (rtinfo.callsub) {
+            OPC(&opc_all, STP_PREL | (stpat << 15))
+            OPC(&opc_all, ADD_IMM | (0x10 << 0xa) | (31 << 5) | (29))
+            push += 8;
         }
-        cur_pc += sizeof (uint32_t);
+
+        for (int i = rtinfo.to_resolve_start; i < to_resolve.count; ++i) {
+            to_resolve.data[i].addr += push;
+        }
+
+        uint32_t *last = rtinfo.opc.data + rtinfo.opc.count - 1;
+        bool last_ret = *last == RET;
+        if (last_ret)
+            rtinfo.opc.count -= 1;
+
+        if (rtinfo.callsub) {
+            OPC(&rtinfo.opc, LDP_PREL | (stpat << 15))
+        }
+        OPC(&rtinfo.opc, ADD_IMM | (rtinfo.stacksiz << 10 | (0b1111111111)))
+
+        if (last_ret)
+            list_add_uint32_t(&rtinfo.opc, RET);
     }
     rtinfo.to_resolve_start = to_resolve.count;
     list_addrang_uint32_t(&opc_all, rtinfo.opc.data, rtinfo.opc.count);
-    printf("\nend of routine, stacksiz %zu, sub %i\n", rtinfo.stacksiz, rtinfo.callsub);
+    printf("\nend of routine, stacksiz %zx, sub %i\n", rtinfo.stacksiz, rtinfo.callsub);
 }
 
 void handle_reg(char c) {
@@ -117,22 +147,45 @@ void letter(void) {
             printf("adrpadd(%s @%x) ", tmp, rd.addr);
         }
     } else if (end == ':') {
-        if (rtinfo.inrt) {
+        bool newrt = srcbuf[i + 1] == '\n';
+        if (newrt && rtinfo.inrt) {
             endofrt();
             rtinfo.inrt = false;
         }
         srcbuf[i] = '\0';
-        struct symbol s = {
-            .p = srcbuf + tok_start,
-            .addr = cur_pc,
-            .undef = false,
-        };
-        symbols_add(&symbols, s);
-        printf("\nsym(%s @0x%x) ", s.p, s.addr);
-        rst_rtinfo();
-        if (srcbuf[i + 1] == '\n') {
+        char next = srcbuf[i + 1];
+        char *label = srcbuf + tok_start;
+        if (next == '\n') {
+            struct symbol s = {
+                .p = label,
+                .addr = cur_pc,
+                .type = unknwon,
+            };
+            symbols_add(&symbols, s);
+            printf("\nsym(%s @0x%x) ", s.p, s.addr);
+            rst_rtinfo();
             printf("start of routine\n");
             rtinfo.inrt = true;
+        } else if (IS_LETTER(srcbuf[i + 2])) {
+            ++i;
+            int tok_start2 = ++i;
+            readsym();
+            srcbuf[i] = '\0';
+            char *next_tok = srcbuf + tok_start2;
+            int objsiz = 0;
+            if (strcmp(next_tok, "i32") == 0) {
+                objsiz = 4;
+            } else if (strcmp(next_tok, "addr") == 0) {
+                objsiz = 8;
+            }
+            rtinfo.stacksiz += objsiz;
+            struct _object obj = {
+                .name = label,
+                .offset = rtinfo.stacksiz,
+                .size = objsiz,
+            };
+            printf("stackobj (%s) ", label);
+            list_add_object(&objects, obj);
         }
     } else {
         printf("unknown end (%c)", end);
@@ -166,6 +219,58 @@ void check_callsub(void) {
     }
 }
 
+void str(void) {
+    int start_pos = i;
+    readsym();
+    srcbuf[i - 1] = '\0';
+    char *name = srcbuf + start_pos + 1;
+    printf("str(obj %s) ", name);
+
+    struct _object *pobj = NULL;
+    for (int i = 0; i < objects.count; ++i) {
+        if (strcmp(name, objects.data[i].name) == 0) {
+            pobj = objects.data + i;
+        }
+    }
+    if (pobj == NULL) {
+        printf("could not find stack obj.\n");
+        return;
+    }
+    uint32_t op;
+    if (pobj->size == 8)
+        op = STRX;
+    else
+        op = STRW;
+    op |= (0b11111 << 5);
+    OPC(&rtinfo.opc, op);
+}
+
+void ldr(void) {
+    int start_pos = i;
+    readsym();
+    srcbuf[i - 1] = '\0';
+    char *name = srcbuf + start_pos + 1;
+    printf("ldr(obj %s) ", name);
+
+    struct _object *pobj = NULL;
+    for (int i = 0; i < objects.count; ++i) {
+        if (strcmp(name, objects.data[i].name) == 0) {
+            pobj = objects.data + i;
+        }
+    }
+    if (pobj == NULL) {
+        printf("could not find stack obj.\n");
+        return;
+    }
+    uint32_t op;
+    if (pobj->size == 8)
+        op = LDRX;
+    else
+        op = LDRW;
+    op |= (0b11111 << 5);
+    OPC(&rtinfo.opc, op);
+}
+
 void hyphen(bool linked) {
     char next = srcbuf[++i];
     if (next == '>') {
@@ -187,6 +292,8 @@ void hyphen(bool linked) {
         struct _resolve_data tmp = { .addr = cur_pc, .str = str };
         list_add_resolve_data(&to_resolve, tmp);
         cur_pc += sizeof (uint32_t);
+    } else if (next == '[') {
+        str();
     }
     handle_reg(c);
 }
@@ -241,7 +348,9 @@ void colons(void) {
 void parse(void) {
     for (i = 0; i < filelen - 1; ++i) {
         c = srcbuf[i];
-        if (IS_LETTER(c)) {
+        if (c == '[') {
+            ldr();
+        } else if (IS_LETTER(c)) {
             letter();
         } else if (IS_DIGIT(c)) {
             digit();
@@ -283,7 +392,7 @@ void resolve_symbols(void) {
             struct symbol tmp = {
                 .addr = 0,
                 .p = d.str,
-                .undef = true,
+                .type = code_undef,
             };
             list_add_uint32_t(&relocent, d.addr);
             int idx = symbols.count;
@@ -293,6 +402,8 @@ void resolve_symbols(void) {
             ++nundefsyms;
             continue;
         }
+        if (s->type == unknwon)
+            s->type = code;
         size_t idx = d.addr / sizeof (uint32_t);
         uint32_t opcode = opc_all.data[idx];
         if (opcode == B || opcode == BL) {
@@ -332,6 +443,7 @@ int main(void) {
     fread(srcbuf, sizeof (char), filelen, src);
     fclose(src);
 
+    list_new_object(&objects);
     list_new_uint32_t(&relocent);
     list_new_uint32_t(&opc_all);
     list_new_uint32_t(&rtinfo.opc);
@@ -358,13 +470,13 @@ int main(void) {
         struct symbol data = symbols.data[i];
         char *s = data.p;
         unsigned long len = strlen(s);
-        while (strtab_idx + len > strtab_size) {
+        while (strtab_idx + len >= strtab_size) {
             strtab_size += 0x10;
             strtab = reallocf(strtab, strtab_size);
         }
         strlcpy(strtab + strtab_idx, s, strtab_size - strtab_idx);
         uint64_t flag;
-        if (data.undef) {
+        if (data.type == code_undef) {
             flag = 0x0100000000;
         } else {
             flag = 0x010f00000000;
@@ -533,11 +645,13 @@ int main(void) {
     FILE *file = fopen("machoreloc.out", "w");
     fwrite(buf_base, sizeof (char), total_size, file);
     fclose(file);
-    free(buf_base);
-    symbols_delete(&symbols);
-    list_delete_uint32_t(&relocent);
-    list_delete_uint32_t(&opc_all);
-    list_delete_resolve_data(&to_resolve);
-    list_delete_uint64_t(&symtab_data);
+    // not freed on purpose for performance gain
+    /* free(buf_base); */
+    /* symbols_delete(&symbols); */
+    /* list_delete_object(&relocent); */
+    /* list_delete_uint32_t(&relocent); */
+    /* list_delete_uint32_t(&opc_all); */
+    /* list_delete_resolve_data(&to_resolve); */
+    /* list_delete_uint64_t(&symtab_data); */
 }
 
