@@ -12,8 +12,8 @@ _main:
     srcbuf: addr
     [filelen] =>_malloc =[srcbuf]
 
-    // , 1, [filelen], [file] =>fread
-    // [file] =>fclose
+    , 1, [filelen], [file] =>_fread
+    [file] =>_fclose
 
     0 ret
 

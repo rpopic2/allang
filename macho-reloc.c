@@ -29,7 +29,7 @@ struct list_uint32_t opc_all;
 char *strlits;
 int strlit_idx = 0;
 int strlit_cap = INIT_CAP;
-struct _symbols symbols;
+struct list_symbol_t symbols;
 int nundefsyms = 0;
 struct list_resolve_data to_resolve;
 char *srcbuf;
@@ -53,6 +53,18 @@ void rst_rtinfo(void) {
     rtinfo.callsub = false;
     rtinfo.stacksiz = 0;
     objects.count = 0;
+}
+
+void draw_stack(void) {
+    printf("\n");
+    for (int i = 0; i < objects.count; ++i) {
+        struct _object *obj = objects.data + i;
+        printf("|%x\t%s(%x)\n", obj->offset, obj->name, obj->size);
+        int lines = obj->size / 2;
+        for (int j = 0; j < lines; ++j) {
+            printf("|\n");
+        }
+    }
 }
 
 void endofrt(void) {
@@ -103,6 +115,7 @@ void endofrt(void) {
         if (last_ret)
             list_add_uint32_t(&rtinfo.opc, RET);
     }
+    draw_stack();
     rtinfo.to_resolve_start = to_resolve.count;
     list_addrang_uint32_t(&opc_all, rtinfo.opc.data, rtinfo.opc.count);
     printf("\nend of routine, stacksiz %zx, sub %i\n", rtinfo.stacksiz, rtinfo.callsub);
@@ -165,7 +178,7 @@ void letter(void) {
                 .addr = cur_pc,
                 .type = unknwon,
             };
-            symbols_add(&symbols, s);
+            list_add_symbol_t(&symbols, s);
             printf("\nsym(%s @0x%x) ", s.p, s.addr);
             rst_rtinfo();
             printf("start of routine\n");
@@ -244,8 +257,10 @@ void ldr_str(bool store) {
     uint16_t size = pobj->size;
     bool unscaled = offset % size != 0;
     uint32_t op = 0xb8000000;
-    if (!store)
+    if (!store) {
         op |= 1 << 22;
+        op |= reg;
+    }
     if (!unscaled)
         op |= 1 << 24;
     if (size == 8)
@@ -388,7 +403,8 @@ void resolve_symbols(void) {
             int idx = symbols.count;
             list_add_uint32_t(&relocent, 0x2d000000 | idx);
 
-            symbols_add(&symbols, tmp);
+            list_add_symbol_t(&symbols, tmp);
+            printf("\nundefsym(%s @0x%x) ", tmp.p, tmp.addr);
             ++nundefsyms;
             continue;
         }
@@ -442,7 +458,7 @@ int main(void) {
     list_new_uint32_t(&opc_all);
     list_new_uint32_t(&rtinfo.opc);
     list_new_resolve_data(&to_resolve);
-    symbols_new(&symbols);
+    list_new_symbol_t(&symbols);
     strlits = malloc(INIT_CAP);
 
     printf(":: parse start\n");
@@ -464,6 +480,7 @@ int main(void) {
         struct symbol data = symbols.data[i];
         char *s = data.p;
         unsigned long len = strlen(s);
+        // printf("%s\n", s);
         while (strtab_idx + len >= strtab_size) {
             strtab_size += 0x10;
             strtab = reallocf(strtab, strtab_size);
@@ -479,6 +496,7 @@ int main(void) {
         list_add_uint64_t(&symtab_data, data.addr);
         strtab_idx += strlen(s) + 1;
     }
+    printf("done strtab\n");
 
     int symtab_data_size = symtab_data.count * sizeof (uint64_t);
     total_size += symtab_data_size;
@@ -641,7 +659,7 @@ int main(void) {
     fclose(file);
     // not freed on purpose for performance gain
     /* free(buf_base); */
-    /* symbols_delete(&symbols); */
+    /* list_delete_symbol_t(&symbols); */
     /* list_delete_object(&relocent); */
     /* list_delete_uint32_t(&relocent); */
     /* list_delete_uint32_t(&opc_all); */

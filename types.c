@@ -17,9 +17,10 @@
         self->count = 0; \
     } \
     void list_reserv_##T(struct list_ ## T *self, size_t newcap) { \
-        while (self->cap < newcap) { \
-            printf("realloc cap (%d -> %zx)\n", self->cap, newcap); \
+        while (self->cap <= newcap) { \
+            printf(#T"realloc cap(%zx) (%x ->", newcap, self->cap); \
             self->cap *= 2; \
+            printf(" %x)\n", self->cap); \
             self->data = reallocf(self->data, self->cap * sizeof (T)); \
         } \
     } \
@@ -42,20 +43,16 @@ enum symbol_type {
     unknwon, code, code_undef, stack_obj
 };
 
-struct symbol {
+typedef struct symbol {
     char *p;
     uint32_t addr;
     enum symbol_type type;
-};
+} symbol_t;
+list (symbol_t)
 
 list (uint32_t)
 list (uint64_t)
 
-struct _symbols {
-    struct symbol *data;
-    int count;
-    int cap;
-};
 
 typedef struct _resolve_data {
     uint32_t addr;
@@ -70,23 +67,4 @@ typedef struct _object {
     bool sign;
 } object;
 list (object)
-
-void symbols_new(struct _symbols *self) {
-    self->data = malloc(INIT_CAP * sizeof (struct _symbols));
-    self->cap = INIT_CAP;
-    self->count = 0;
-}
-void symbols_add(struct _symbols *self, struct symbol target) {
-    int cap = self->cap;
-    if (self->count >= cap) {
-        self->data = reallocf(self->data, cap * 2);
-        printf("realloc\n");
-    }
-    self->data[self->count] = target;
-    self->count += 1;
-}
-
-void symbols_delete(struct _symbols *self) {
-    free(self->data);
-}
 
