@@ -8,6 +8,8 @@
 #define printf(...) \
     printf(__VA_ARGS__) \
 
+// #define AL_DRAW_STACK
+
 #include "types.c"
 #include "opcode.c"
 
@@ -38,13 +40,14 @@ uint64_t cur_pc = 0;
 int reg = 0;
 size_t i;
 char c;
+bool cmpmode = false;
 struct list_object objects;
 struct {
     size_t stacksiz;
-    bool callsub;
     struct list_uint32_t opc;
-    bool inrt;
     int to_resolve_start;
+    bool inrt;
+    bool callsub;
 } rtinfo;
 // end
 
@@ -52,19 +55,22 @@ void rst_rtinfo(void) {
     rtinfo.opc.count = 0;
     rtinfo.callsub = false;
     rtinfo.stacksiz = 0;
+    cmpmode = false;
     objects.count = 0;
 }
 
 void draw_stack(void) {
+#ifdef AL_DRAW_STACK
     printf("\n");
     for (int i = 0; i < objects.count; ++i) {
         struct _object *obj = objects.data + i;
         printf("|%x\t%s(%x)\n", obj->offset, obj->name, obj->size);
         int lines = obj->size / 2;
-        for (int j = 0; j < lines; ++j) {
+        for (int j = 1; j < lines; ++j) {
             printf("|\n");
         }
     }
+#endif
 }
 
 void endofrt(void) {
@@ -212,6 +218,12 @@ void letter(void) {
     }
 }
 
+void cmp(int lit) {
+    printf("cmp(w%d<-%d) \n", reg, lit);
+    OPC(&rtinfo.opc, CMP | (lit << 10));
+    cmpmode = false;
+}
+
 void digit(void) {
     size_t tok_start = i;
     while ((c = srcbuf[i])) {
@@ -221,8 +233,13 @@ void digit(void) {
         }
         srcbuf[i] = '\0';
         long lit = strtol(srcbuf + tok_start, NULL, 10);
+        if (cmpmode) {
+            cmp(lit);
+            break;
+        }
+
         uint32_t op = MOV | lit << 5 | reg;
-        printf("mov(w%d<-%ld) ", reg, lit);
+        printf("mov(w%d<-%ld) \n", reg, lit);
         list_add_uint32_t(&rtinfo.opc, op);
         cur_pc += sizeof (uint32_t);
         break;
@@ -268,7 +285,7 @@ void ldr_str(bool store) {
     else if (size != 4)
         printf("!!!unimpl size!!!");
     char *opname = store ? "str" : "ldr";
-    printf("%s(obj %s(off %x siz %x) ", opname, name, offset, size);
+    printf("%s obj %s(off %x siz %x) ", opname, name, offset, size);
     if (unscaled) {
         op |= offset << 12;
     } else {
@@ -367,12 +384,24 @@ void parse(void) {
         } else if (c == '/') {
             c = srcbuf[++i];
             if (c == '/') {
-                printf("comment ");
+                printf("comment \n");
                 while (c != '\n')
                     c = srcbuf[++i];
             }
+            if (c == '*') {
+                printf("multiline comment \n");
+rerun_comment:
+                while (c != '*')
+                    c = srcbuf[++i];
+                if (srcbuf[++i] != '/')
+                    goto rerun_comment;
+            }
         } else if (c == ':') {
             colons();
+        } else if (c == '?') {
+            cmpmode = true;
+        } else if (c > ' ') {
+            printf("unknwon tok '%c'(%x) ", c, c);
         }
         handle_reg(c);
     }
@@ -453,12 +482,12 @@ int main(void) {
     fread(srcbuf, sizeof (char), filelen, src);
     fclose(src);
 
-    list_new_object(&objects);
-    list_new_uint32_t(&relocent);
-    list_new_uint32_t(&opc_all);
-    list_new_uint32_t(&rtinfo.opc);
-    list_new_resolve_data(&to_resolve);
-    list_new_symbol_t(&symbols);
+    list_new_object(&objects, INIT_CAP, "obj");
+    list_new_uint32_t(&relocent, INIT_CAP, "reloc");
+    list_new_uint32_t(&opc_all, 0x100, "opc");
+    list_new_uint32_t(&rtinfo.opc, INIT_CAP, "rt");
+    list_new_resolve_data(&to_resolve, INIT_CAP, "resolv");
+    list_new_symbol_t(&symbols, INIT_CAP, "symb");
     strlits = malloc(INIT_CAP);
 
     printf(":: parse start\n");
@@ -469,7 +498,7 @@ int main(void) {
     printf("\n:: resolv end\n");
 
     struct list_uint64_t symtab_data;
-    list_new_uint64_t(&symtab_data);
+    list_new_uint64_t(&symtab_data, INIT_CAP, "symtab");
 
     int strtab_size = 0x10;
     char *strtab = malloc(strtab_size * sizeof (char));

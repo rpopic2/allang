@@ -10,16 +10,18 @@
         T *data; \
         int count; \
         int cap; \
+        char *debug_name; \
     }; \
-    void list_new_##T(struct list_ ## T *self) { \
-        self->data = malloc(INIT_CAP * sizeof (T)); \
-        self->cap = INIT_CAP; \
+    void list_new_##T(struct list_ ## T *self, int init_cap, char *debug_name) { \
+        self->data = malloc(init_cap * sizeof (T)); \
+        self->cap = init_cap; \
         self->count = 0; \
+        self->debug_name = debug_name; \
     } \
     void list_reserv_##T(struct list_ ## T *self, size_t newcap) { \
         while (self->cap <= newcap) { \
-            printf(#T"realloc cap(%zx) (%x ->", newcap, self->cap); \
-            self->cap *= 2; \
+            printf("%s realloc cap(%zx) (%x ->", self->debug_name, newcap, self->cap); \
+            self->cap = self->cap << 2; \
             printf(" %x)\n", self->cap); \
             self->data = reallocf(self->data, self->cap * sizeof (T)); \
         } \
@@ -39,20 +41,18 @@
     } \
 
 
+list (uint32_t)
+list (uint64_t)
+
 enum symbol_type {
     unknwon, code, code_undef, stack_obj
 };
-
 typedef struct symbol {
     char *p;
     uint32_t addr;
     enum symbol_type type;
 } symbol_t;
 list (symbol_t)
-
-list (uint32_t)
-list (uint64_t)
-
 
 typedef struct _resolve_data {
     uint32_t addr;

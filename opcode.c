@@ -17,6 +17,7 @@
 #define MOV 0x52800000
 #define MOV_X 0xD2800000
 #define SUB 0xd1000000
+#define CMP 0xf100001f
 
 #define B 0x14000000
 #define BL 0x94000000
