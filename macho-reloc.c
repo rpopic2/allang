@@ -125,7 +125,6 @@ void endofrt(void) {
     }
     for (int i = rtinfo.to_resolve_start; i < to_resolve.count; ++i) {
         to_resolve.data[i].addr += push;
-        printf("push sym %s, %x\n", to_resolve.data[i].str, to_resolve.data[i].addr);
     }
     for (int i = rtinfo.loc_symbol_start; i < symbols.count; ++i) {
         symbols.data[i].addr += push;
@@ -208,12 +207,25 @@ void letter(void) {
             char *next_tok = srcbuf + tok_start2;
             int objsiz = 0;
             bool sign = false;
-            if (strcmp(next_tok, "i32") == 0) {
-                objsiz = 4;
-                sign = true;
+            if (next_tok[0] == 'u' || next_tok[0] == 'i') {
+                bool is_int = false;
+                if (strcmp(next_tok + 1, "8") == 0) {
+                    objsiz = 1;
+                    is_int = true;
+                } else if (strcmp(next_tok + 1, "16") == 0) {
+                    objsiz = 2;
+                    is_int = true;
+                } else if (strcmp(next_tok + 1, "32") == 0) {
+                    objsiz = 4;
+                    is_int = true;
+                } else if (strcmp(next_tok + 1, "64") == 0) {
+                    objsiz = 8;
+                    is_int = true;
+                }
+                if (is_int) {
+                    sign = next_tok[0] == 'i';
+                }
             } else if (strcmp(next_tok, "addr") == 0) {
-                objsiz = 8;
-            } else if (strcmp(next_tok, "u64") == 0) {
                 objsiz = 8;
             }
             struct _object obj = {

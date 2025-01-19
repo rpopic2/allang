@@ -5,7 +5,7 @@ _main:
         fileopen_err =>_printf
         1 =>_exit
 
-    filelen: i32
+    filelen: i64
     , 0, 2 =>_fseek
     [file] =>_ftell =[filelen]
     [file], 0, 0 =>_fseek
