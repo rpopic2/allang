@@ -8,7 +8,7 @@
 #define printf(...) \
     printf(__VA_ARGS__) \
 
-// #define AL_DRAW_STACK
+#define AL_DRAW_STACK
 
 #include "types.c"
 #include "opcode.c"
@@ -85,7 +85,7 @@ void endofrt(void) {
     int push = 0;
     if (rtinfo.stacksiz == 0 && rtinfo.callsub) {
         OPC(&opc_all, STPPRE_PREL)
-        OPC(&opc_all, ADD_IMM | (0x1f << 5) | (0x1d))
+        OPC(&opc_all, ADD_IMM | (31) | (29))
 
         uint32_t *last = rtinfo.opc.data + rtinfo.opc.count - 1;
         bool last_ret = *last == RET;
@@ -106,7 +106,7 @@ void endofrt(void) {
         int stpat = (rtinfo.stacksiz - 0x10) / 8;
         if (rtinfo.callsub) {
             OPC(&opc_all, STP_PREL | (stpat << 15))
-            OPC(&opc_all, ADD_IMM | (0x10 << 0xa) | (31 << 5) | (29))
+            OPC(&opc_all, ADD_IMM | ((stpat * 8) << 0xa) | (31 << 5) | (29))
             push += 8;
         }
 
@@ -212,6 +212,8 @@ void letter(void) {
                 objsiz = 4;
                 sign = true;
             } else if (strcmp(next_tok, "addr") == 0) {
+                objsiz = 8;
+            } else if (strcmp(next_tok, "u64") == 0) {
                 objsiz = 8;
             }
             struct _object obj = {
@@ -384,7 +386,7 @@ void colons(void) {
 
     printf("\n(anoyn blk ");
     asprintf(&blk_name, "__anoyn_blk_%d", blk_idx);
-    asprintf(&blk_name_brk, "__anoyn_blk_%d.break", blk_idx);
+    asprintf(&blk_name_brk, "__anoyn_blk_%d_brk", blk_idx);
     if (c == ' ') {
         c = srcbuf[++i];
     }
@@ -459,6 +461,7 @@ rerun_comment:
                     };
                     list_add_symbol_t(&symbols, s);
                     printf("end of blk, pc: %x\n", s.addr);
+                    blk_idx += 1;
                 }
                 printf("\nident %d(before %d, pc %llx)", ident, ident_before, cur_pc);
             }

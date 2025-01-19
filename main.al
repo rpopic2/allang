@@ -12,9 +12,14 @@ _main:
 
     srcbuf: addr
     [filelen] =>_malloc =[srcbuf]
+    :: ? 0
+        malloc_err =>_printf
+        1 =>_exit
 
     , 1, [filelen], [file] =>_fread
     [file] =>_fclose
+
+    [srcbuf] =>_printf
 
 parse:
     0 ret
@@ -25,3 +30,5 @@ readmode:
     "r"
 fileopen_err:
     "could not open file"
+malloc_err:
+    "malloc failed"
