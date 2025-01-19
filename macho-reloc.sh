@@ -1,1 +1,1 @@
-clang ./macho-reloc.c -o macho-reloc && ./macho-reloc && hexdump -C ./machoreloc.out #&& ld machoreloc.out -lSystem -syslibroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk -o machoreloc && ./machoreloc && echo $?
+clang ./macho-reloc.c -o macho-reloc && ./macho-reloc && hexdump -C ./machoreloc.out && ld machoreloc.out -lSystem -syslibroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk -o machoreloc && ./machoreloc && echo $?

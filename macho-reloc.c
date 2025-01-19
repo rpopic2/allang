@@ -28,6 +28,12 @@ struct list_uint32_t relocent;
 
 // parser context
 int ident = 0;
+int ident_before = 0;
+
+char *blk_name = "";
+char *blk_name_brk = "";
+int blk_idx = 0;
+
 struct list_uint32_t opc_all;
 char *strlits;
 int strlit_idx = 0;
@@ -47,6 +53,7 @@ struct {
     size_t stacksiz;
     struct list_uint32_t opc;
     int to_resolve_start;
+    int loc_symbol_start;
     bool inrt;
     bool callsub;
 } rtinfo;
@@ -75,25 +82,23 @@ void draw_stack(void) {
 }
 
 void endofrt(void) {
+    int push = 0;
     if (rtinfo.stacksiz == 0 && rtinfo.callsub) {
         OPC(&opc_all, STPPRE_PREL)
         OPC(&opc_all, ADD_IMM | (0x1f << 5) | (0x1d))
-
-        for (int i = rtinfo.to_resolve_start; i < to_resolve.count; ++i) {
-            to_resolve.data[i].addr += 8;
-        }
 
         uint32_t *last = rtinfo.opc.data + rtinfo.opc.count - 1;
         bool last_ret = *last == RET;
         if (last_ret)
             rtinfo.opc.count -= 1;
+        push = 8;
 
         OPC(&rtinfo.opc, LDPPOST_PREL)
         if (last_ret)
             list_add_uint32_t(&rtinfo.opc, RET);
     } else if (rtinfo.stacksiz > 0) {
         printf("original stack(%zx) ", rtinfo.stacksiz);
-        int push = 4;
+        push = 4;
         if (rtinfo.callsub)
             rtinfo.stacksiz += 0x10;   // sizeof { fp, lr }
         rtinfo.stacksiz += 0x10 - (rtinfo.stacksiz % 0x10);
@@ -103,10 +108,6 @@ void endofrt(void) {
             OPC(&opc_all, STP_PREL | (stpat << 15))
             OPC(&opc_all, ADD_IMM | (0x10 << 0xa) | (31 << 5) | (29))
             push += 8;
-        }
-
-        for (int i = rtinfo.to_resolve_start; i < to_resolve.count; ++i) {
-            to_resolve.data[i].addr += push;
         }
 
         uint32_t *last = rtinfo.opc.data + rtinfo.opc.count - 1;
@@ -122,6 +123,14 @@ void endofrt(void) {
         if (last_ret)
             list_add_uint32_t(&rtinfo.opc, RET);
     }
+    for (int i = rtinfo.to_resolve_start; i < to_resolve.count; ++i) {
+        to_resolve.data[i].addr += push;
+        printf("push sym %s, %x\n", to_resolve.data[i].str, to_resolve.data[i].addr);
+    }
+    for (int i = rtinfo.loc_symbol_start; i < symbols.count; ++i) {
+        symbols.data[i].addr += push;
+    }
+
     draw_stack();
     rtinfo.to_resolve_start = to_resolve.count;
     list_addrang_uint32_t(&opc_all, rtinfo.opc.data, rtinfo.opc.count);
@@ -190,6 +199,7 @@ void letter(void) {
             rst_rtinfo();
             printf("start of routine\n");
             rtinfo.inrt = true;
+            rtinfo.loc_symbol_start = symbols.count;
         } else if (IS_LETTER(srcbuf[i + 2])) {
             ++i;
             int tok_start2 = ++i;
@@ -373,6 +383,8 @@ void colons(void) {
     }
 
     printf("\n(anoyn blk ");
+    asprintf(&blk_name, "__anoyn_blk_%d", blk_idx);
+    asprintf(&blk_name_brk, "__anoyn_blk_%d.break", blk_idx);
     if (c == ' ') {
         c = srcbuf[++i];
     }
@@ -380,8 +392,13 @@ void colons(void) {
         printf("cond) ");
         int n = readnum();
         if (n == 0) {
-            printf("tbnz ");
-            OPC(&rtinfo.opc, CBNZ | (6 << 5) | reg);
+            printf("cbnz ");
+            struct _resolve_data tmp = {
+                .addr = cur_pc,
+                .str = blk_name_brk,
+            };
+            list_add_resolve_data(&to_resolve, tmp);
+            OPC(&rtinfo.opc, CBNZ | reg);
         }
     }
 }
@@ -432,8 +449,18 @@ rerun_comment:
             }
             c = srcbuf[--i];
             if (space_count >= 4) {
+                ident_before = ident;
                 ident = space_count / 4;
-                printf("\n\tsp(%d)%d ", space_count, ident);
+                if (ident_before > ident) {
+                    struct symbol s = {
+                        .p = blk_name_brk,
+                        .addr = cur_pc,
+                        .type = code,
+                    };
+                    list_add_symbol_t(&symbols, s);
+                    printf("end of blk, pc: %x\n", s.addr);
+                }
+                printf("\nident %d(before %d, pc %llx)", ident, ident_before, cur_pc);
             }
         } else if (c > ' ') {
             printf("unknwon tok '%c'(%x) ", c, c);
@@ -491,6 +518,10 @@ void resolve_symbols(void) {
 
             // opc_all.data[idx] |= (0xf88) << 10;
             printf("will be resolved by ld(%s, %x) ", d.str, opc_all.data[idx]);
+        } else if ((opcode & 0xff000000) == CBNZ) {
+            uint32_t dif = s->addr - d.addr;
+            opc_all.data[idx] |= (dif / sizeof (uint32_t)) << 5;
+            printf("resolv(%s->%x, %x) ", d.str, dif, opc_all.data[idx]);
         } else {
             printf("undefined opcode %x @%zx\n", opc_all.data[idx], idx);
         }

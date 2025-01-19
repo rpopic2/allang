@@ -1,10 +1,9 @@
 _main:
     file: addr
     filename, readmode =>_fopen =[file]
-    0
     :: ? 0
         fileopen_err =>_printf
-        =>_exit
+        1 =>_exit
 
     filelen: i32
     , 0, 2 =>_fseek
