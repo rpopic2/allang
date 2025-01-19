@@ -183,6 +183,23 @@ void readsym() {
     }
 }
 
+char *readsym2() {
+    int start_pos = i;
+    c = srcbuf[i++];
+    if (!(IS_LETTER(c))) {
+        compile_err("a symbol must start with a letter: (but was '%c') @'%s'\n", c, srcbuf + i - 3);
+    }
+    while ((c = srcbuf[i])) {
+        if (IS_LETTER(c) || IS_DIGIT(c)) {
+            ++i; continue;
+        }
+        break;
+    }
+    srcbuf[i - 1] = '\0';
+    char *name = srcbuf + start_pos;
+    return name;
+}
+
 void letter(void) {
     size_t tok_start = i;
     readsym();
@@ -324,6 +341,51 @@ void check_callsub(void) {
     }
 }
 
+uint32_t make_strldr(bool store, bool unscaled, int size, int offset) {
+    uint32_t op = 0xb8000000;
+    if (!store) {
+        op |= 1 << 22;
+        op |= reg;
+    }
+    if (!unscaled)
+        op |= 1 << 24;
+    if (size == 8)
+        op |= 1 << 30;
+    else if (size != 4)
+        printf("!!!unimpl size!!!");
+    if (unscaled) {
+        op |= offset << 12;
+    } else {
+        op |= ((offset / size) << 10);
+    }
+    return op;
+}
+
+void ldr_str_nreg() {
+    i += 2;
+    int start_pos = i;
+    // char *name = readsym2();
+    readsym();
+    srcbuf[i - 1] = '\0';
+    char *name = srcbuf + start_pos;
+    printf("popo nreg %s ", name);
+
+    struct nregs *pobj = NULL;
+    for (int i = 0; i < rtinfo.nreg.count; ++i) {
+        if (strcmp(name, rtinfo.nreg.data[i].name) == 0) {
+            pobj = rtinfo.nreg.data + i;
+        }
+    }
+    if (!pobj) {
+        printf("str nreg not found ");
+        return;
+    }
+    printf("str nreg %s ", name);
+    uint32_t op = make_strldr(true, true, 8, 0);
+    op |= (pobj->idx << 5);
+    OPC(&rtinfo.opc, op);
+}
+
 void ldr_str(bool store) {
     int start_pos = i;
     readsym();
@@ -441,7 +503,10 @@ void hyphen(bool linked) {
         list_add_resolve_data(&to_resolve, tmp);
         cur_pc += sizeof (uint32_t);
     } else if (next == '[') {
-        ldr_str(true);
+        if (srcbuf[i + 1] == '$')
+            ldr_str_nreg();
+        else
+            ldr_str(true);
     } else if (next == '$') {
         mov_nreg();
     }

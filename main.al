@@ -25,11 +25,12 @@ _main:
     $resultbuf: addr
     0x1000 =>_malloc =$resultbuf
 
+    0x10 =[$resultbuf]
 
-    // outfile: addr
-    // filename_out, writemode =>_fopen =[outfile]
-    // $resultbuf, 1, 0x100, [outfile] =>_fwrite
-    // [outfile] =>_fclose
+    outfile: addr
+    filename_out, writemode =>_fopen =[outfile]
+    $resultbuf, 1, 0x100, [outfile] =>_fwrite
+    [outfile] =>_fclose
     0 ret
 
 filename:
