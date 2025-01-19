@@ -20,15 +20,29 @@ _main:
     [file] =>_fclose
 
     [srcbuf] =>_printf
+    parse_start =>_printf
 
-parse:
+    resultbuf: addr
+    0x1000 =>_malloc =[resultbuf]
+
+    outfile: addr
+    filename_out, writemode =>_fopen =[outfile]
+    [resultbuf], 1, 0x100, [outfile] =>_fwrite
+    [outfile] =>_fclose
     0 ret
 
 filename:
-    "main.al"
+    "easy.al"
+filename_out:
+    "easy.o"
 readmode:
     "r"
+writemode:
+    "w"
 fileopen_err:
     "could not open file"
 malloc_err:
     "malloc failed"
+parse_start:
+    ":: parse start
+"

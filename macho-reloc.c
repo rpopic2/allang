@@ -265,13 +265,20 @@ long readnum(void) {
 
 void digit(void) {
     size_t tok_start = i;
+    int base = 10;
     while ((c = srcbuf[i])) {
         if (IS_DIGIT(c)) {
             ++i;
             continue;
         }
+        if (c == 'x') {
+            printf("is hex");
+            tok_start = ++i;
+            base = 16;
+            continue;
+        }
         srcbuf[i] = '\0';
-        long lit = strtol(srcbuf + tok_start, NULL, 10);
+        long lit = strtol(srcbuf + tok_start, NULL, base);
         if (cmpmode) {
             cmp(lit);
             break;
@@ -475,7 +482,10 @@ rerun_comment:
                     printf("end of blk, pc: %x\n", s.addr);
                     blk_idx += 1;
                 }
-                printf("\nident %d(before %d, pc %llx)", ident, ident_before, cur_pc);
+                for (int i = 0; i < ident; ++i) {
+                    printf("\t");
+                }
+                // printf("\nident %d(before %d, pc %llx)", ident, ident_before, cur_pc);
             }
         } else if (c > ' ') {
             printf("unknwon tok '%c'(%x) ", c, c);
