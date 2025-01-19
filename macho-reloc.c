@@ -52,17 +52,23 @@ struct list_object objects;
 struct {
     size_t stacksiz;
     struct list_uint32_t opc;
+    struct list_nregs nreg;
     int to_resolve_start;
     int loc_symbol_start;
     bool inrt;
     bool callsub;
-} rtinfo;
+    int nreg_idx;
+} rtinfo = {
+    .nreg_idx = 18,
+};
 // end
 
 void rst_rtinfo(void) {
     rtinfo.opc.count = 0;
+    rtinfo.nreg.count = 0;
     rtinfo.callsub = false;
     rtinfo.stacksiz = 0;
+    rtinfo.nreg_idx = 18;
     cmpmode = false;
     objects.count = 0;
 }
@@ -83,6 +89,11 @@ void draw_stack(void) {
 
 void endofrt(void) {
     int push = 0;
+    int nreg_count = rtinfo.nreg_idx - 18;
+    nreg_count += nreg_count % 2;
+    if (nreg_count > 0) {
+        rtinfo.stacksiz += nreg_count * 4;
+    }
     if (rtinfo.stacksiz == 0 && rtinfo.callsub) {
         OPC(&opc_all, STPPRE_PREL)
         OPC(&opc_all, ADD_IMM | (31) | (29))
@@ -103,11 +114,18 @@ void endofrt(void) {
             rtinfo.stacksiz += 0x10;   // sizeof { fp, lr }
         rtinfo.stacksiz += 0x10 - (rtinfo.stacksiz % 0x10);
         OPC(&opc_all, SUB | (rtinfo.stacksiz << 10) | (0b1111111111))
-        int stpat = (rtinfo.stacksiz - 0x10) / 8;
+        int stpat = (rtinfo.stacksiz - 0x10);
         if (rtinfo.callsub) {
-            OPC(&opc_all, STP_PREL | (stpat << 15))
-            OPC(&opc_all, ADD_IMM | ((stpat * 8) << 0xa) | (31 << 5) | (29))
+            OPC(&opc_all, STP_PREL | ((stpat / 8)<< 15))
+            OPC(&opc_all, ADD_IMM | (stpat << 0xa) | (31 << 5) | (29))
             push += 8;
+        }
+        for (int i = nreg_count; i > 0; i -= 2) {
+            // stp x19, x20, [sp, $(stacksiz)]
+            int r1 = 18 + i - 1;
+            int r2 = 18 + i;
+            OPC(&opc_all, STP | ((stpat - 0x10) / 8) << 15 | (31 << 5) | (r2 << 10) | (r1))
+            push += 4;
         }
 
         uint32_t *last = rtinfo.opc.data + rtinfo.opc.count - 1;
@@ -115,8 +133,14 @@ void endofrt(void) {
         if (last_ret)
             rtinfo.opc.count -= 1;
 
+        for (int i = nreg_count; i > 0; i -= 2) {
+            // ldp x19, x20, [sp, $(stacksiz)]
+            int r1 = 18 + i - 1;
+            int r2 = 18 + i;
+            OPC(&rtinfo.opc, LDP | ((stpat - 0x10) / 8) << 15 | (31 << 5) | (r2 << 10) | (r1))
+        }
         if (rtinfo.callsub) {
-            OPC(&rtinfo.opc, LDP_PREL | (stpat << 15))
+            OPC(&rtinfo.opc, LDP_PREL | ((stpat / 8) << 15))
         }
         OPC(&rtinfo.opc, ADD_IMM | (rtinfo.stacksiz << 10 | (0b1111111111)))
 
@@ -341,6 +365,60 @@ void ldr_str(bool store) {
     OPC(&rtinfo.opc, op);
 }
 
+void mov_nreg() {
+    int start_pos = ++i;
+    readsym();
+    srcbuf[i] = '\0';
+    char *sym = srcbuf + start_pos;
+    nregs *search = NULL;
+    for (int i = 0; i < rtinfo.nreg.count; ++i) {
+        nregs *tmp = rtinfo.nreg.data + i;
+        if (strcmp(tmp->name, sym) == 0) {
+            search = tmp;
+            break;
+        }
+    }
+    if (!search) {
+        printf("failed to resolv %s ", sym);
+    }
+    // mov x19, x0
+    uint32_t op = ORR | search->idx;
+    OPC(&rtinfo.opc, op);
+    printf("resolv nreg %s %x", sym, op);
+}
+void named_reg(void) {
+    int start_pos = ++i;
+    readsym();
+    char end = srcbuf[i];
+    srcbuf[i] = '\0';
+    char *sym = srcbuf + start_pos;
+    if (end == ':') {
+        printf("named reg (%s) ", sym);
+        struct nregs tmp = {
+            .name = sym,
+            .idx = ++rtinfo.nreg_idx,
+        };
+        i += 2;
+        readsym();
+        list_add_nregs(&rtinfo.nreg, tmp);
+    } else if (end == ' ' || end == ',') {
+        nregs *search = NULL;
+        for (int i = 0; i < rtinfo.nreg.count; ++i) {
+            nregs *tmp = rtinfo.nreg.data + i;
+            if (strcmp(tmp->name, sym) == 0) {
+                search = tmp;
+                break;
+            }
+        }
+        if (!search) {
+            printf("no named reg %s ", sym);
+        }
+        OPC(&rtinfo.opc, ORR | (search->idx << 16) | reg);
+        printf("named reg mov %s ", sym);
+    }
+}
+
+
 void hyphen(bool linked) {
     char next = srcbuf[++i];
     if (next == '>') {
@@ -364,6 +442,8 @@ void hyphen(bool linked) {
         cur_pc += sizeof (uint32_t);
     } else if (next == '[') {
         ldr_str(true);
+    } else if (next == '$') {
+        mov_nreg();
     }
 }
 
@@ -456,10 +536,11 @@ rerun_comment:
             colons();
         } else if (c == '?') {
             cmpmode = true;
+        } else if (c == '$') {
+            named_reg();
         } else if (c == ' ') {
             char before = srcbuf[i - 1];
             if (before != '\0' && before != '\n') {
-                printf("before! (%x)\n", before);
                 continue;
             }
             int space_count = 0;
@@ -482,9 +563,7 @@ rerun_comment:
                     printf("end of blk, pc: %x\n", s.addr);
                     blk_idx += 1;
                 }
-                for (int i = 0; i < ident; ++i) {
-                    printf("\t");
-                }
+                printf("\n");
                 // printf("\nident %d(before %d, pc %llx)", ident, ident_before, cur_pc);
             }
         } else if (c > ' ') {
@@ -577,6 +656,7 @@ int main(void) {
     list_new_uint32_t(&relocent, INIT_CAP, "reloc");
     list_new_uint32_t(&opc_all, 0x100, "opc");
     list_new_uint32_t(&rtinfo.opc, INIT_CAP, "rt");
+    list_new_nregs(&rtinfo.nreg, INIT_CAP, "namedregs");
     list_new_resolve_data(&to_resolve, INIT_CAP, "resolv");
     list_new_symbol_t(&symbols, INIT_CAP, "symb");
     strlits = malloc(INIT_CAP);

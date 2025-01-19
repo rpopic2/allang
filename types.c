@@ -68,3 +68,9 @@ typedef struct _object {
 } object;
 list (object)
 
+
+typedef struct nregs {
+    char *name;
+    uint8_t idx;
+} nregs;
+list (nregs)

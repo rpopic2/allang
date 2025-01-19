@@ -4,6 +4,10 @@
 #define STPPRE_PREL 0xa9bf7bfd
 #define LDP_PREL 0xa9407BFD
 #define STP_PREL 0xa9007BFD
+#define STP_PRE 0xa9800000
+#define STP 0xa9000000
+#define LDP 0xa9400000
+
 #define LDRW 0xb9400000
 #define LDRX 0xf9400000
 #define STRW 0xb9000000
@@ -18,6 +22,8 @@
 #define MOV_X 0xD2800000
 #define SUB 0xd1000000
 #define CMP 0xf100001f
+
+#define ORR 0xaa0003e0
 
 #define B 0x14000000
 #define BL 0x94000000
