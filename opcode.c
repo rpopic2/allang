@@ -23,6 +23,8 @@
 #define SUB 0xd1000000
 #define CMP 0xf100001f
 
+#define MOVK 0xf2800000
+
 #define ORR 0xaa0003e0
 
 #define B 0x14000000

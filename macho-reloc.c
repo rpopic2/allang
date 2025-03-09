@@ -21,6 +21,7 @@ void compile_err(const char *s, ...) {
     exit(1);
 }
 #define IS_DIGIT(c) (c >= '0' && c <= '9')
+#define IS_DIGIT_HEX(c) ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))
 #define IS_LETTER(c) (c >= 'A' && c <= 'z')
 #define OPC(o, op) list_add_uint32_t(o, (op)); cur_pc += sizeof (uint32_t);
 
@@ -308,7 +309,10 @@ void digit(void) {
     size_t tok_start = i;
     int base = 10;
     while ((c = srcbuf[i])) {
-        if (IS_DIGIT(c)) {
+        if (base == 10 && IS_DIGIT(c)) {
+            ++i;
+            continue;
+        } else if (base == 16 && IS_DIGIT_HEX(c)) {
             ++i;
             continue;
         }
@@ -324,11 +328,12 @@ void digit(void) {
             cmp(lit);
             break;
         }
-
-        uint32_t op = MOV | lit << 5 | reg;
-        printf("mov(w%d<-%ld) \n", reg, lit);
-        list_add_uint32_t(&rtinfo.opc, op);
-        cur_pc += sizeof (uint32_t);
+        OPC(&rtinfo.opc, MOV | (((uint16_t)lit) << 5) | reg);
+        printf("mov(w%d<-%lx) ", reg, lit);
+        if (lit > 0xffff) {
+            OPC(&rtinfo.opc, MOVK | (1 << 21) | (((uint16_t)(lit >> 16)) << 5) | reg);
+            printf("movk(w%d<-%lx) ", reg, lit);
+        }
         break;
     }
 }
@@ -368,7 +373,7 @@ void ldr_str_nreg() {
     readsym();
     srcbuf[i - 1] = '\0';
     char *name = srcbuf + start_pos;
-    printf("popo nreg %s ", name);
+    printf("nreg %s ", name);
 
     struct nregs *pobj = NULL;
     for (int i = 0; i < rtinfo.nreg.count; ++i) {

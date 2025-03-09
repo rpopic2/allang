@@ -25,7 +25,7 @@ _main:
     $resultbuf: addr
     0x1000 =>_malloc =$resultbuf
 
-    0x10 =[$resultbuf]
+    0xfeedfacf =[$resultbuf]
 
     outfile: addr
     filename_out, writemode =>_fopen =[outfile]
