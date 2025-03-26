@@ -24,7 +24,8 @@ add: (a: i32, b: i32 => i32)
 
 main:
     i: 0
-    :: loop i ? 10 lt
+    :: loop
+        i ? 10 lt<-
+        ~ i += 1
         "count %\n", i =>fmt =>print
-        i +: 1
 
