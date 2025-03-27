@@ -2,7 +2,8 @@
 
 #alias print :: std.io.println
 
-// also check out the alternative way using vtable in vtable.al
+// SEE ALSO vtable.al
+
 // sorry, but you will have to dynamic dispatch yourselves
 // inheritance was done so easily compared to the cost of execution and human comprehension.
 // although, it is not that hard to impl from scratch!
@@ -54,7 +55,7 @@ measure: (@geometry g)
 
 detect_circle: (@geometry g)
     g.area == circle.area ->    //type cheking is done by checking if address of two functions are same or not. you can also put a type variable in vtable.
-        @circle c :: <g>
+        @circle c :: &g
         "circle with radius", c.radius =>println
 
 
@@ -67,4 +68,145 @@ c measure=>
 r detect_circle=>
 c detect_circle=>
 
+// https://doc.rust-lang.org/stable/rust-by-example/trait.html
 
+Animal:
+    @struct {
+        addr (str =>any) new
+        addr (any) name
+        addr (any) noise
+        addr (any) talk
+    }
+
+    fn talk(@self) {
+        self.name=> %
+        self.noise=> %2
+        %"says "%2 print=>
+    }
+
+Sheep:
+    @struct {
+        b8 naked,
+        str name,
+    }
+
+    @inline is_naked: (@self =>bool)
+        self.naked
+
+    shear: (addr @self)
+        [self] @is_naked true->
+            " is already naked..." % >>
+        :
+            true =[self.naked]
+            " gets a haircut!" % >>
+        << self.name=>, % print=>
+
+Sheep: impl Animal
+    @inline new: (str name =>Sheep)
+        Sheep { name: name, naked: false }
+
+    @inline name: (addr @self =>str)
+        [self.name]
+
+    noise: (addr @self =>str)
+        [self] @is_naked
+        "baaaaah?" : "baaaaah!"
+
+    talk: (addr @self)
+        self.noise=> %
+        self.name" pauses briefly... "% print=>
+
+
+dolly :: Sheep
+
+// https://doc.rust-lang.org/book/ch10-02-traits.html
+
+// not an actual al code, just trying to see if it fits in al!
+
+Summary: Trait
+    @struct {
+        addr
+    }
+    addr (addr =>str) summarize
+
+Summary:
+    #alias summarize = (addr =>str)
+    @interface summarize: (addr @self =>str)
+
+NewsArticle:
+    @struct {
+        str headline, location, author, content
+    }
+
+NewsArticle: impl Summary
+    summarize: (addr @self =>str)
+        self :: [self]
+        "{}, by {} ({})", self.headline, self.author, self.location fmt=>
+
+Tweet:
+    @struct {
+        str username, content
+    }
+Tweet: impl Summary
+    summarize: (addr @self =>str)
+        self :: [self]
+        "{}: {}", self.username, self.content fmt=>
+
+Foo:
+    @struct {
+        i32 i
+    }
+Foo: impl Summary
+    summarize: (addr @self =>str)
+        "foo! "[self.i] fmt=>
+
+whatever: (@Summary s) // whatever: (addr s)
+    s summarize=> print=>
+
+@inline whatever: (@Summary s) // whatever: (addr s)
+    s summarize=> print=>
+
+t []= :: Tweet { "alvin", "hello world!" }
+t summarize=> print=>
+
+f []= :: Foo { 2 }
+
+t whatever=>
+f whatever=>
+
+// https://doc.rust-lang.org/stable/rust-by-example/generics/bounds.html
+
+HasArea:
+    area: (addr @self =>f64)
+
+Rectangle:
+    @struct {
+        f64 length, height
+    }
+    area: (addr @Rectangle self =>f64)
+        *
+
+Triangle:
+    @struct {
+        f64 length, height
+    }
+
+area.(@type HasArea T)(addr T t =>f64)
+    area=>
+
+@inline area: (addr t =>f64)
+    area=>
+
+[r]= :: Rectangle { 3, 4 }
+[t]= :: Triangle { 3, 4 }
+
+r @area
+t @area
+r .area=>
+t .area=>
+
+slice T:
+    @class {
+        addr T data,
+        usiz len,
+    }

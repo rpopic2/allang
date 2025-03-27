@@ -16,3 +16,13 @@ e :: WebEvent { { 2.3, 3.4 } }
 
 e.Paste print=>
 
+#union Result {
+    i64 int,
+    f64 float,
+    bool bool,
+};
+
+test "simple union"
+    result :: Result { int: 1234 }
+    12.34 =result.float // this works in al
+}

@@ -1,5 +1,7 @@
 // https://gobyexample.com/for
 
+// SEE ALSO loop.al
+
 #alias print = std.io.print.ln.#
 
 // how to loop without macros
@@ -73,8 +75,8 @@ count :: 0
     "This point will never be reached" print=>
 "Exited the outer loop" print=>
 
-outer @loop
-    inner @loop
+outer: @loop
+    inner: @loop
         <-outer // you can also have named loops! this makes sense if you see how @loop macro is done..
 
 counter :: 0
@@ -112,4 +114,101 @@ name..names @foreach // careful it is a dumb macro right now...
     "Hello "name print=>
 
 
+// https://zig.guide/language-basics/for-loops
+string: c8 { 'a', 'b', 'c' }
+
+string, c8 character, i32 index  @foreach.index
+    character =_
+    index =_
+
+string, c8 character @foreach
+    character =_
+
+
+// https://odin-lang.org/docs/overview/#for-statement
+
+i :: 0; i < 10; i +: 1 @for
+    i print=>
+
+i :: 0
+; i < 10; @for
+
+i < 10 @while
+
+@loop
+
+// it's always exclusive
+i :: 0..10 @range
+    i print=>
+
+i :: 0..9 + 1 @range
+    i print=>
+
+
+some_string: "hello, 세계"
+
+some_string[c8 character] @foreach
+    character print=>
+
+some_array: 3 i32 { 1, 4, 9 }
+
+some_array[i32 value] @foreach
+    value print=>
+
+some_dynamic_array~ :: i32 { 1, 4, 9 } @std.list.new
+~ some_dynamic_array~> @std.list.delete
+some_dynamic_array[i32 value] @foreach
+    value print=>
+
+some_map~ :: { string, int } {{"A", 1}, {"C", 9} , {"B", 4}} @std.map.new
+~ some_map~> @std.map.delete
+// dunnow how to iter map for now...
+
+some_string[c8 character], i32 index @foreach.index
+    index` `character print=>
+
+// ..same stuffs for others
+
+// if you wish to iterate over a ptr
+some_array.
+p :: .data...data + .len @range
+    [p]
+
+some_array..addr T p @loop.reference
+    [p]
+
+array :: i32 { 10, 20, 30, 40 , 50 }
+array..[i32 x] @reversed.foreach
+    x print=>
+
+
+
+// https://odin-lang.org/docs/overview/#branch-statements
+
+cond @while
+    :
+        is cond <-  // breaks
+    <-  // breaks
+
+loop: cond1 @while
+    cond2 @while
+        <-loop
+
+cond1 @while
+    cond2 @while
+        >>
+<<
+
+exit:
+    is true -> <-exit
+
+cond @while
+    get_foo=> is true->
+        ->continue
+
+i
+is 0 ->
+    foo=>
+is 1 ->
+    bar=>
 

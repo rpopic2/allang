@@ -1,10 +1,10 @@
 // stack vars: three i32s. stack size: 0x20, fp : sp + 0x10
-i32 foo // fp + 4
-i32 bar // fp + 8
+i32 foo :: []= // fp + 4
+i32 bar :: []= // fp + 8
 // reserve stack space for foo and bar
 
 reg :: 3 // mov reg, 0x3
-reg =foo  // str reg, [fp, -4]
+[foo]= reg // str reg, [fp, -4]
 
 // i32 foo: 3 // compile err!
 foo := 3  // can be assigned only to result of str
@@ -41,3 +41,15 @@ i           // add x0, sp, 4
 addr p :: malloc=> // bl malloc; mov w19, x0
 p       // mov x0, x19
 [p]     // ldr x19, x0
+
+a= 1
+1
+=a
+
+a+= 1
+
+1
++=a
+
+i :: []= 
+i :: =

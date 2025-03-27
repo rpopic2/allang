@@ -79,3 +79,43 @@ _: {
 #Color.Red &i32, "06", to.hex=> %
 "violets are ", % print=>
 
+// https://zig.guide/language-basics/enums
+
+#enum Direction {
+    north, south, east, west
+}
+
+#enum u8 Value {
+    zero, one, two
+}
+
+expect Value.zero as 0 is 0
+
+
+#enum u32 Value2 {
+    hundred: 100,
+    thousand: 1000,
+    million: 1000000,
+    next,
+}
+
+Suit:
+    #enum {
+        clubs, spades, diamonds, hearts
+    }
+
+    isClubs: (@self =>bool)
+        is clubs
+
+test "enum method"
+    expect Suit.spades isClubs=> is Suit.clubs
+
+Mode:
+    #enum {
+        on, off
+    }
+    count :: 0'u32
+
+test "hmm"
+    Mode.count += 1
+    expect Mode.count is 1

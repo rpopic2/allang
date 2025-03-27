@@ -5,9 +5,6 @@
 #include <string.h>
 #include <mach-o/loader.h>
 
-#define printf(...) \
-    printf(__VA_ARGS__) \
-
 #define AL_DRAW_STACK
 
 #include "types.c"

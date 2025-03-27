@@ -16,14 +16,14 @@ geometry:
     }
 
 rect:
-    @struct @geometry {
+    @struct _@geometry + {
         f64 width, height
     }
 
     @inline new: (@rect.rect r =>@rect)
-        geometry { vtable } r
+        geometry { _vtable } r
 
-    vtable: geometry.vtable { area, perim }
+    _vtable: geometry.vtable { area, perim }
 
     area: (@rect self =>f64)
         self.width * self.height ret
@@ -33,13 +33,13 @@ rect:
         + ret
 
 circle:
-    @struct @geometry {
+    @struct _@geometry + {
         f64 radius
     }
 
     @inline new: (@rect self)
         self
-        vtable >self.vtable
+        vtable =self.vtable
 
     vtable: geometry.vtable { area, perim }
 

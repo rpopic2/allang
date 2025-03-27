@@ -24,4 +24,44 @@ i :: #sizeof i32 std.heap.alloc=> // now i holds addr to some location on the he
 [i] zeroval=>
 i zeroptr=>
 
+// https://zig.guide/language-basics/pointers
+
+increment: (addr u8 num)
+    [num] + 1 =[]
+
+test "pointers"
+    |stack u8 x| :: 1 []=
+    increment=>
+
+    expect x is 2
+
+test "naughty pointer"
+    |u16 x| :: 5
+    x-= 5
+    addr u8 y :: x as addr u8   // warning: creating ptr from unowned ptr
+    [y] = y // null ptr is allowed in allang
+
+    stack u8 x :: 1 =[]
+    |y| :: x    // now the type is |addr| u8, pointer to const u8
+    // [y] + 1 =[] err! cannot store to const ptr
+
+// we don't have many item ptr
+doubleAllManypointer: (addr u8 buffer, usiz byte_count)
+    usiz i :: 0
+    i < byte_count, i+= 1 @zig.while
+        [buffer, i u8] * 2 =[]
+
+test "many-item pointers"
+    stack |100 u8 buffer| :: 100 { 1 } =[]
+    addr |100 u8 buffer_ptr| :: buffer
+
+    manyaddr u8 buffer_many_ptr :: buffer_ptr
+    buffer_many_ptr, #len buffer doubleAllManypointer=>
+
+    buffer, byte @foreach
+        expect byte is 2
+
+    addr u8 first_elem_ptr :: buffer_many_ptr + 0
+    addr u8 first_elem_ptr_2 :: buffer_many_ptr
+
 

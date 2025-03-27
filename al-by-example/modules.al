@@ -1,4 +1,4 @@
-https://doc.rust-lang.org/stable/rust-by-example/mod/visibility.html
+// https://doc.rust-lang.org/stable/rust-by-example/mod/visibility.html
 
 // al is dead simple about moduls..
 // a file is a module.. directory orginises it!
@@ -85,3 +85,11 @@ my:
     #self.cool.function=> // how to impl this?
     ../..function=>
 
+// https://odin-lang.org/docs/overview/#packages
+
+// for std packages, you can just use it right away.
+
+"hi" std.print=>
+
+#alias std.print    // you can use it by the name print
+#alias foo: std.print   // use it as name foo

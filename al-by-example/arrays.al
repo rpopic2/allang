@@ -130,3 +130,16 @@ i :: 0..ws.len + 1; @for.n
     t.error err->
         "Slow down! ", i, " is too far!" print=> ret
     i, ": " , t.value print=>
+
+// https://zig.guide/language-basics/arrays
+
+a :: 5 u8 { 'h', 'e', 'l', 'l', 'o' }
+
+b :: u8 { 'w', 'o', 'r', 'l', 'd' } =[]
+
+c :: u8 { 'w', 'o', 'r', 'l', 'd' } @std.heap.alloc
+
+d: u8 { 'b', 'y', 'e' }
+
+length :: #countof a
+

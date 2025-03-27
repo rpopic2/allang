@@ -1,4 +1,5 @@
 // https://doc.rust-lang.org/stable/rust-by-example/custom_types/enum.html
+
 // also known as tagged unions.
 // it stores enum tag and the data.
 // #sizeof WebEvent is i32 + i32 padding + i64 + i64
@@ -144,3 +145,63 @@ List.
 list .len=> %
 "linked list has length: "% print=>
 list .stringfy=> print=>
+
+// https://zig.guide/language-basics/unions
+
+#enum Tag {
+    a, b, c
+}
+
+@enum union Tagged {
+    u8 a, f32 b, b8 c
+}
+
+test "switch on tagged union"
+    value :: Tagged { b: 1.5 }
+    is { a, byte } -> [byte] + 1 =[],
+    is { b, float } -> [float] * 2 =[],
+    is { c, b } -> [b]! =[],
+
+// https://zig.guide/language-basics/optionals
+
+test "optional"
+    found_index :: optional.usiz { null }
+    data: i32 { 1, 2, 3, 4, 5, 6, 7, 8, 12 }
+    data, i32 v, i32 i @foreach.index
+        v is 10 -> i =found_index
+
+test "orelse"
+    a :: optional.f32 { null }
+    fallback_value :: 0'f32
+    b :: a is null ? 0 : a.value
+    b :: a is value ? .value : fallback_value
+
+test "orelse unreachable"
+    a :: optional.f32 { 5'f32 }
+    b :: a is value ? .value : panic
+    // c :: a.?  // i don't think that we'll adopt this
+    expect b is #typeof f32
+    expect b is c
+
+test "if optional payload capture"
+    a :: optional.i32 { 5 }
+    a isnt null ->
+        a isnt value -> panic
+
+    b :: option.i32 { 5 }
+    b is (value, &v) -> 1 +=v
+
+numbers_left :: 4'u32
+eventuallyNullSequence: () option.u32 {
+    numbers_left is 0 ->
+        null ret
+    1 -=numbers_left
+    numbers_left ret
+}
+
+test "while null capture"
+    sum :: u32 0
+    @loop
+        eventuallyNullSequence=> is (value, &v) {
+            v +=sum
+        }

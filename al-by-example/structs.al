@@ -88,3 +88,40 @@ unit :: unit { }
 pair :: pair { 1, 0.1 }
 integer, decimal :: pair
 "pair contains ", integer, " and ", decimal print=>
+
+// https://zig.guide/language-basics/structs
+
+// we have guarentee about the in-memory layout. it is in declared order.
+
+@struct Vec3 3 i32 { }
+
+my_vector :: Vec3 {
+    x: 0, y: 100, z: 50
+}
+
+// we don't have struct defaults
+
+Vec4:
+    @struct 4 i32{ }
+    @inline new: (@self =>Vec4)
+        { 0, 0, 0, 0 } with @self
+
+test "struct defaults"
+    my_vector :: { x: 25, y: -50 } @Vec4.new
+
+Stuff:
+    @struct {
+        i32, i32
+    }
+    // derefernecing is not done automatically
+    swap: (addr |@this selfp|)
+        self :: [selfp]
+        tmp :: self.x
+        self.y =self.x
+        tmp =self.y
+        self =[selfp]
+
+test "automatic derefernce"
+    thing :: Stuff { 10, 20 } =[]
+    thing swap=>
+

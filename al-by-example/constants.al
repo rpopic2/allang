@@ -45,3 +45,13 @@ n" is "% print=>
 // 5 =THRESHOLD    // illeagal!
 // 5 =[THRESHOLD]
 
+// https://odin-lang.org/docs/overview/#constant-declarations
+
+x: "what"
+
+y: i32 123
+i32 y: 123
+i32 z: y + 7    // it's comptime
+
+t :: y + 7      // it's not comptime
+t: y + 7        // now it's comptime

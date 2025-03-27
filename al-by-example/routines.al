@@ -106,4 +106,30 @@ pair :: Pair { %~, %2~ }    // ~ makes it own the pointer.
 
 
 
+// https://zig.guide/language-basics/functions
+
+addFive: (u32 x ->u32)
+    + 5
+
+y :: 0 addFive=>
+
+fibonacci: (u16 n ->u16)
+    is 0 or, 1 -> n ret
+    a :: n - 1 fibonacci=>
+    b :: n - 2 fibonacci=>
+    a + b ret
+
+// https://odin-lang.org/docs/overview/#procedures
+
+fibonacci: (i32 n ->i32)
+    n < 1 -> 0 ret
+    is 1 -> 1 ret
+    n - 1 fibonacci=> $
+    n - 2 fibonacci=> %
+    % + $ ret
+
+3 fibonacci=> print=>
+
+
+
 

@@ -40,3 +40,29 @@ true what_am_i=>
 1 what_am_i=>
 "hey" what_am_i=>
 
+// https://zig.guide/language-basics/switch
+
+// is -1..1 @in_range
+test "switch statement"
+    |i8 x| :: 10
+
+    is -1..1 @in_range ->
+        -x,
+    10 or, 100 ->
+        x, 10 @div,
+    : x,
+    =x
+
+    expect x is 1
+
+test "switch expression"
+    |i8 x| :: 10
+
+    x=
+        is -1..1 @in_range ->
+            -x,
+        10 or, 100 ->
+            x, 10 @div,
+        : x,
+
+    expect x is 1

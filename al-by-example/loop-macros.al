@@ -2,7 +2,7 @@
 
 @inline loop:
     :
-    continue:
+        continue:
         ~ ->.
 
 @inline while: (@code condition)
@@ -24,10 +24,20 @@
     :
         init
     continue:
-        ~ ->
-        i ? condition ge<-
+        ~ ->.
+        i >= condition <-
         1 +=init
 
 #macro foreach (decl..collection)
     i :: 0; i < collection.len; ++i; @for
         decl :: i, collection @at
+
+@inline foreach (@slice s[@reg r])
+    i :: 0..s.len @for
+        __i :: 0
+    continue:
+        #block.append ++__i; ->continue
+        __i >= s.len <-
+        r :: s[__i] @at
+
+
