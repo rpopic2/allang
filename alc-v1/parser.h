@@ -78,6 +78,8 @@ loop:;
         TokenEnd
         printf("str lit: `"), printstr(token), printf("`\n");
         ls_addran_char(&strings, token.data, token.len);
+        if (it.data[1] == '0')
+            ls_add_char(&strings, '\0');
         goto loop;
     }
 
