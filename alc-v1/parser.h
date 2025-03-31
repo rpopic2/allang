@@ -53,7 +53,7 @@ void parse(str src) {
     ls_nreg named_regs;
 
     size_t stack_size = 0;
-    char line_end = '\n';
+    char *line_end = NULL;
 
     ls_new_nreg(&named_regs, 16, "named registers");
     ls_new_char(&strings, 1024, "string literals");
@@ -66,9 +66,17 @@ loop:;
     ReadToken();
     TokenEnd
 
-    printf("token '"), printstr(token), printf("': ");
+    if (line_end < it.data) {
+        char *p = it.data;
+        while (*p != '\n' && *p != '\0') {
+            ++p;
+        }
+        line_end = p - 1;
+        printf("lineend: %d\n", *line_end);
+    }
 
     char tokc = token.data[0];
+    printf("token '%d', '", tokc), printstr(token), printf("': ");
 
 
     if (tokc is '_' or IsAlpha(tokc)) {
@@ -137,8 +145,8 @@ loop:;
     if (regoff > 7) {
         CompileErr("Error: used up all scratch registers\n");
     }
-    printf("le: %d\n", line_end);
-    if (line_end == '\0') {
+    printf("le: %d\n", *line_end);
+    if (line_end[2] == '\0' || (*line_end == '>')) {
         reg = regoff;
     } else {
         reg = 8 + regoff;
@@ -193,14 +201,6 @@ loop:;
     printf("\n");
 
 
-    if (c == '\n') {
-        char *p = it.data + 1;
-        while (*p != '\n' && *p != '\0') {
-            ++p;
-        }
-        line_end = *(p + 1);
-        printf("lineend: %d\n", line_end);
-    }
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
         printf("token may be not consumed\n");
     if (c == ' ' || c == '\n') {
