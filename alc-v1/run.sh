@@ -5,3 +5,4 @@ clang ./main.c \
     && ./main \
     && echo $?
 echo $?
+

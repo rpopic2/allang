@@ -3,15 +3,26 @@
 #include "typedefs.h"
 #include <stdbool.h>
 #include <stdio.h>
+
+#define SP 31
+
+// branches
 #define RET 0xd65f03c0
+#define BL 0x94000000
+
+// load and stores
+#define STP 0x29000000
+#define LDP 0x29400000
+
+// data processing - imm
+#define ADD_IMM 0x91000000
+#define SUB 0xd1000000
+
+// data processing - reg
 #define MOV 0x52800000
 #define ORR 0x2a000000
 #define MOVK 0xf2800000
-#define ADD_IMM 0x91000000
-#define SUB 0xd1000000
-#define STP 0x29000000
-#define LDP 0x29400000
-#define SP 31
+#define ADRP 0x90000000
 
 enum strldr_t {
     load_t, store_t
@@ -37,8 +48,8 @@ static inline u32 sub(u8 reg1, u8 reg2, u16 literal) {
     return SUB | (literal << 10) | reg2 << 5 | reg1;
 }
 
-static inline u32 add(u8 reg1, u8 reg2, u16 offset) {
-    return ADD_IMM | (offset << 0xa) | (reg2 << 5) | (reg1);
+static inline u32 add(enum sf_t sf, u8 reg1, u8 reg2, u16 value) {
+    return ADD_IMM | sf << 31 | (value << 0xa) | (reg2 << 5) | (reg1);
 }
 
 static inline u32 ldpstp(enum sf_t sf, bool load, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
@@ -84,3 +95,10 @@ static inline u32 ldr(u8 reg, u8 reg2, u16 offset) {
     return strorldr(load_t, reg, reg2, false, sizeof (u64), offset);
 }
 
+static inline u32 adrp(u8 reg) {
+    return ADRP | reg;
+}
+
+static inline u32 add_imm(enum sf_t sf, u8 reg1, u8 reg2, u16 imm12) {
+    return ADD_IMM | sf << 31 | imm12 << 10 | reg2 << 5 | reg1;
+}

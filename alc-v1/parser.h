@@ -20,7 +20,7 @@
 #define if_Is(X) if (memcmp((X), it.data, strlen(X)) == 0) { it.data += strlen(X); c = *it.data;
 
 #define ReadUntilSpace() while (c != ' ' && c != '\n' && c != '\0') { c = Next(); }
-#define ReadToken() while (c != ' ' && c != '\n' && c != ',' && c != '"' && c != '\0') { c = Next(); }
+#define ReadToken() while (c != ' ' && c != '\n' && c != ',' && c != '"' && c != '\0' && c != '=') { c = Next(); }
 
 
 #define TokenStart token.data = it.data;
@@ -70,24 +70,12 @@ loop:;
 
     char tokc = token.data[0];
 
-    if (tokc is '"') {
-        // is going to be a string
-        c = Next();
-        TokenStart
-        while (c != '"' && c != '\0') { c = Next(); }
-        TokenEnd
-        printf("str lit: `"), printstr(token), printf("`\n");
-        ls_addran_char(&strings, token.data, token.len);
-        if (it.data[1] == '0')
-            ls_add_char(&strings, '\0');
-        goto loop;
-    }
 
     if (tokc is '_' or IsAlpha(tokc)) {
 
         str name = token;
 
-        if_Is(" :: ")
+        if_Is(" :: ") // {
             printf("..is named reg");
             if (IsNum(c)) {
                 TokenStart
@@ -135,56 +123,78 @@ loop:;
                 goto loop;
             }
         }
-    }
 
-
-    bool isAlph = IsAlpha(tokc);
-
-    if (IsNum(tokc) || isAlph) {
-
-        int reg;
-
-        if (regoff > 7) {
-            CompileErr("Error: used up all scratch registers\n");
-        }
-        if (line_end == '\0') {
-            reg = regoff;
-        } else {
-            reg = 8 + regoff;
-        }
-
-        if (isAlph) {
-            nreg *find = NULL;
-            for (int i = 0; i < named_regs.count; ++i) {
-                nreg *tmp = named_regs.data + i;
-                if (memcmp(tmp->name.data, token.data, token.len) == 0) {
-                    find = tmp;
-                }
-            }
-
-            if (find != NULL) {
-                fat_put(&stackcode, mov_reg(R, reg, find->reg));
-                printf("..move to %d", reg);
-            } else {
-                CompileErr("Error: unknown named register "), PrintErrStr(token);
-            }
-        } else {
-            long number = strtol(token.data, &it.data, 10);
-            fat_put(&stackcode, mov(reg, number));
-            printf("value of '%ld'", number);
-        }
-
-        printf("%d", *it.data);
-        if (*it.data == ',') {
-            ++regoff;
-            Next();
-            printf(", ");
-            token_consumed = true;
+        if_Is("=>") // {
+            printf("call fn\n");
+        fat_put(&stackcode, BL);
             goto loop;
         }
-        regoff = 0;
-        printf("\n");
     }
+
+    if (tokc is '"') {
+        // is going to be a string
+        c = Next();
+        TokenStart
+        while (c != '"' && c != '\0') { c = Next(); }
+        TokenEnd
+        printf("str lit: `"), printstr(token), printf("`\n");
+        ls_addran_char(&strings, token.data, token.len);
+        if (it.data[1] == '0') {
+            printf("is null terminated string\n");
+            c = Next();
+            c = Next();
+            ls_add_char(&strings, '\0');
+        }
+
+        fat_put(&stackcode, adrp(0));
+        fat_put(&stackcode, add(X, 0, 0, 0));
+        goto loop;
+    }
+
+    bool isAlph = IsAlpha(tokc);
+    bool isNum = IsNum(tokc);
+
+    int reg;
+
+    if (regoff > 7) {
+        CompileErr("Error: used up all scratch registers\n");
+    }
+    if (line_end == '\0') {
+        reg = regoff;
+    } else {
+        reg = 8 + regoff;
+    }
+
+    if (isAlph) {
+        nreg *find = NULL;
+        for (int i = 0; i < named_regs.count; ++i) {
+            nreg *tmp = named_regs.data + i;
+            if (memcmp(tmp->name.data, token.data, token.len) == 0) {
+                find = tmp;
+            }
+        }
+
+        if (find != NULL) {
+            fat_put(&stackcode, mov_reg(R, reg, find->reg));
+            printf("..move to %d", reg);
+        } else {
+            CompileErr("Error: unknown named register "), PrintErrStr(token);
+        }
+    } else if (isNum) {
+        long number = strtol(token.data, &it.data, 10);
+        fat_put(&stackcode, mov(reg, number));
+        printf("value of '%ld'", number);
+    }
+
+    if (*it.data == ',') {
+        ++regoff;
+        Next();
+        printf(", ");
+        token_consumed = true;
+        goto loop;
+    }
+    regoff = 0;
+    printf("\n");
 
 
     if (c == '\n') {
@@ -196,7 +206,6 @@ loop:;
     }
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
         printf("token may be not consumed\n");
-    printf("%d(%d)", c, '\n');
     if (c == ' ' || c == '\n') {
         goto loop;
     }
@@ -218,7 +227,7 @@ loop:;
     if (stack_size > 0) {
         u32 prologue_sp = sub(SP, SP, stack_size);
         write_buf(&objcode, &prologue_sp, sizeof (prologue_sp));
-        fat_put(&epilogue, add(SP, SP, stack_size));
+        fat_put(&epilogue, add(X, SP, SP, stack_size));
     }
 
     fat_put(&epilogue, RET);

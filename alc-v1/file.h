@@ -50,3 +50,4 @@ void write_buf_fat(writer_t *writer, fat s) {
     memcpy(*writer, s.start, size);
     *writer += size;
 }
+
