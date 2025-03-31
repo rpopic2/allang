@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 typedef struct {
     char *data;
@@ -70,4 +71,9 @@ static inline usize fat_size(fat f) {
 }
 static inline void fat_put(fat *f, u32 val) {
     *(f->end)++ = val;
+}
+
+static inline void fat_put_str(fat *f, str s) {
+    memcpy(f->end, s.data, s.len);
+    f->end += s.len;
 }

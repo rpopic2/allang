@@ -20,7 +20,7 @@
 #define if_Is(X) if (memcmp((X), it.data, strlen(X)) == 0) { it.data += strlen(X); c = *it.data;
 
 #define ReadUntilSpace() while (c != ' ' && c != '\n' && c != '\0') { c = Next(); }
-#define ReadToken() while (c != ' ' && c != '\n' && c != ',' && c != '\0') { c = Next(); }
+#define ReadToken() while (c != ' ' && c != '\n' && c != ',' && c != '"' && c != '\0') { c = Next(); }
 
 
 #define TokenStart token.data = it.data;
@@ -32,6 +32,8 @@ writer_t objcode = _objcode;
 fat_new(u32, stackcode, [1024]);
 fat_new(u32, prologue, [1024]);
 fat_new(u32, epilogue, [1024]);
+
+fat_new(u32, strings, [1024]);
 
 typedef struct {
     str name;
@@ -61,9 +63,21 @@ loop:;
     ReadToken();
     TokenEnd
 
-    printf("token "), printstr(token), printf(": ");
+    printf("token '"), printstr(token), printf("': ");
 
     char tokc = token.data[0];
+
+    if (tokc is '"') {
+        // is going to be a string
+        c = Next();
+        TokenStart
+        while (c != '"' && c != '\0') { c = Next(); }
+        TokenEnd
+        printf("str lit: `"), printstr(token), printf("`\n");
+        fat_put_str(&strings, token);
+        goto loop;
+    }
+
     if (tokc is '_' or IsAlpha(tokc)) {
 
         str name = token;
@@ -207,6 +221,7 @@ loop:;
     write_buf_fat(&objcode, prologue);
     write_buf_fat(&objcode, stackcode);
     write_buf_fat(&objcode, epilogue);
+    write_buf_fat(&objcode, strings);
     printf("parse end\n");
 }
 
