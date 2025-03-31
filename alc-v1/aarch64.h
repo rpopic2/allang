@@ -9,6 +9,8 @@
 #define MOVK 0xf2800000
 #define ADD_IMM 0x91000000
 #define SUB 0xd1000000
+#define STP 0x29000000
+#define LDP 0x29400000
 #define SP 31
 
 enum strldr_t {
@@ -37,6 +39,14 @@ static inline u32 sub(u8 reg1, u8 reg2, u16 literal) {
 
 static inline u32 add(u8 reg1, u8 reg2, u16 offset) {
     return ADD_IMM | (offset << 0xa) | (reg2 << 5) | (reg1);
+}
+
+static inline u32 stp_pre(enum sf_t sf, u8 reg1, u8 reg2, u8 base, u16 offset) {
+    return STP | sf << 31 | offset << 15 | reg2 << 10 | base << 5 | reg1;
+}
+
+static inline u32 ldp_post(enum sf_t sf, u8 reg1, u8 reg2, u8 base, u16 offset) {
+    return LDP | sf << 31 | offset << 15 | reg2 << 10 | base << 5 | reg1;
 }
 
 uint32_t strorldr(enum strldr_t store, u8 reg, u8 reg2, bool unscaled, int size, int offset) {

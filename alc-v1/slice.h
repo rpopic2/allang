@@ -27,13 +27,18 @@ typedef struct {
     size_t i;
 } str_iter;
 
-#define ITER_EOF -1
+#define ITER_EOF 0
 int iter_next(str_iter *self) {
     if (self->i <= self->len) {
         self->data++;
         return self->data[self->i];
     }
     return ITER_EOF;
+}
+
+int iter_prev(str_iter *self) {
+    self->data--;
+    return self->data[self->i];
 }
 
 static inline str_iter into_iter(str s) {
