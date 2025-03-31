@@ -12,6 +12,7 @@
 #include "typedefs.h"
 #include "list.h"
 #include "error.h"
+#include "strgen.h"
 
 #define is ==
 #define or ||
@@ -35,7 +36,9 @@ fat_new(u32, epilogue, [1024]);
 
 ls (char);
 ls_char strings;
-// u8 strings[1024];
+ls_char strtab;
+int strtab_idx;
+
 
 typedef struct {
     str name;
@@ -57,6 +60,11 @@ void parse(str src) {
 
     ls_new_nreg(&named_regs, 16, "named registers");
     ls_new_char(&strings, 1024, "string literals");
+    ls_new_char(&strtab, 1024, "strtab");
+
+    ls_add_char(&strtab, '\0');
+    ls_addran_char(&strtab, "_main", 6);
+    ls_addran_char(&strtab, "_printf", 8);
 
 loop:;
     int c = Next();
@@ -185,6 +193,9 @@ loop:;
             c = Next();
             ls_add_char(&strings, '\0');
         }
+        ls_addran_char(&strtab, "__str", 5);
+        str index = strgen_next();
+        ls_addran_char(&strtab, index.data, index.len);
 
         fat_put(&stackcode, adrp(reg));
         fat_put(&stackcode, add(X, reg, reg, 0));

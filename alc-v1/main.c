@@ -23,8 +23,6 @@ int main(void) {
     //printf("%zd", objcode_size);
     slice asm_out = slice_new(_objcode, objcode_size);
 
-    int nreloc = 0;
-
     int nsyms = 2;
     int nlocal_syms = 1;
     int nextdef_syms = 1;
@@ -45,13 +43,15 @@ int main(void) {
     entry1.n_sect = 0x1; // TODO
     entry1.n_desc = 0x0; // TODO
     entry1.n_value = 0L; // TODO
+                         //
+    struct relocation_info rel_entry0 = {
+        .r_address = 0,
+        .r_extern = 1,
+    };
 
-    // strtab
-
-    slice strtab = slice_new("\0_main\0ltmp0\0\0\0\0", 0x10);
-
-    // reloctab
+    // relocent
     u32 relocoff = 0;
+    int nreloc = 0;
 
 // prepare mach-o obj file
     header_init(&s_header);
@@ -68,7 +68,7 @@ int main(void) {
     lc_segment_end(&seg_text, &s_lcs.segment);
 
     lc_build_version(&s_lcs.build_ver);
-    lc_symtab(&s_lcs.symtab, nsyms, strtab.size);
+    lc_symtab(&s_lcs.symtab, nsyms, strtab.count);
     lc_dysymtab(&s_lcs.dysymtab, nlocal_syms, nextdef_syms, nundef_syms);
 
 
@@ -102,10 +102,10 @@ int main(void) {
     write_buf2(&ptr, get_slice(s_header));
     write_buf2(&ptr, get_slice(s_lcs));
     write_buf2(&ptr, asm_out);
+    // TODO add relocent
     write_buf2(&ptr, get_slice(entry0));
     write_buf2(&ptr, get_slice(entry1));
-    write_buf2(&ptr, strtab);
-    // TODO add relocent
+    write_buf2(&ptr, (slice) {.data =strtab.data, .size = strtab.count });
 
     FILE *file = fopen("main.o", "w");
     fwrite(obj_buf, sizeof (char), total_size, file);
