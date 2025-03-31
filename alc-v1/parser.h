@@ -33,7 +33,9 @@ fat_new(u32, stackcode, [1024]);
 fat_new(u32, prologue, [1024]);
 fat_new(u32, epilogue, [1024]);
 
-fat_new(u32, strings, [1024]);
+ls (char);
+ls_char strings;
+// u8 strings[1024];
 
 typedef struct {
     str name;
@@ -54,6 +56,7 @@ void parse(str src) {
     char line_end = '\0';
 
     ls_new_nreg(&named_regs, 16, "named registers");
+    ls_new_char(&strings, 1024, "string literals");
 
 loop:;
     int c = Next();
@@ -74,7 +77,7 @@ loop:;
         while (c != '"' && c != '\0') { c = Next(); }
         TokenEnd
         printf("str lit: `"), printstr(token), printf("`\n");
-        fat_put_str(&strings, token);
+        ls_addran_char(&strings, token.data, token.len);
         goto loop;
     }
 
@@ -221,7 +224,7 @@ loop:;
     write_buf_fat(&objcode, prologue);
     write_buf_fat(&objcode, stackcode);
     write_buf_fat(&objcode, epilogue);
-    write_buf_fat(&objcode, strings);
+    write_buf(&objcode, strings.data, strings.count);
     printf("parse end\n");
 }
 

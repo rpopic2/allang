@@ -75,5 +75,5 @@ static inline void fat_put(fat *f, u32 val) {
 
 static inline void fat_put_str(fat *f, str s) {
     memcpy(f->end, s.data, s.len);
-    f->end += s.len;
+    f->end += s.len / sizeof (u32);
 }
