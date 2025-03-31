@@ -53,7 +53,7 @@ void parse(str src) {
     ls_nreg named_regs;
 
     size_t stack_size = 0;
-    char line_end = '\0';
+    char line_end = '\n';
 
     ls_new_nreg(&named_regs, 16, "named registers");
     ls_new_char(&strings, 1024, "string literals");
@@ -131,41 +131,20 @@ loop:;
         }
     }
 
-    if (tokc is '"') {
-        // is going to be a string
-        c = Next();
-        TokenStart
-        while (c != '"' && c != '\0') { c = Next(); }
-        TokenEnd
-        printf("str lit: `"), printstr(token), printf("`\n");
-        ls_addran_char(&strings, token.data, token.len);
-        if (it.data[1] == '0') {
-            printf("is null terminated string\n");
-            c = Next();
-            c = Next();
-            ls_add_char(&strings, '\0');
-        }
-
-        fat_put(&stackcode, adrp(0));
-        fat_put(&stackcode, add(X, 0, 0, 0));
-        goto loop;
-    }
-
-    bool isAlph = IsAlpha(tokc);
-    bool isNum = IsNum(tokc);
 
     int reg;
 
     if (regoff > 7) {
         CompileErr("Error: used up all scratch registers\n");
     }
+    printf("le: %d\n", line_end);
     if (line_end == '\0') {
         reg = regoff;
     } else {
         reg = 8 + regoff;
     }
 
-    if (isAlph) {
+    if (IsAlpha(tokc)) {
         nreg *find = NULL;
         for (int i = 0; i < named_regs.count; ++i) {
             nreg *tmp = named_regs.data + i;
@@ -180,10 +159,27 @@ loop:;
         } else {
             CompileErr("Error: unknown named register "), PrintErrStr(token);
         }
-    } else if (isNum) {
+    } else if (IsNum(tokc)) {
         long number = strtol(token.data, &it.data, 10);
         fat_put(&stackcode, mov(reg, number));
         printf("value of '%ld'", number);
+    } else if (tokc is '"') {
+        // is going to be a string
+        c = Next();
+        TokenStart
+        while (c != '"' && c != '\0') { c = Next(); }
+        TokenEnd
+        printf("str lit: `"), printstr(token), printf("`\n");
+        ls_addran_char(&strings, token.data, token.len);
+        if (it.data[1] == '0') {
+            printf("is null terminated string\n");
+            c = Next();
+            c = Next();
+            ls_add_char(&strings, '\0');
+        }
+
+        fat_put(&stackcode, adrp(reg));
+        fat_put(&stackcode, add(X, reg, reg, 0));
     }
 
     if (*it.data == ',') {
@@ -198,11 +194,12 @@ loop:;
 
 
     if (c == '\n') {
-        char *p = it.data;
+        char *p = it.data + 1;
         while (*p != '\n' && *p != '\0') {
             ++p;
         }
         line_end = *(p + 1);
+        printf("lineend: %d\n", line_end);
     }
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
         printf("token may be not consumed\n");
