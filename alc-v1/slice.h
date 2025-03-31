@@ -59,6 +59,8 @@ typedef struct {
     u32 *end;
 } fat;
 
+#define fat_new(T, X, A) T (_##X)A; fat X = (fat) { _##X, _##X };
+
 static inline usize fat_len(fat f) {
     return f.end - f.start;
 }

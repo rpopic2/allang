@@ -13,6 +13,10 @@ int main(void) {
 
     free(src.data);
 
+    if (has_compile_err) {
+        return 1;
+    }
+
 // need to parse out
     size_t objcode_size = ((u32 *)objcode - _objcode) * sizeof (u32);
     //

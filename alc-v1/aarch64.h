@@ -41,13 +41,19 @@ static inline u32 add(u8 reg1, u8 reg2, u16 offset) {
     return ADD_IMM | (offset << 0xa) | (reg2 << 5) | (reg1);
 }
 
-static inline u32 stp_pre(enum sf_t sf, u8 reg1, u8 reg2, u8 base, u16 offset) {
-    return STP | sf << 31 | offset << 15 | reg2 << 10 | base << 5 | reg1;
+static inline u32 ldpstp(enum sf_t sf, bool load, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
+    i8 off = sf == X ? offset_i7 / 8 : offset_i7 / 4;
+    return STP | sf << 31 | load << 22 | off << 14 | reg2 << 10 | base << 5 | reg1;
 }
 
-static inline u32 ldp_post(enum sf_t sf, u8 reg1, u8 reg2, u8 base, u16 offset) {
-    return LDP | sf << 31 | offset << 15 | reg2 << 10 | base << 5 | reg1;
+static inline u32 stp_pre(enum sf_t sf, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
+    return ldpstp(sf, false, reg1, reg2, base, offset_i7);
 }
+
+static inline u32 ldp_post(enum sf_t sf, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
+    return ldpstp(sf, true, reg1, reg2, base, offset_i7);
+}
+
 
 uint32_t strorldr(enum strldr_t store, u8 reg, u8 reg2, bool unscaled, int size, int offset) {
     uint32_t op = 0xb8000000;
