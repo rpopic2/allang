@@ -5,6 +5,7 @@
 #include <stdio.h>
 #define RET 0xd65f03c0
 #define MOV 0x52800000
+#define ORR 0x2a000000
 #define MOVK 0xf2800000
 #define ADD_IMM 0x91000000
 #define SUB 0xd1000000
@@ -14,8 +15,16 @@ enum strldr_t {
     load_t, store_t
 };
 
+enum sf_t {
+    R, X
+};
+
 static inline u32 mov(u8 reg, u16 literal) {
     return MOV | literal << 5 | reg;
+}
+
+static inline u32 mov_reg(enum sf_t sf, u8 rd, u8 rm) {
+    return ORR | sf << 31 | rm << 16 | 0b11111 << 5 | rd;
 }
 
 static inline u32 movk(u8 reg, u16 literal) {

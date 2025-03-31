@@ -69,6 +69,7 @@ cond ? x : y // x and y can be register values only.
 // no operator precedence
 
 // overflow
-x +? 1 ov->
+x +? 1 overflow-> panic
 
+#alias t my_type
 

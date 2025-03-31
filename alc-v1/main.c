@@ -15,7 +15,8 @@ int main(void) {
 
 // need to parse out
     size_t objcode_size = ((u32 *)objcode - _objcode) * sizeof (u32);
-    // printf("%zd", objcode_size);
+    //
+    //printf("%zd", objcode_size);
     slice asm_out = slice_new(_objcode, objcode_size);
 
     int nreloc = 0;

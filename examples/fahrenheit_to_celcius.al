@@ -4,7 +4,7 @@
 
 (args: slice str =>i32)
 
-args.len < 2
+args.len < 2 ->
     error.ExpectedArgument ret
 
 args..arg, i @foreach.index

@@ -22,6 +22,8 @@ enum token_type {
 #define or ||
 
 #define ReadUntilSpace() while (c != ' ' && c != '\n' && c != ITER_EOF) { c = Next(); }
+#define ReadToken() while (c != ' ' && c != '\n' && c != ',' && c != ITER_EOF) { c = Next(); }
+
 
 #define TokenStart token.data = it.data;
 #define TokenEnd  token.len = it.data - token.data;
@@ -39,14 +41,18 @@ void parse(str src) {
     str token = (str) { NULL, 0 };
     u8 reg_to_save = 0;
     size_t stack_size = 0;
+    int regoff = 0;
+
 
 loop:;
     int c = Next();
 
-    if (c is '_' or IsAlpha(c)) {
-        TokenStart
-        ReadUntilSpace();
-        TokenEnd
+    TokenStart
+    ReadUntilSpace();
+    TokenEnd
+    char tokc = token.data[0];
+
+    if (tokc is '_' or IsAlpha(tokc)) {
 
         printf("token "); printstr(token);
 
@@ -63,34 +69,54 @@ loop:;
 
                 reg_to_save = 20;
                 fat_put(&stackcode, mov(20, number));
+                goto loop;
             }
-        } else if (c == '\n') {
-            printf("load to stack");
         }
     }
 
-    if (IsNum(c)) {
-        TokenStart
-        ReadUntilSpace();
-        TokenEnd
+    char *p = it.data;
+    while (*p != '\n' && *p != '\0') {
+        ++p;
+    }
+    char line_end = *(p + 1);
 
+    bool isAlph = IsAlpha(tokc);
+num:
+    if (IsNum(tokc) || isAlph) {
         long number = strtol(token.data, &it.data, 10);
-        printf("value of '%ld'\n", number);
 
         int reg;
-        char nextchar = *(it.data + 1);
-        if (nextchar == '\0') {
-            reg = 0;
+
+        if (line_end == '\0') {
+            reg = regoff;
         } else {
-            reg = 8;
+            reg = 8 + regoff;
         }
 
+        if (isAlph) {
+            fat_put(&stackcode, mov_reg(R, reg, 20));
+            printf("..move to %d", reg);
+        } else {
+            fat_put(&stackcode, mov(reg, number));
+            printf("value of '%ld'", number);
+        }
 
-        fat_put(&stackcode, mov(reg, number));
+        if (*it.data == ',') {
+            ++regoff;
+            printf(", %d", regoff);
+            goto num;
+        }
+        regoff = 0;
+        printf("\n");
     }
+
 
     if (c == ' ' || c == '\n')
         goto loop;
+
+    if (c != '\0') {
+        printf("file not end yet...");
+    }
 
     if (reg_to_save != 0) {
         fat_put(&prologue, sub(SP, SP, 0x10));
