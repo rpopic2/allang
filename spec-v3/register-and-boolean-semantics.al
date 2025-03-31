@@ -1,5 +1,7 @@
 // register semantics
 
+0   // probably simplest code that you can write. moves 0 to register 0 or tmp
+
 i :: 10 // a named register i. mov 10 to callee-saved registers
 i       // mov w8, i
 i foo=> // mov w0, i; bl foo
@@ -28,6 +30,10 @@ t is false->   // tbz
 t is
 true->
 false->
+
+t
+is true->
+t is false->
 
 n :: null
 n is null->     // tbnz

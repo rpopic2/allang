@@ -20,12 +20,19 @@
 inspect: (event @WebEvent)
     event.enum
     EWebEvent.
-    ? #.PageLoad -> "page loaded" ->>
-    ? #.PageUnload -> "page unloaded" ->>
-    ? #.KeyPress -> "pressed ", event.KeyPress ->>
-    ? #.Paste -> "pasted \"", event.Paste ->>
-    ? #.Click -> "clicked at x=", %, ", y=", %, "." ->>
+    is #.PageLoad -> "page loaded" ->>
+    is #.PageUnload -> "page unloaded" ->>
+    is #.KeyPress -> "pressed ", event.KeyPress ->>
+    is #.Paste -> "pasted \"", event.Paste ->>
+    is #.Click -> "clicked at x=", %, ", y=", %, "." ->>
     << print=>
+
+    is #.PageLoad -> "page loaded",
+    is #.PageUnload -> "page unloaded",
+    is #.KeyPress -> "pressed ", event.KeyPress,
+    is #.Paste -> "pasted \"", event.Paste,
+    is #.Click -> "clicked at x=", %, ", y=", %, ".",
+    print=>
 
 WebEvent.
 pressed :: WebEvent { #.KeyPress, 'x' }
@@ -205,3 +212,16 @@ test "while null capture"
         eventuallyNullSequence=> is (value, &v) {
             v +=sum
         }
+
+// http://odin-lang.org/docs/overview/#or_else-expression
+
+m :: string..int @map.new
+
+i, ok :: m["hello"] @get
+ok is Error ->
+    i = 123
+
+i :: m["hello"] @get % is Ok ? % : 123
+i :: m["hello"] @get % is Error ? 123 : %
+
+

@@ -50,7 +50,7 @@
 
 
 list.i32.
-list.i32 lst ::
+lst~ :: 
 ~ lst .delete=>
 10, lst .push=>
 13, lst .push=>

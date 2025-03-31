@@ -8,11 +8,11 @@ a :: 2  // named reg a has 2 assigned. technically it's a shadowing, but after t
 
 a :: 3.0    // shadows the a declared before! although it may look like a duck typing, it is actually checked statically
 
-a +: 2.1    // add the value before and shadow it again
+a :: a + 2.1    // add the value before and shadow it again
 
-a +: 'c'    // error! you cannot assign u8 to float!
+/// a ::  a +'c'    // error! you cannot assign u8 to float!
 
-a :: i32 3 // you can annotate type to go explicit..
+a :: i32 3 // you can annotate type explicitly
 
 
 // stack

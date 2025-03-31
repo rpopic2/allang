@@ -64,4 +64,14 @@ test "many-item pointers"
     addr u8 first_elem_ptr :: buffer_many_ptr + 0
     addr u8 first_elem_ptr_2 :: buffer_many_ptr
 
+// http://odin-lang.org/docs/overview/#pointers
+
+p :: addr i32 not pointing
+i :: 123 =[]
+p :: i
+
+[p] print=>
+1337 =[p]
+
+// pointer arithmetic exist.
 

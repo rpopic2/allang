@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "slice.h"
 
@@ -30,3 +31,22 @@ str read_source() {
     return tmp;
 }
 
+// typedef struct {
+//     void *w;
+// } writer;
+
+typedef void *restrict writer_t;
+
+void write_buf(writer_t *writer, const void *restrict data, size_t size) {
+    memcpy(*writer, data, size);
+    *writer += size;
+}
+void write_buf2(writer_t *writer, slice s) {
+    memcpy(*writer, s.data, s.size);
+    *writer += s.size;
+}
+void write_buf_fat(writer_t *writer, fat s) {
+    size_t size = fat_size(s);
+    memcpy(*writer, s.start, size);
+    *writer += size;
+}

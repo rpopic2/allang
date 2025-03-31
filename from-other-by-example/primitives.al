@@ -28,13 +28,30 @@ my_tuple :: { 5'u32, 1'u8, true, -5.04'f32 }
 
 -2.5e-3
 
-// example below are compile errors, but you can see how std.print.ln is used.
-// true && false #.to_str=> %
-// "true AND false is ", % println=>
+true and false %
+`true AND false is `% println=>
 
-// true || false #.to_str=> %
-// "true OR false is ", % println=>
+true, or false %
+`true OR false is `% println=>
 
-// true! #.to_str => %
-// "NOT true is ", % println=>
+not true %
+`NOT true is `% println=>
+
+// http://odin-lang.org/docs/overview/#basic-types
+b8
+
+i8, i16, i32, i64, i128, isiz
+u8, u16, u32, u64, u128, usiz
+f32, f64
+c8
+addr
+any
+void
+
+// # zero values
+0       // zero
+false   // false
+not pointing    // null pointer
+||  // zero array
+
 

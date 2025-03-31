@@ -125,3 +125,60 @@ test "automatic derefernce"
     thing :: Stuff { 10, 20 } =[]
     thing swap=>
 
+// http://odin-lang.org/docs/overview/#structs
+
+struct Vector2 {
+    f32 x, f32 y
+}
+
+v :: Vector2 { 1, 2 }
+v.x : 4
+v.x print=>
+
+v :: Vector2 { 1, 2 } =[]
+p :: v
+1335 =[p.x]
+v print=>
+
+struct Vector3 {
+    f32 x, y, z
+}
+
+v :: Vector3
+v :: Vector3 ||
+v :: Vector3 { 1, 4, 9 }
+
+v :: Vector3 { z: 1, y: 2 }
+
+.alignof 4
+struct {
+
+}
+
+.packed
+struct {
+
+}
+
+// http://odin-lang.org/docs/overview/#subtype-polymorphism
+
+foo: (Entity entity)
+    entity print=>
+
+bar: (addr Entity entity)
+    [entity] print=>
+
+struct frog {
+    f32 ribbit_volume,
+    @Entity entity,
+}
+
+frog :: Frog {}
+frog.x = 123
+frog.entity foo=>
+
+frog2 :: Frog {} =[]
+123 =[frog.x]
+frog2.entity foo=>
+
+

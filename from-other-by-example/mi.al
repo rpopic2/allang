@@ -5,24 +5,24 @@
 // wip.
 
 clickable:
-    @struct {
+    struct {
         addr vtable vtable
     }
 
-    @struct vtable {
+    struct vtable {
         addr () click
     }
 
 makes_sound:
-    @struct {
+    struct {
         addr vtable vtable
     }
 
-    @struct vtable {
+    struct vtable {
         vtable_entry make_sound
     }
 
-    @struct vtable_entry {
+    struct vtable_entry {
         addr () routine, i32 delta
     }
 

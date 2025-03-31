@@ -1,31 +1,32 @@
-allang: alvin's assembly like language
+# allang: alvin's assembly like language
 by rpopic2
 
-this language is not safe at all. use at your own risk.
+Maps to assembly, and compiles down to machine code directly.
+Be productive at the same time by powerful abstraction features
 
-examples:
+# examples
 
+## Hello World
 
-# hello-world.al
+"Hello World!" std.print=>
 
-main:
-    "Hello World!\n" =>print
+## Powerful macros (and it's type checked!)
+i :: 0..10 @range
+    `i: `i std.print=>
 
-# add.al
+// "i: 0"
+// "i: 1"
+// ...
+// "i: 10"
 
-main:
-    3, 4 =>add =>tostring =>println
+## Be expressive
 
-add: (a: i32, b: i32 => i32)
-    +
-
-
-# loop.al
-
-main:
-    i: 0
-    :: loop
-        i ? 10 lt<-
-        ~ i += 1
-        "count %\n", i =>fmt =>print
+std.getchar=>
+is '0' -> "zero",
+is >= '0' and <= 9' -> "number"
+is 'a'..'z' @in_range
+    and 'A'..'Z' @in_range -> "alphabet"
+is '-' or '+' or '*' or '/' -> "operator"
+: "other"
+std.print=>
 

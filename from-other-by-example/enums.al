@@ -119,3 +119,37 @@ Mode:
 test "hmm"
     Mode.count += 1
     expect Mode.count is 1
+
+// http://odin-lang.org/docs/overview/#enumerations
+
+enum Directions { North, East, South, West }
+enum Foo { A, 4: B, 7: C, 1337: D }
+
+enum Foo u8 { }
+
+enum Foo { A, B, C }
+
+f :: Foo.A
+
+f
+is A -> "foo" >>
+is B -> "bar" >>
+is C -> "baz" >>
+: "unknown"
+<< print=>
+
+| "foo", "bar", "baz" |, i32 f @at
+print=>
+
+Foo.
+a :: .A
+
+Directions.
+direction_vectors: |
+    #.North: | 0, -1 |,
+    #.East: | 1, 0 |,
+    #.South: | 0, 1 |,
+    #.West: | -1, 0 |
+|
+
+[direction_vectors, #Directions.North]
