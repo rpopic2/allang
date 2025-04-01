@@ -15,6 +15,7 @@ int main(void) {
     free(src.data);
 
     if (has_compile_err) {
+        CompileErr("Compile Error\n");
         return 1;
     }
 

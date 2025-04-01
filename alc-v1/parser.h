@@ -74,7 +74,6 @@ loop:;
 
     if (it.data[0] == ':') {
         c = Next();
-        printf("wow%d", c);
         if (c != ' ' && c != '\n') {
             CompileErr("Syntax error: space or newline required after a label: ");
         }
@@ -85,14 +84,21 @@ loop:;
         macho_stab_ext(f, token);
 
         if (c == '(') {
-            printf("it's a routine, ");
-
+            printf("it's a routine, args ");
             Next();
             TokenStart;
             ReadToken;
             TokenEnd;
+read_type:
             if (Is("i32")) {
-                printf("arg type of i32");
+                printf("type of i32 ");
+            }
+            if (Is(", ")) {
+                goto read_type;
+            }
+            if (Is(" =>")) {
+                printf("return ");
+                goto read_type;
             }
         }
 
@@ -308,6 +314,9 @@ loop:;
     }
 
 
+    if (s.epilogue.count == 0) {
+        ls_add_u32(&s.epilogue, mov(0, 0));
+    }
     if (calls_fn) {
         s.stack_size += 0x10;
         u32 op = stp_pre(X, 29, 30, SP, s.stack_size);
