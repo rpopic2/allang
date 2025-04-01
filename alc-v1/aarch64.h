@@ -1,5 +1,7 @@
 #pragma once
 
+#include "list.h"
+#include "stack_context.h"
 #include "typedefs.h"
 #include <stdbool.h>
 #include <stdio.h>
@@ -64,6 +66,14 @@ static inline u32 store(u8 reg, u8 reg2, u16 offset) {
 
 static inline u32 ldr(u8 reg, u8 reg2, u16 offset) {
     return strorldr(load_t, reg, reg2, false, sizeof (u64), offset);
+}
+
+void make_prelude(stack_context *s, u8 r1, u8 r2) {
+    u32 op = stp_pre(X, r1, r2, SP, s->stack_size);
+    ls_add_u32(&s->prologue, op);
+    op = ldp_post(X, r1, r2, SP, s->stack_size);
+    ls_add_u32(&s->epilogue, op);
+    s->stack_size += 0x10;
 }
 
 // data processing - imm

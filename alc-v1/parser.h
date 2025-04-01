@@ -37,8 +37,6 @@ void parse_scope(str src) {
 
     stack_context s;
     stack_context_new(&s);
-
-    size_t stack_size = 0;
     char *line_end = NULL;
 
     bool calls_fn = false;
@@ -98,8 +96,8 @@ loop:;
             }
         }
 
-        c = Next();
-        c = Next();
+        c = Next(); // )
+        c = Next(); // \n
         str nextsrc = (str){ it.data };
 
         for (int i = nextsrc.len; i < src.len; ++i) {
@@ -113,7 +111,7 @@ loop:;
             }
             printf("has ident %d\n", ident);
             if (ident == 0) {   // TODO need to hanle blank lines
-                printf("\n\nnew stack!!!\n");
+                printf("\n\n\tnew stack\n");
                 it.data[0] = '\0';
                 nextsrc.len = it.data - nextsrc.data;
 
@@ -160,11 +158,7 @@ loop:;
             }
             if (find == NULL) {
                 if (reg_to_save != 0) {
-                    u32 op = stp_pre(X, reg_to_save, reg, SP, stack_size);
-                    ls_add_u32(&s.prologue, op);
-                    op = ldp_post(X, reg_to_save, reg, SP, stack_size);
-                    ls_add_u32(&s.epilogue, op);
-                    stack_size += 0x10;
+                    make_prelude(&s, reg_to_save, reg);
                     reg_to_save = 0;
                 } else {
                     reg_to_save = reg;
@@ -182,9 +176,10 @@ loop:;
                 TokenEnd;
 
                 long number = strtol(token.data, &it.data, 10);
+                ls_add_u32(&s.code, mov(reg, number));
+
                 printf("..value of '%ld'\n", number);
 
-                ls_add_u32(&s.code, mov(reg, number));
                 goto loop;
             }
         }
@@ -208,18 +203,20 @@ loop:;
     if (regoff > 7) {
         CompileErr("Error: used up all scratch registers\n");
     }
-    if (line_end[2] == '\0' || (*line_end == '>')) {
+    if (line_end + 2 >= (src.data + src.len) || (*line_end == '>')) {
         reg = regoff;
     } else {
         reg = 8 + regoff;
     }
 
     if (tokc is '+') {
-        // let's do adding!
-        //  0b090100
         c = Next();
         printf("add");
-        ls_add_u32(&s.code, add_shft(R, reg, 8, 9));
+        u8 reg1 = 8, reg2 = 9;
+        if (s.code.count == 0) {
+            reg1 = 0, reg2 = 1;
+        }
+        ls_add_u32(&s.code, add_shft(R, reg, reg1, reg2));
         token_consumed = true;
     }
 
@@ -312,15 +309,15 @@ loop:;
 
 
     if (calls_fn) {
-        stack_size += 0x10;
-        u32 op = stp_pre(X, 29, 30, SP, stack_size);
+        s.stack_size += 0x10;
+        u32 op = stp_pre(X, 29, 30, SP, s.stack_size);
         ls_add_u32(&s.prologue, op);
 
-        op = ldp_post(X, 29, 30, SP, stack_size);
+        op = ldp_post(X, 29, 30, SP, s.stack_size);
         ls_add_u32(&s.epilogue, op);
     }
     if (reg_to_save != 0) {
-        stack_size += 0x10;
+        s.stack_size += 0x10;
         ls_add_u32(&s.prologue, store(reg_to_save, SP, 0x8));
 
         ls_add_u32(&s.epilogue, ldr(reg_to_save, SP, 0x8));
@@ -328,11 +325,11 @@ loop:;
     }
 
     usize prologue_len = s.prologue.count;
-    if (stack_size > 0) {
-        u32 prologue_sp = sub(SP, SP, stack_size);
+    if (s.stack_size > 0) {
+        u32 prologue_sp = sub(SP, SP, s.stack_size);
         write_buf(&objcode, &prologue_sp, sizeof (prologue_sp));
         ++prologue_len;
-        ls_add_u32(&s.epilogue, add(X, SP, SP, stack_size));
+        ls_add_u32(&s.epilogue, add(X, SP, SP, s.stack_size));
     }
 
     usize prologue_size = prologue_len * sizeof (u32);
