@@ -30,13 +30,13 @@ void strprint_nl(str s) {
 
 #define str_from_c(X) (str){(X), strlen(X)}
 
-bool streq(str s1, str s2) {
+bool str_equal(str s1, str s2) {
     if (s1.len != s2.len)
         return false;
     return memcmp(s1.data, s2.data, s1.len) == 0;
 }
 
-bool streq_c(str s1, const char *s2) {
+bool str_c_equal(str s1, const char *s2) {
     return memcmp(s1.data, s2, s1.len) == 0;
 }
 

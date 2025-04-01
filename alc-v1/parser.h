@@ -10,7 +10,7 @@
 
 #include "aarch64.h"
 #include "file.h"
-#include "lexer.h"
+#include "parser_util.h"
 #include "slice.h"
 #include "typedefs.h"
 #include "list.h"
@@ -18,39 +18,17 @@
 #include "macho-context.h"
 #include "stack_context.h"
 
-#define is ==
-#define or ||
-
-#define Next() iter_next(&it)
-#define if_Is(X) if (memcmp((X), it.data, strlen(X)) == 0) { it.data += strlen(X); c = *it.data;
-
-#define ReadUntilSpace() while (c != ' ' && c != '\n' && c != '\0') { c = Next(); }
-#define ReadToken_old() while (c != ' ' && c != '\n' && c != ',' && c != '"' && c != '\0' && c != '=') { c = Next(); }
-
-#define ReadToken() while (IsAlpha(c) || IsNum(c) || c is '.' || c is '_') { c = Next();}
-
-#define printdbg(...) printf(__VA_ARGS__)
-
-#define TokenStart token.data = it.data;
-#define TokenEnd  token.len = it.data - token.data;
-
-u32 _objcode[1024];
-writer_t objcode = _objcode;
-
-ls_char strings;
-bool main_defined;
-
-void scope(str src);
-
 void parse(str src) {
     macho_context_init();
-    scope(src);
+    ls_new_char(&strings, 1024, "string literals");
+
+    parse_scope(src);
 }
 
-void scope(str src) {
+void parse_scope(str src) {
     printf("start parse "), strprint(src);
     str_iter it = into_iter(src);
-    str token = (str) { NULL, 0 };
+    str token = {};
 
     u8 reg_to_save = 0;
     u8 named_reg_idx = 19;
@@ -65,26 +43,19 @@ void scope(str src) {
 
     bool calls_fn = false;
 
-    ls_new_nreg(&s.named_regs, 16, "named registers");
-    ls_new_char(&strings, 1024, "string literals");
-
-
 loop:;
     int c = Next();
     bool token_consumed = false;
 
     TokenStart;
-    ReadToken();
+    ReadToken;
     TokenEnd;
 
-    if (token.len == 0 && (c == ' ')) {
+    if (token.len == 0 && c == ' ') {
         ++ident;
         goto loop;
     }
-    if (token.len == 0 && (c == '\n')) {
-        printf("endl\n");
-        goto loop;
-    }
+
     if (ident % 4 != 0) {
         CompileErr("Syntax error: single indentation should consist of 4 spaces");
     }
@@ -96,15 +67,16 @@ loop:;
         }
         line_end = p - 1;
     }
-    if (line_end[2] == '\0') {
+    bool is_eof = line_end[2] == '\0';
+    if (is_eof) {
         token_consumed = true;
     }
 
-    char tokc = token.data[0];
     printdbg("token '"), strprint_nl(token), printdbg("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
 
     if (it.data[0] == ':') {
         c = Next();
+        printf("wow%d", c);
         if (c != ' ' && c != '\n') {
             CompileErr("Syntax error: space or newline required after a label: ");
         }
@@ -117,23 +89,23 @@ loop:;
         if (c == '(') {
             printf("it's a routine, ");
 
-            c = Next();
-            TokenStart
-            ReadToken();
-            TokenEnd
-            if (streq_c(token, "i32")) {
+            Next();
+            TokenStart;
+            ReadToken;
+            TokenEnd;
+            if (Is("i32")) {
                 printf("arg type of i32");
             }
         }
 
-        Next();
+        c = Next();
+        c = Next();
         str nextsrc = (str){ it.data };
 
         for (int i = nextsrc.len; i < src.len; ++i) {
             c = Next();
             if (c != '\n')
                 continue;
-            printf("i: %zu ", it.i);
             int ident = 0;
             while (c == ' ') {
                 Next();
@@ -144,7 +116,9 @@ loop:;
                 printf("\n\nnew stack!!!\n");
                 it.data[0] = '\0';
                 nextsrc.len = it.data - nextsrc.data;
-                scope(nextsrc);
+
+                parse_scope(nextsrc);
+
                 printf("endofrt\n\n\n");
                 break;
             }
@@ -161,59 +135,61 @@ loop:;
         main_defined = true;
     }
 
+    char tokc = token.data[0];
     if (tokc is '_' or IsAlpha(tokc)) {
 
         str name = token;
 
-        if_Is(" :: ") // {
+        if (Is(" :: ")) {
             printf("..is named reg");
+
+            nreg *find = NULL;
+            for (int i = 0; i < s.named_regs.count; ++i) {
+                nreg *tmp = s.named_regs.data + i;
+                if (str_equal(tmp->name, name)) {
+                    find = tmp;
+                }
+            }
+
+            int reg = named_reg_idx;
+            if (find != NULL) {
+                reg = find->reg;
+            }
+            if (reg > 28) {
+                CompileErr("Error: used up all callee-saved registers\n");
+            }
+            if (find == NULL) {
+                if (reg_to_save != 0) {
+                    u32 op = stp_pre(X, reg_to_save, reg, SP, stack_size);
+                    ls_add_u32(&s.prologue, op);
+                    op = ldp_post(X, reg_to_save, reg, SP, stack_size);
+                    ls_add_u32(&s.epilogue, op);
+                    stack_size += 0x10;
+                    reg_to_save = 0;
+                } else {
+                    reg_to_save = reg;
+                }
+                ls_add_nreg(&s.named_regs, (nreg) { name, reg });
+                named_reg_idx += 1;
+            }
+            if (find != NULL) {
+                printf("found "), strprint(find->name);
+            }
+
             if (IsNum(c)) {
                 TokenStart;
                 ReadUntilSpace();
                 TokenEnd;
 
-                nreg *find = NULL;
-                for (int i = 0; i < s.named_regs.count; ++i) {
-                    nreg *tmp = s.named_regs.data + i;
-                    if (memcmp(tmp->name.data, name.data, name.len) == 0) {
-                        find = tmp;
-                    }
-                }
-                if (find != NULL) {
-                    printf("found "), strprint(find->name);
-                }
-
                 long number = strtol(token.data, &it.data, 10);
                 printf("..value of '%ld'\n", number);
 
-                int reg = named_reg_idx;
-                if (find != NULL) {
-                    reg = find->reg;
-                }
-                if (reg > 28) {
-                    CompileErr("Error: used up all callee-saved registers\n");
-                }
-                if (find == NULL) {
-                    if (reg_to_save != 0) {
-                        u32 op = stp_pre(X, reg_to_save, reg, SP, stack_size);
-                        ls_add_u32(&s.prologue, op);
-                        op = ldp_post(X, reg_to_save, reg, SP, stack_size);
-                        ls_add_u32(&s.epilogue, op);
-                        stack_size += 0x10;
-                        reg_to_save = 0;
-                    } else {
-                        reg_to_save = reg;
-                    }
-                    ls_add_nreg(&s.named_regs, (nreg) { name, reg });
-                }
                 ls_add_u32(&s.code, mov(reg, number));
-                if (find == NULL)
-                    named_reg_idx += 1;
                 goto loop;
             }
         }
 
-        if_Is("=>") // {
+        if (Is("=>")) {
             printf("branch linked to "), strprint(token);
             calls_fn = true;
             macho_stab_undef(token);
