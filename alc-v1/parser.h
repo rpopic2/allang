@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <mach-o/nlist.h>
 
 #include "aarch64.h"
 #include "file.h"
@@ -39,6 +40,11 @@ ls_char strings;
 ls_char strtab;
 int strtab_idx;
 
+typedef struct nlist_64 stabe;
+ls (stabe)
+ls_stabe stab_loc;
+ls_stabe stab_ext;
+ls_stabe stab_und;
 
 typedef struct {
     str name;
@@ -58,13 +64,18 @@ void parse(str src) {
     size_t stack_size = 0;
     char *line_end = NULL;
 
+    bool calls_fn = false;
+
     ls_new_nreg(&named_regs, 16, "named registers");
     ls_new_char(&strings, 1024, "string literals");
     ls_new_char(&strtab, 1024, "strtab");
-
     ls_add_char(&strtab, '\0');
+
     ls_addran_char(&strtab, "_main", 6);
-    ls_addran_char(&strtab, "_printf", 8);
+
+    ls_new_stabe(&stab_loc, 128, "local symbol table");
+    ls_new_stabe(&stab_ext, 128, "external symbol table");
+    ls_new_stabe(&stab_und, 128, "undefined symbol table");
 
 loop:;
     int c = Next();
@@ -142,7 +153,22 @@ loop:;
 
         if_Is("=>") // {
             printf("call fn\n");
-        fat_put(&stackcode, BL);
+            calls_fn = true;
+
+            printf("stab cnt: %d\n", strtab.count);
+
+            struct nlist_64 entry = {
+                .n_un.n_strx = strtab.count,
+                .n_type = N_EXT,
+                .n_sect = NO_SECT,
+                .n_desc = 0x0,
+                .n_value = 0L,
+            };
+            ls_add_stabe(&stab_und, entry);
+
+            ls_addran_char(&strtab, "_printf", 8);
+
+            fat_put(&stackcode, BL);
             goto loop;
         }
     }
@@ -153,7 +179,6 @@ loop:;
     if (regoff > 7) {
         CompileErr("Error: used up all scratch registers\n");
     }
-    printf("le: %d\n", *line_end);
     if (line_end[2] == '\0' || (*line_end == '>')) {
         reg = regoff;
     } else {
@@ -186,6 +211,18 @@ loop:;
         while (c != '"' && c != '\0') { c = Next(); }
         TokenEnd
         printf("str lit: `"), printstr(token), printf("`\n");
+
+        long offset = 0x24L;
+        struct nlist_64 entry = {
+            .n_un.n_strx = strtab.count,
+            .n_type = N_TYPE,
+            .n_sect = 1,
+            .n_desc = 0x0,
+            .n_value = 0 + offset,   // TODO assign this
+        };
+        ls_add_stabe(&stab_loc, entry);
+
+
         ls_addran_char(&strings, token.data, token.len);
         if (it.data[1] == '0') {
             printf("is null terminated string\n");
@@ -195,7 +232,8 @@ loop:;
         }
         ls_addran_char(&strtab, "__str", 5);
         str index = strgen_next();
-        ls_addran_char(&strtab, index.data, index.len);
+        ls_addran_char(&strtab, index.data, index.len + 1);
+
 
         fat_put(&stackcode, adrp(reg));
         fat_put(&stackcode, add(X, reg, reg, 0));
@@ -225,6 +263,14 @@ loop:;
     ls_delete_nreg(&named_regs);
 
 
+    if (calls_fn) {
+        stack_size += 0x10;
+        u32 op = stp_pre(X, 29, 30, SP, stack_size);
+        fat_put(&prologue, op);
+
+        op = ldp_post(X, 29, 30, SP, stack_size);
+        fat_put(&epilogue, op);
+    }
     if (reg_to_save != 0) {
         stack_size += 0x10;
         fat_put(&prologue, store(reg_to_save, SP, 0x8));

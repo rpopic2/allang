@@ -15,6 +15,7 @@
 #define LDP 0x29400000
 
 // data processing - imm
+#define ADRP 0x90000000
 #define ADD_IMM 0x91000000
 #define SUB 0xd1000000
 
@@ -22,7 +23,6 @@
 #define MOV 0x52800000
 #define ORR 0x2a000000
 #define MOVK 0xf2800000
-#define ADRP 0x90000000
 
 enum strldr_t {
     load_t, store_t

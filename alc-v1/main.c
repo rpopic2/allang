@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <mach-o/arm64/reloc.h>
 
 #include "file.h"
 #include "macho.h"
@@ -23,35 +24,53 @@ int main(void) {
     //printf("%zd", objcode_size);
     slice asm_out = slice_new(_objcode, objcode_size);
 
-    int nsyms = 2;
+    int nsyms = 3;
     int nlocal_syms = 1;
     int nextdef_syms = 1;
-    int nundef_syms = 0;
+    int nundef_syms = 1;
 
-    // symtab
-    struct nlist_64 entry0 = {
-        .n_un.n_strx = 7,
-        .n_type = 0x0e,
+    struct nlist_64 entry_main = {
+        .n_un.n_strx = 1,
+        .n_type = N_EXT | N_TYPE,
         .n_sect = 0x1,
         .n_desc = 0x0,
         .n_value = 0L,
     };
 
-    struct nlist_64 entry1;
-    entry1.n_un.n_strx = 1; // TODO
-    entry1.n_type = 0x0f; // TODO
-    entry1.n_sect = 0x1; // TODO
-    entry1.n_desc = 0x0; // TODO
-    entry1.n_value = 0L; // TODO
-                         //
-    struct relocation_info rel_entry0 = {
-        .r_address = 0,
-        .r_extern = 1,
+    int nreloc = 3;
+    // 08 00 00 00 01 00 00 3d - adrp
+    struct relocation_info rel_adrp = {
+        .r_address = 0x8,
+        .r_symbolnum = 0, // symbol index
+
+        .r_pcrel = true,
+        .r_length = 2, // long
+        .r_extern = true,
+        .r_type = ARM64_RELOC_PAGE21,
     };
 
-    // relocent
-    u32 relocoff = 0;
-    int nreloc = 0;
+    // 0c 00 00 00 01 00 00 4c - add 
+    struct relocation_info rel_add = {
+        .r_address = 0xc,
+        .r_symbolnum = 0, // symbol index
+
+        .r_pcrel = 0,
+        .r_length = 2,
+        .r_extern = 1,
+        .r_type = ARM64_RELOC_PAGEOFF12
+    };
+
+    // 10 00 00 00 05 00 00 2d
+    struct relocation_info rel_printf = {
+        .r_address = 0x10,
+        .r_symbolnum = 2, // symbol index
+
+        .r_pcrel = 1,
+        .r_length = 2,
+        .r_extern = 1,
+        .r_type = ARM64_RELOC_BRANCH26
+    };
+
 
 // prepare mach-o obj file
     header_init(&s_header);
@@ -61,7 +80,6 @@ int main(void) {
     lc_segment_sect_info info = {
         .name = SECT_TEXT,
         .size = asm_out.size,
-        .relocoff = relocoff,
         .nreloc = nreloc,
     };
     lc_segment_sect(&seg_text, &s_lcs.section_text, &info);
@@ -85,6 +103,9 @@ int main(void) {
     s_lcs.section_text.offset = offset;
     offset += asm_out.size;
 
+    s_lcs.section_text.reloff = offset;
+    offset += (s_lcs.section_text.nreloc * sizeof (struct relocation_info));
+
     s_lcs.symtab.symoff = offset;
     offset += (s_lcs.symtab.nsyms * sizeof (struct nlist_64));
 
@@ -102,9 +123,15 @@ int main(void) {
     write_buf2(&ptr, get_slice(s_header));
     write_buf2(&ptr, get_slice(s_lcs));
     write_buf2(&ptr, asm_out);
-    // TODO add relocent
-    write_buf2(&ptr, get_slice(entry0));
-    write_buf2(&ptr, get_slice(entry1));
+
+    write_buf2(&ptr, get_slice(rel_adrp));
+    write_buf2(&ptr, get_slice(rel_add));
+    write_buf2(&ptr, get_slice(rel_printf));
+
+    write_buf2(&ptr, get_slice(stab_loc.data[0]));
+    write_buf2(&ptr, get_slice(entry_main));
+    write_buf2(&ptr, get_slice(stab_und.data[0]));
+
     write_buf2(&ptr, (slice) {.data =strtab.data, .size = strtab.count });
 
     FILE *file = fopen("main.o", "w");
