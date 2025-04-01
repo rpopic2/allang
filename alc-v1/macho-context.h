@@ -1,7 +1,7 @@
 #pragma once
 
 #include "list.h"
-#include "slice.h"
+#include "parser.h"
 #include "strgen.h"
 #include <mach-o/arm64/reloc.h>
 #include <mach-o/nlist.h>
@@ -40,7 +40,7 @@ void macho_context_init() {
     ls_new_int(&to_push_ext, 128, "relocation table entries, that needs r_symbolnum pushed by number of locr");
 }
 
-void macho_stab_ext(fat code, str entry) {
+void macho_stab_ext(fat code, str s) {
     int len = fat_len(code) * sizeof (u32);
     const struct nlist_64 entry_main = {
         .n_un.n_strx = strtab.count,
@@ -50,8 +50,9 @@ void macho_stab_ext(fat code, str entry) {
         .n_value = len, // TODO
     };
     ls_add_stabe(&stab_ext, entry_main);
+    printf("add stab entry, len %d", stab_ext.count), strprint(s);
 
-    ls_addran_char(&strtab, entry.data, entry.len);
+    ls_addran_char(&strtab, s.data, s.len);
     ls_add_char(&strtab, '\0');
 }
 
@@ -88,11 +89,11 @@ void macho_stab_stringlit() {
     ls_addran_char(&strtab, index.data, index.len + 1);
 }
 
-void macho_relocent(fat stackcode, enum reloc_type_arm64 type, bool pcrel) {
+void macho_relocent(fat f, ls_u32 *stackcode, enum reloc_type_arm64 type, bool pcrel) {
     int stab_idx = stab_loc.count - 1;
 
     const struct relocation_info rel = {
-        .r_address = (stackcode.end - stackcode.start) * sizeof (u32),
+        .r_address = (fat_len(f) + stackcode->count) * sizeof (u32),
         .r_symbolnum = stab_idx,
 
         .r_pcrel = pcrel,
@@ -103,9 +104,9 @@ void macho_relocent(fat stackcode, enum reloc_type_arm64 type, bool pcrel) {
     ls_add_relocent(&relocents, rel);
 }
 
-void macho_relocent_undef(fat stackcode, enum reloc_type_arm64 type, bool pcrel) {
+void macho_relocent_undef(fat f, ls_u32 *stackcode, enum reloc_type_arm64 type, bool pcrel) {
     struct relocation_info rel_printf = {
-        .r_address = (stackcode.end - stackcode.start) * sizeof (u32),
+        .r_address = (fat_len(f) + stackcode->count) * sizeof (u32),
         .r_symbolnum = stab_und.count - 1,
 
         .r_pcrel = 1,

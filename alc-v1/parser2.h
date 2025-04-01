@@ -28,7 +28,7 @@ str read_symbol() {
         symbol.len = skip_space();
 
         printf("symbol len %zd data ", symbol.len);
-        printstr(symbol);
+        strprint(symbol);
         printf(" \n");
     }
     return symbol;

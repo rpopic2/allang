@@ -1,5 +1,6 @@
 #pragma once
 
+#include "typedefs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,3 +44,4 @@
 
 ls (char)
 ls (int)
+ls (u32)
