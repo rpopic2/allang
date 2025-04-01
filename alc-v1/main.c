@@ -43,6 +43,13 @@ int main(void) {
     lc_symtab(&s_lcs.symtab, nsyms, strtab.count);
     lc_dysymtab(&s_lcs.dysymtab, stab_loc.count, stab_ext.count, stab_und.count);
 
+// push relocents
+    for (int i = 0; i < to_push_und.count; ++i) {
+        int index = to_push_und.data[i];
+        int original = relocents.data[index].r_symbolnum;
+        relocents.data[index].r_symbolnum += s_lcs.dysymtab.iundefsym;
+        printf("pushed %d, %d->%d\n", index, original, relocents.data[index].r_symbolnum);
+    }
 
 // calculate offsets
 

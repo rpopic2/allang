@@ -19,6 +19,6 @@ void CompileErr(const char *s, ...) {
 
 void PrintErrStr(str s) {
     printf("\x1B[31m");
-    printstr(s);
+    strprint(s);
     printf("\x1B[0m\n");
 }

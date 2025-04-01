@@ -22,6 +22,8 @@ ls (relocent)
 ls_relocent relocents;
 
 ls_int to_push;
+ls_int to_push_ext;
+ls_int to_push_und;
 
 void macho_context_init() {
     ls_new_relocent(&relocents, 128, "relocation entries");
@@ -34,15 +36,18 @@ void macho_context_init() {
     ls_add_char(&strtab, '\0');
 
     ls_new_int(&to_push, 128, "symbol table entries to push n_value");
+    ls_new_int(&to_push_und, 128, "relocation table entries, that needs r_symbolnum pushed by number of loc and ext");
+    ls_new_int(&to_push_ext, 128, "relocation table entries, that needs r_symbolnum pushed by number of locr");
 }
 
-void macho_stab_ext(str entry) {
+void macho_stab_ext(fat code, str entry) {
+    int len = fat_len(code) * sizeof (u32);
     const struct nlist_64 entry_main = {
         .n_un.n_strx = strtab.count,
         .n_type = N_EXT | N_TYPE,
         .n_sect = 0x1,
         .n_desc = 0x0,
-        .n_value = 0L,
+        .n_value = len, // TODO
     };
     ls_add_stabe(&stab_ext, entry_main);
 
@@ -96,4 +101,19 @@ void macho_relocent(fat stackcode, enum reloc_type_arm64 type, bool pcrel) {
         .r_type = type,
     };
     ls_add_relocent(&relocents, rel);
+}
+
+void macho_relocent_undef(fat stackcode, enum reloc_type_arm64 type, bool pcrel) {
+    struct relocation_info rel_printf = {
+        .r_address = (stackcode.end - stackcode.start) * sizeof (u32),
+        .r_symbolnum = stab_und.count - 1,
+
+        .r_pcrel = 1,
+        .r_length = 2,
+        .r_extern = 1,
+        .r_type = ARM64_RELOC_BRANCH26
+    };
+    ls_add_int(&to_push_und, relocents.count);
+    ls_add_relocent(&relocents, rel_printf);
+
 }

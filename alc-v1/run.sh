@@ -6,5 +6,5 @@ clang ./main.c \
 echo $?
 
 
-    # && hexdump -C main.o \
     # && otool -tvj main.o \
+    # && hexdump -C main.o \

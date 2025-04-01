@@ -5,25 +5,6 @@
 #include <stdio.h>
 
 #define SP 31
-
-// branches
-#define RET 0xd65f03c0
-#define BL 0x94000000
-
-// load and stores
-#define STP 0x29000000
-#define LDP 0x29400000
-
-// data processing - imm
-#define ADRP 0x90000000
-#define ADD_IMM 0x91000000
-#define SUB 0xd1000000
-
-// data processing - reg
-#define MOV 0x52800000
-#define ORR 0x2a000000
-#define MOVK 0xf2800000
-
 enum strldr_t {
     load_t, store_t
 };
@@ -32,25 +13,15 @@ enum sf_t {
     R, X
 };
 
-static inline u32 mov(u8 reg, u16 literal) {
-    return MOV | literal << 5 | reg;
-}
+// branches
+#define RET 0xd65f03c0
+#define BL 0x94000000
 
-static inline u32 mov_reg(enum sf_t sf, u8 rd, u8 rm) {
-    return ORR | sf << 31 | rm << 16 | 0b11111 << 5 | rd;
-}
+// load and stores
 
-static inline u32 movk(u8 reg, u16 literal) {
-    return MOVK | 1 << 21 | literal >> 16 << 5 | reg;
-}
+#define STP 0x29000000
+#define LDP 0x29400000
 
-static inline u32 sub(u8 reg1, u8 reg2, u16 literal) {
-    return SUB | (literal << 10) | reg2 << 5 | reg1;
-}
-
-static inline u32 add(enum sf_t sf, u8 reg1, u8 reg2, u16 value) {
-    return ADD_IMM | sf << 31 | (value << 0xa) | (reg2 << 5) | (reg1);
-}
 
 static inline u32 ldpstp(enum sf_t sf, bool load, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
     i8 off = sf == X ? offset_i7 / 8 : offset_i7 / 4;
@@ -93,6 +64,45 @@ static inline u32 store(u8 reg, u8 reg2, u16 offset) {
 
 static inline u32 ldr(u8 reg, u8 reg2, u16 offset) {
     return strorldr(load_t, reg, reg2, false, sizeof (u64), offset);
+}
+
+// data processing - imm
+#define ADRP 0x90000000
+#define ADD_IMM 0x91000000
+#define SUB 0xd1000000
+
+// data processing - reg
+#define MOV 0x52800000
+#define ORR 0x2a000000
+#define MOVK 0xf2800000
+#define ADD_EXT 0x0b000000
+
+static inline u32 add_ext(enum sf_t sf, u8 rd, u8 rn, u8 rm) {
+    return ADD_EXT | sf << 31 | 1 << 21 | rm << 16 | rn << 5 | rd;
+}
+static inline u32 add_shft(enum sf_t sf, u8 rd, u8 rn, u8 rm) {
+    return ADD_EXT | sf << 31 | rm << 16 | rn << 5 | rd;
+}
+
+
+static inline u32 mov(u8 reg, u16 literal) {
+    return MOV | literal << 5 | reg;
+}
+
+static inline u32 mov_reg(enum sf_t sf, u8 rd, u8 rm) {
+    return ORR | sf << 31 | rm << 16 | 0b11111 << 5 | rd;
+}
+
+static inline u32 movk(u8 reg, u16 literal) {
+    return MOVK | 1 << 21 | literal >> 16 << 5 | reg;
+}
+
+static inline u32 sub(u8 reg1, u8 reg2, u16 literal) {
+    return SUB | (literal << 10) | reg2 << 5 | reg1;
+}
+
+static inline u32 add(enum sf_t sf, u8 reg1, u8 reg2, u16 value) {
+    return ADD_IMM | sf << 31 | (value << 0xa) | (reg2 << 5) | (reg1);
 }
 
 static inline u32 adrp(u8 reg) {

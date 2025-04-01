@@ -1,27 +1,10 @@
 #pragma once
 
+#include "str.h"
 #include "typedefs.h"
-#include <assert.h>
-#include <stddef.h>
-#include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 
-typedef struct {
-    char *data;
-    size_t len;
-} str;
-
-char str_get(str s, int index) {
-    assert(index >= s.len);
-    return s.data[index];
-}
-
-void printstr(str s) {
-    for (int i = 0; i < s.len; ++i) {
-        putchar(s.data[i]);
-    }
-}
-#define str_from_c(X) (str){(X), strlen(X)}
 
 typedef struct {
     char *data;

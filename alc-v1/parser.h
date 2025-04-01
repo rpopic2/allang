@@ -15,7 +15,6 @@
 #include "typedefs.h"
 #include "list.h"
 #include "error.h"
-#include "strgen.h"
 #include "macho-context.h"
 
 #define is ==
@@ -25,8 +24,11 @@
 #define if_Is(X) if (memcmp((X), it.data, strlen(X)) == 0) { it.data += strlen(X); c = *it.data;
 
 #define ReadUntilSpace() while (c != ' ' && c != '\n' && c != '\0') { c = Next(); }
-#define ReadToken() while (c != ' ' && c != '\n' && c != ',' && c != '"' && c != '\0' && c != '=') { c = Next(); }
+#define ReadToken_old() while (c != ' ' && c != '\n' && c != ',' && c != '"' && c != '\0' && c != '=') { c = Next(); }
 
+#define ReadToken() while (IsAlpha(c) || IsNum(c) || c is '.' || c is '_') { c = Next();}
+
+#define printdbg(...) printf(__VA_ARGS__)
 
 #define TokenStart token.data = it.data;
 #define TokenEnd  token.len = it.data - token.data;
@@ -35,6 +37,7 @@ u32 _objcode[1024];
 writer_t objcode = _objcode;
 
 ls_char strings;
+bool main_defined;
 
 fat_new(u32, stackcode, [1024]);
 fat_new(u32, prologue, [1024]);
@@ -46,7 +49,17 @@ typedef struct {
 } nreg; // named registers
 ls (nreg);
 
+void parse_named_reg() {
+
+}
+
+void scope(str src);
+
 void parse(str src) {
+    scope(src);
+}
+
+void scope(str src) {
     str_iter it = into_iter(src);
     str token = (str) { NULL, 0 };
 
@@ -54,6 +67,7 @@ void parse(str src) {
     u8 named_reg_idx = 19;
     int regoff = 0;
     ls_nreg named_regs;
+    int ident = 0;
 
     macho_context_init();
 
@@ -65,15 +79,26 @@ void parse(str src) {
     ls_new_nreg(&named_regs, 16, "named registers");
     ls_new_char(&strings, 1024, "string literals");
 
-    macho_stab_ext(str_from_c("_main"));
 
 loop:;
     int c = Next();
     bool token_consumed = false;
 
-    TokenStart
+    TokenStart;
     ReadToken();
-    TokenEnd
+    TokenEnd;
+
+    if (token.len == 0 && (c == ' ')) {
+        ++ident;
+        goto loop;
+    }
+    if (token.len == 0 && (c == '\n')) {
+        printf("endl\n");
+        goto loop;
+    }
+    if (ident % 4 != 0) {
+        CompileErr("Syntax error: single indentation should consist of 4 spaces");
+    }
 
     if (line_end < it.data) {
         char *p = it.data;
@@ -82,10 +107,42 @@ loop:;
         }
         line_end = p - 1;
     }
+    if (line_end[2] == '\0') {
+        token_consumed = true;
+    }
 
     char tokc = token.data[0];
-    printf("token '"), printstr(token), printf("': ");
+    printdbg("token '"), strprint_nl(token), printdbg("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
 
+    if (it.data[0] == ':') {
+        c = Next();
+        if (c != ' ' && c != '\n') {
+            CompileErr("Syntax error: space or newline required after a label: ");
+        }
+        c = Next();
+        printf("static label '"), strprint_nl(token); printf("', ");
+        macho_stab_ext(stackcode, token);
+
+        if (c == '(') {
+            printf("it's a routine, ");
+
+            c = Next();
+            TokenStart
+            ReadToken();
+            TokenEnd
+            if (streq_c(token, "i32")) {
+                printf("arg type of i32");
+            }
+        }
+
+        goto loop;
+    }
+
+    if (!main_defined && ident == 0) {
+        macho_stab_ext(stackcode, str_from_c("_main"));
+        printf("main defined here\n");
+        main_defined = true;
+    }
 
     if (tokc is '_' or IsAlpha(tokc)) {
 
@@ -94,9 +151,9 @@ loop:;
         if_Is(" :: ") // {
             printf("..is named reg");
             if (IsNum(c)) {
-                TokenStart
+                TokenStart;
                 ReadUntilSpace();
-                TokenEnd
+                TokenEnd;
 
                 nreg *find = NULL;
                 for (int i = 0; i < named_regs.count; ++i) {
@@ -106,7 +163,7 @@ loop:;
                     }
                 }
                 if (find != NULL) {
-                    printf("found "), printstr(find->name);
+                    printf("found "), strprint(find->name);
                 }
 
                 long number = strtol(token.data, &it.data, 10);
@@ -123,7 +180,6 @@ loop:;
                     if (reg_to_save != 0) {
                         u32 op = stp_pre(X, reg_to_save, reg, SP, stack_size);
                         fat_put(&prologue, op);
-
                         op = ldp_post(X, reg_to_save, reg, SP, stack_size);
                         fat_put(&epilogue, op);
                         stack_size += 0x10;
@@ -141,24 +197,11 @@ loop:;
         }
 
         if_Is("=>") // {
-            printf("branch linked to "), printstr(token), printf("\n");
+            printf("branch linked to "), strprint(token);
             calls_fn = true;
             macho_stab_undef(token);
 
-            // macho_relocent(stackcode, ARM64_RELOC_BRANCH26, true);
-
-            int stab_idx = stab_und.count - 1;
-            printf("sind%d", stab_idx);
-            struct relocation_info rel_printf = {
-                .r_address = (stackcode.end - stackcode.start) * sizeof (u32),
-                .r_symbolnum = 2, // symbol index // TODO .. this changes if more loc or ext symbols are added!
-
-                .r_pcrel = 1,
-                .r_length = 2,
-                .r_extern = 1,
-                .r_type = ARM64_RELOC_BRANCH26
-            };
-            ls_add_relocent(&relocents, rel_printf);
+            macho_relocent_undef(stackcode, ARM64_RELOC_BRANCH26, true);
 
             fat_put(&stackcode, BL);
             goto loop;
@@ -175,6 +218,15 @@ loop:;
         reg = regoff;
     } else {
         reg = 8 + regoff;
+    }
+
+    if (tokc is '+') {
+        // let's do adding!
+        //  0b090100
+        c = Next();
+        printf("add");
+        fat_put(&stackcode, add_shft(R, reg, 8, 9));
+        token_consumed = true;
     }
 
     if (IsAlpha(tokc)) {
@@ -195,6 +247,7 @@ loop:;
     } else if (IsNum(tokc)) {
         long number = strtol(token.data, &it.data, 10);
         fat_put(&stackcode, mov(reg, number));
+        token_consumed = true;
         printf("value of '%ld'", number);
     } else if (tokc is '"') {
         // is going to be a string
@@ -203,20 +256,20 @@ loop:;
         while (c != '"' && c != '\0') { c = Next(); }
         TokenEnd
 
-        printf("original: `"), printstr(token), printf("` ");
+        printf("original: `"), strprint_nl(token), printf("` ");
         for (int i = 0; i < token.len; ++i) {
             char d = token.data[i];
             if (d != '\\')
                 continue;
             d = token.data[i + 1];
-            printf("escape seq '%x(%c)'", d, d);
+            printf("(has escape seq %c) ", d);
             if (d == 'n') {
                 token.data[i] = '\n';
                 memmove(token.data + i + 1, token.data + i + 2, token.len - i);
                 token.len -= 1;
             }
         }
-        printf("str lit: `"), printstr(token);
+        printf("str lit: `"), strprint_nl(token), printf("`");
 
         macho_stab_stringlit();
 
@@ -227,13 +280,14 @@ loop:;
             c = Next();
             ls_add_char(&strings, '\0');
         }
-        printf("`\n");
+        printf("\n");
 
         macho_relocent(stackcode, ARM64_RELOC_PAGE21, true);
         fat_put(&stackcode, adrp(reg));
 
         macho_relocent(stackcode, ARM64_RELOC_PAGEOFF12, false);
         fat_put(&stackcode, add(X, reg, reg, 0));
+        token_consumed = true;
     }
 
     if (*it.data == ',') {
@@ -244,18 +298,21 @@ loop:;
         goto loop;
     }
     regoff = 0;
-    printf("\n");
-
 
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
-        printf("token may be not consumed\n");
-    if (c == ' ' || c == '\n') {
+        printf("token may be not consumed %d", c), strprint(token), printf("\n");
+    if (c == '\n') {
+        printf("\\n\n");
+        ident = 0;
+        goto loop;
+    }
+    if (c != '\0') {
         goto loop;
     }
 
 //fin
     if (c != '\0') {
-        printf("might returned prematurely, %d, '%s'\n", c, it.data);
+        CompileErr("parser returned prematurely, %d, '%s'\n", c, it.data);
     }
     ls_delete_nreg(&named_regs);
 
