@@ -18,58 +18,11 @@ int main(void) {
         return 1;
     }
 
-// need to parse out
     size_t objcode_size = ((u32 *)objcode - _objcode + 1) * sizeof (u32);
-    //
-    //printf("%zd", objcode_size);
+
     slice asm_out = slice_new(_objcode, objcode_size);
 
-    int nsyms = 3;
-    int nlocal_syms = 1;
-    int nextdef_syms = 1;
-    int nundef_syms = 1;
-
-    struct nlist_64 entry_main = {
-        .n_un.n_strx = 1,
-        .n_type = N_EXT | N_TYPE,
-        .n_sect = 0x1,
-        .n_desc = 0x0,
-        .n_value = 0L,
-    };
-
-    int nreloc = 3;
-    // 08 00 00 00 01 00 00 3d - adrp
-    struct relocation_info rel_adrp = {
-        .r_address = 0x8,
-        .r_symbolnum = 0, // symbol index
-
-        .r_pcrel = true,
-        .r_length = 2, // long
-        .r_extern = true,
-        .r_type = ARM64_RELOC_PAGE21,
-    };
-
-    // 0c 00 00 00 01 00 00 4c - add 
-    struct relocation_info rel_add = {
-        .r_address = 0xc,
-        .r_symbolnum = 0, // symbol index
-
-        .r_pcrel = 0,
-        .r_length = 2,
-        .r_extern = 1,
-        .r_type = ARM64_RELOC_PAGEOFF12
-    };
-
-    // 10 00 00 00 05 00 00 2d
-    struct relocation_info rel_printf = {
-        .r_address = 0x10,
-        .r_symbolnum = 2, // symbol index
-
-        .r_pcrel = 1,
-        .r_length = 2,
-        .r_extern = 1,
-        .r_type = ARM64_RELOC_BRANCH26
-    };
+    int nreloc = relocents.count;
 
 
 // prepare mach-o obj file
@@ -86,8 +39,9 @@ int main(void) {
     lc_segment_end(&seg_text, &s_lcs.segment);
 
     lc_build_version(&s_lcs.build_ver);
+    int nsyms = stab_loc.count + stab_ext.count + stab_und.count;
     lc_symtab(&s_lcs.symtab, nsyms, strtab.count);
-    lc_dysymtab(&s_lcs.dysymtab, nlocal_syms, nextdef_syms, nundef_syms);
+    lc_dysymtab(&s_lcs.dysymtab, stab_loc.count, stab_ext.count, stab_und.count);
 
 
 // calculate offsets
@@ -124,13 +78,21 @@ int main(void) {
     write_buf2(&ptr, get_slice(s_lcs));
     write_buf2(&ptr, asm_out);
 
-    write_buf2(&ptr, get_slice(rel_adrp));
-    write_buf2(&ptr, get_slice(rel_add));
-    write_buf2(&ptr, get_slice(rel_printf));
+    for (int i = 0; i < relocents.count; ++i) {
+        write_buf2(&ptr, get_slice(relocents.data[i]));
+    }
+    // write_buf2(&ptr, get_slice(rel_printf));
 
-    write_buf2(&ptr, get_slice(stab_loc.data[0]));
-    write_buf2(&ptr, get_slice(entry_main));
-    write_buf2(&ptr, get_slice(stab_und.data[0]));
+    for (int i = 0; i < stab_loc.count; ++i) {
+        write_buf2(&ptr, get_slice(stab_loc.data[i]));
+    }
+    for (int i = 0; i < stab_ext.count; ++i) {
+        stabe d = stab_ext.data[i];
+        write_buf2(&ptr, get_slice(d));
+    }
+    for (int i = 0; i < stab_und.count; ++i) {
+        write_buf2(&ptr, get_slice(stab_und.data[i]));
+    }
 
     write_buf2(&ptr, (slice) {.data =strtab.data, .size = strtab.count });
 

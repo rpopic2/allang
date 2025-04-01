@@ -1,3 +1,5 @@
+#pragma once
+
 #include "error.h"
 #include "slice.h"
 #include <stdlib.h>

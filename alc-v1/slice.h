@@ -21,6 +21,7 @@ void printstr(str s) {
         putchar(s.data[i]);
     }
 }
+#define str_from_c(X) (str){(X), strlen(X)}
 
 typedef struct {
     char *data;

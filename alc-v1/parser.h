@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mach-o/arm64/reloc.h>
+#include <mach-o/reloc.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +16,7 @@
 #include "list.h"
 #include "error.h"
 #include "strgen.h"
+#include "macho-context.h"
 
 #define is ==
 #define or ||
@@ -31,20 +34,11 @@
 u32 _objcode[1024];
 writer_t objcode = _objcode;
 
+ls_char strings;
+
 fat_new(u32, stackcode, [1024]);
 fat_new(u32, prologue, [1024]);
 fat_new(u32, epilogue, [1024]);
-
-ls (char);
-ls_char strings;
-ls_char strtab;
-int strtab_idx;
-
-typedef struct nlist_64 stabe;
-ls (stabe)
-ls_stabe stab_loc;
-ls_stabe stab_ext;
-ls_stabe stab_und;
 
 typedef struct {
     str name;
@@ -61,6 +55,8 @@ void parse(str src) {
     int regoff = 0;
     ls_nreg named_regs;
 
+    macho_context_init();
+
     size_t stack_size = 0;
     char *line_end = NULL;
 
@@ -68,14 +64,8 @@ void parse(str src) {
 
     ls_new_nreg(&named_regs, 16, "named registers");
     ls_new_char(&strings, 1024, "string literals");
-    ls_new_char(&strtab, 1024, "strtab");
-    ls_add_char(&strtab, '\0');
 
-    ls_addran_char(&strtab, "_main", 6);
-
-    ls_new_stabe(&stab_loc, 128, "local symbol table");
-    ls_new_stabe(&stab_ext, 128, "external symbol table");
-    ls_new_stabe(&stab_und, 128, "undefined symbol table");
+    macho_stab_ext(str_from_c("_main"));
 
 loop:;
     int c = Next();
@@ -91,11 +81,10 @@ loop:;
             ++p;
         }
         line_end = p - 1;
-        printf("lineend: %d\n", *line_end);
     }
 
     char tokc = token.data[0];
-    printf("token '%d', '", tokc), printstr(token), printf("': ");
+    printf("token '"), printstr(token), printf("': ");
 
 
     if (tokc is '_' or IsAlpha(tokc)) {
@@ -152,21 +141,24 @@ loop:;
         }
 
         if_Is("=>") // {
-            printf("call fn\n");
+            printf("branch linked to "), printstr(token), printf("\n");
             calls_fn = true;
+            macho_stab_undef(token);
 
-            printf("stab cnt: %d\n", strtab.count);
+            // macho_relocent(stackcode, ARM64_RELOC_BRANCH26, true);
 
-            struct nlist_64 entry = {
-                .n_un.n_strx = strtab.count,
-                .n_type = N_EXT,
-                .n_sect = NO_SECT,
-                .n_desc = 0x0,
-                .n_value = 0L,
+            int stab_idx = stab_und.count - 1;
+            printf("sind%d", stab_idx);
+            struct relocation_info rel_printf = {
+                .r_address = (stackcode.end - stackcode.start) * sizeof (u32),
+                .r_symbolnum = 2, // symbol index // TODO .. this changes if more loc or ext symbols are added!
+
+                .r_pcrel = 1,
+                .r_length = 2,
+                .r_extern = 1,
+                .r_type = ARM64_RELOC_BRANCH26
             };
-            ls_add_stabe(&stab_und, entry);
-
-            ls_addran_char(&strtab, "_printf", 8);
+            ls_add_relocent(&relocents, rel_printf);
 
             fat_put(&stackcode, BL);
             goto loop;
@@ -212,16 +204,7 @@ loop:;
         TokenEnd
         printf("str lit: `"), printstr(token), printf("`\n");
 
-        long offset = 0x24L;
-        struct nlist_64 entry = {
-            .n_un.n_strx = strtab.count,
-            .n_type = N_TYPE,
-            .n_sect = 1,
-            .n_desc = 0x0,
-            .n_value = 0 + offset,   // TODO assign this
-        };
-        ls_add_stabe(&stab_loc, entry);
-
+        macho_stab_stringlit();
 
         ls_addran_char(&strings, token.data, token.len);
         if (it.data[1] == '0') {
@@ -230,12 +213,11 @@ loop:;
             c = Next();
             ls_add_char(&strings, '\0');
         }
-        ls_addran_char(&strtab, "__str", 5);
-        str index = strgen_next();
-        ls_addran_char(&strtab, index.data, index.len + 1);
 
-
+        macho_relocent(stackcode, ARM64_RELOC_PAGE21, true);
         fat_put(&stackcode, adrp(reg));
+
+        macho_relocent(stackcode, ARM64_RELOC_PAGEOFF12, false);
         fat_put(&stackcode, add(X, reg, reg, 0));
     }
 
@@ -278,10 +260,18 @@ loop:;
         fat_put(&epilogue, ldr(reg_to_save, SP, 0x8));
         reg_to_save = 0;
     }
+
+    usize prologue_len = prologue.end - prologue.start;
     if (stack_size > 0) {
         u32 prologue_sp = sub(SP, SP, stack_size);
         write_buf(&objcode, &prologue_sp, sizeof (prologue_sp));
+        ++prologue_len;
         fat_put(&epilogue, add(X, SP, SP, stack_size));
+    }
+
+    usize prologue_size = prologue_len * sizeof (u32);
+    for (int i = 0; i < relocents.count; ++i) {
+        relocents.data[i].r_address += prologue_size;
     }
 
     fat_put(&epilogue, RET);
@@ -289,6 +279,13 @@ loop:;
     write_buf_fat(&objcode, prologue);
     write_buf_fat(&objcode, stackcode);
     write_buf_fat(&objcode, epilogue);
+
+    const long offset = objcode - (void *)_objcode;
+    for (int i = 0; i < to_push.count; ++i) {
+        int index = to_push.data[i];
+        stab_loc.data[index].n_value += offset;
+    }
+
     write_buf(&objcode, strings.data, strings.count);
     printf("parse end\n");
 }

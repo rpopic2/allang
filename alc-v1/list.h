@@ -1,4 +1,7 @@
+#pragma once
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define INIT_CAP 8
@@ -32,9 +35,11 @@
     void ls_delete_##T(ls_## T *self) { \
         free(self->data); \
     } \
-    void ls_addran_##T(ls_## T *restrict self, T *restrict ptr, size_t nitems) { \
+    void ls_addran_##T(ls_## T *restrict self, const T *restrict ptr, size_t nitems) { \
         ls_reserv_##T(self, self->count + nitems); \
         memcpy(self->data + self->count, ptr, nitems * sizeof (T)); \
         self->count += nitems; \
     } \
 
+ls (char)
+ls (int)
