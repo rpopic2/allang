@@ -202,17 +202,32 @@ loop:;
         TokenStart
         while (c != '"' && c != '\0') { c = Next(); }
         TokenEnd
-        printf("str lit: `"), printstr(token), printf("`\n");
+
+        printf("original: `"), printstr(token), printf("` ");
+        for (int i = 0; i < token.len; ++i) {
+            char d = token.data[i];
+            if (d != '\\')
+                continue;
+            d = token.data[i + 1];
+            printf("escape seq '%x(%c)'", d, d);
+            if (d == 'n') {
+                token.data[i] = '\n';
+                memmove(token.data + i + 1, token.data + i + 2, token.len - i);
+                token.len -= 1;
+            }
+        }
+        printf("str lit: `"), printstr(token);
 
         macho_stab_stringlit();
 
         ls_addran_char(&strings, token.data, token.len);
         if (it.data[1] == '0') {
-            printf("is null terminated string\n");
+            printf("is null terminated string");
             c = Next();
             c = Next();
             ls_add_char(&strings, '\0');
         }
+        printf("`\n");
 
         macho_relocent(stackcode, ARM64_RELOC_PAGE21, true);
         fat_put(&stackcode, adrp(reg));

@@ -1,2 +1,2 @@
-"Hello World!"0 _printf=>
+"Hello World!\n"0 _printf=>
 0
