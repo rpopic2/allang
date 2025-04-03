@@ -8,26 +8,23 @@
 
 typedef struct {
     char *data;
-    size_t len;
-    size_t i;
+    char *end;
 } str_iter;
 
 #define ITER_EOF 0
 int iter_next(str_iter *self) {
-    if (self->i <= self->len) {
-        self->data++;
-        return self->data[self->i];
+    if (self->data < self->end) {
+        ++(self->data);
+        return *self->data;
     }
     return ITER_EOF;
 }
-
 int iter_prev(str_iter *self) {
-    self->data--;
-    return self->data[self->i];
+    return *(--(self->data));
 }
 
 static inline str_iter into_iter(str s) {
-    return (str_iter) { .data = s.data - 1, .len = s.len, 0 };
+    return (str_iter) { .data = s.data - 1, .end = s.data + s.len };
 }
 
 typedef struct {
