@@ -78,7 +78,7 @@ void macho_stab_stringlit() {
         .n_type = N_TYPE,
         .n_sect = 1,
         .n_desc = 0x0,
-        .n_value = 0,
+        .n_value = strings.count,
     };
     ls_add_stabe(&stab_loc, entry);
     ls_add_int(&to_push, stab_idx);
@@ -116,3 +116,22 @@ void macho_relocent_undef(fat f, ls_u32 *stackcode, u32 symbolnum, enum reloc_ty
     ls_add_relocent(&relocents, rel_printf);
 
 }
+
+typedef struct {
+    char *find;
+    int symbolnum;
+} tab_find;
+tab_find stab_search(ls_stabe *tab, str token) {
+    char *find = NULL;
+    u32 symbolnum = tab->count;
+    for (int i = 0; i < stab_ext.count; ++i) { // have to also find in local stab
+        stabe s = stab_ext.data[i];
+        u32 index = s.n_un.n_strx;
+        if (str_c_equal(token, strtab.data + index)) {
+            find = strtab.data + index;
+            symbolnum = i;
+        }
+    }
+    return (tab_find){ find, symbolnum };
+}
+
