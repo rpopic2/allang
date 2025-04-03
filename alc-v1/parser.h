@@ -72,6 +72,12 @@ loop:;
 
     printdbg("token '"), strprint_nl(token), printdbg("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
 
+    if (Is("//")) {
+        printdbg("comment\n");
+        ReadUntilNewline();
+        goto loop;
+    }
+
     if (it.data[0] == ':') {
         c = Next();
         if (c != ' ' && c != '\n') {
@@ -186,13 +192,19 @@ read_type:
                 printf("found "), strprint(find->name);
             }
 
+            enum sf_t reg_sf = W;
+            if (Is("i64")) {
+                printdbg("type i64");
+                c = Next();
+                reg_sf = X;
+            }
             if (IsNum(c)) {
                 TokenStart;
                 ReadUntilSpace();
                 TokenEnd;
 
                 long number = strtol(token.data, &it.data, 10);
-                ls_add_u32(&s.code, mov(reg, number));
+                ls_add_u32(&s.code, mov(reg_sf, reg, number));
 
                 printf("..value of '%ld'\n", number);
 
@@ -264,7 +276,7 @@ read_type:
         }
     } else if (IsNum(tokc)) {
         long number = strtol(token.data, &it.data, 10);
-        ls_add_u32(&s.code, mov(reg, number));
+        ls_add_u32(&s.code, mov(W, reg, number));
         token_consumed = true;
         printf("value of '%ld'", number);
     } else if (tokc is '"') {
@@ -300,7 +312,6 @@ read_type:
         c = Next();
         printf("\n");
 
-        // stab_search(&stab_loc, 
         int stab_idx = stab_loc.count - 1;
         fat f = { _objcode, objcode };
         macho_relocent(f, &s.code, stab_idx, ARM64_RELOC_PAGE21, true);

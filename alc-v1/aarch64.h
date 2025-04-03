@@ -107,8 +107,8 @@ static inline u32 add_shft(enum sf_t sf, u8 rd, u8 rn, u8 rm) {
 }
 
 
-static inline u32 mov(u8 reg, u16 literal) {
-    return MOV | literal << 5 | reg;
+static inline u32 mov(enum sf_t sf, u8 reg, u16 literal) {
+    return MOV | sf << 31 | literal << 5 | reg;
 }
 
 static inline u32 mov_reg(enum sf_t sf, u8 rd, u8 rm) {

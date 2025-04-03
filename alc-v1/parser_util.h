@@ -32,6 +32,7 @@ static inline bool IsSpace(char c) {
 #define Is(X) _if_is(X, &it, &c)
 
 #define ReadUntilSpace() while (c != ' ' && c != '\n' && c != '\0') { c = Next(); }
+#define ReadUntilNewline() while (c != '\n' && c != '\0') { c = Next(); }
 #define ReadToken_old() while (c != ' ' && c != '\n' && c != ',' && c != '"' && c != '\0' && c != '=') { c = Next(); }
 
 #define ReadToken while (IsAlpha(c) || IsNum(c) || c is '.' || c is '_') { c = Next();}
