@@ -51,15 +51,16 @@ typedef enum {
 } str_ext;
 
 static inline u32 ldpstp(sf_t sf, bool load, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
-    i8 off = sf == X ? offset_i7 / 8 : offset_i7 / 4;
-    return STP | sf << 31 | load << 22 | off << 14 | reg2 << 10 | base << 5 | reg1;
+    i8 off = sf == X ? (offset_i7 / 8) : (offset_i7 / 4);
+    printf("ldp off: %x", off);
+    return STP | sf << 31 | load << 22 | off << 15 | reg2 << 10 | base << 5 | reg1;
 }
 
-static inline u32 stp_pre(sf_t sf, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
+static inline u32 stp_pre(sf_t sf, u8 reg1, u8 reg2, u8 base, int offset_i7) {
     return ldpstp(sf, false, reg1, reg2, base, offset_i7);
 }
 
-static inline u32 ldp_post(sf_t sf, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
+static inline u32 ldp_post(sf_t sf, u8 reg1, u8 reg2, u8 base, int offset_i7) {
     return ldpstp(sf, true, reg1, reg2, base, offset_i7);
 }
 
@@ -106,6 +107,7 @@ static inline u32 ldr(u8 reg, u8 reg2, u16 offset) {
 }
 
 void make_prelude(stack_context *s, u8 r1, u8 r2) {
+    printf("make prelude %d, %d", r1, r2);
     u32 op = stp_pre(X, r1, r2, SP, s->stack_size);
     ls_add_u32(&s->prologue, op);
     op = ldp_post(X, r1, r2, SP, s->stack_size);

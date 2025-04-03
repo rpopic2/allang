@@ -1,9 +1,11 @@
 #pragma once
 
-#include "slice.h"
+#include "str.h"
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+
+#define printd(...) printf(__VA_ARGS__)
 
 bool has_compile_err = false;
 

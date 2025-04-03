@@ -16,7 +16,6 @@
 #include "list.h"
 #include "error.h"
 #include "macho-context.h"
-#include "stack_context.h"
 
 void parse(str src) {
     macho_context_init();
@@ -30,7 +29,6 @@ void parse_scope(str src) {
     str_iter it = into_iter(src);
     str token = {};
 
-    u8 reg_to_save = 0;
     u8 named_reg_idx = 19;
     int regoff = 0;
     int ident = 0;
@@ -59,8 +57,7 @@ loop:;
     }
 
     if (line_end + 1 < it.data) {
-        printf(" reset nreg ");
-        target_nreg = NULL; // TODO should we consume here?
+        target_nreg = NULL;
         char *p = it.data;
         while (*p != '\n' && *p != '\0') {
             ++p;
@@ -97,10 +94,20 @@ loop:;
             TokenStart;
             ReadToken;
             TokenEnd;
+            // printf("arg1: "), strprint(token), printf(";");
 read_type:
-            if (Is("i32")) {
+            if (Is("i32")) {    // TODO more types
                 printf("type of i32 ");
+            } else if (Is("c8")) {
+                printf("type of c8 ");
+            } else if (Is("FILE")) {
+                printf("type of FILE ");
+            } else if (Is("addr")) {
+                Next();
+                printf("type of addr ");
+                goto read_type;
             }
+            printf(":%x:", it.data[0]);
             if (Is(", ")) {
                 goto read_type;
             }
@@ -146,7 +153,7 @@ read_type:
         printd("found compare ");
         if (Is(" 0 ->")) {
             printd("special case 0 ");
-            ls_add_u32(&s.code, cbnz(W, 0, 4)); // TODO
+            ls_add_u32(&s.code, cbnz(X, 0, 4)); // TODO
         }
         printd("\n");
         goto loop;
@@ -185,6 +192,7 @@ read_type:
             n.reg = named_reg_idx;
             if (find != NULL) {
                 n.reg = find->reg;
+                *find = n;
                 printf("found "), strprint(find->name);
             }
             if (n.reg > 28) {
@@ -192,13 +200,7 @@ read_type:
             }
 
             if (find == NULL) {
-                if (reg_to_save != 0) {
-                    make_prelude(&s, reg_to_save, n.reg);
-                    reg_to_save = 0;
-                } else {
-                    reg_to_save = n.reg;
-                }
-
+                s.regs_to_save[s.regs_to_save_size++] = n.reg;
                 ls_add_nreg(&s.named_regs, n);
                 named_reg_idx += 1;
             }
@@ -218,9 +220,9 @@ read_type:
                 u32 symbolnum = stab_und.count;
                 macho_stab_undef(token);
             printf("failed <%d>,", symbolnum);
-                macho_relocent_undef(f, &s.code, symbolnum, ARM64_RELOC_BRANCH26, true);
+                macho_relocent_undef(f, &s, symbolnum, ARM64_RELOC_BRANCH26, true);
             } else {
-                macho_relocent(f, &s.code, find.symbolnum, ARM64_RELOC_BRANCH26, true);
+                macho_relocent(f, &s, find.symbolnum, ARM64_RELOC_BRANCH26, true);
                 ls_add_int(&to_push_ext, relocents.count - 1);
             }
             printf("find reloc '%p%s <%d>,", find.find, find.find, find.symbolnum);
@@ -229,6 +231,7 @@ read_type:
             ls_add_u32(&s.code, BL);
 
             if (is_target_nreg(&it)) {
+                printd("target: %d", target_nreg->size);
                 sf_t sf = nreg_sf(target_nreg);
                 ls_add_u32(&s.code, mov_reg(sf, target_nreg->reg, 0));
             }
@@ -349,10 +352,10 @@ read_type:
 
         int stab_idx = stab_loc.count - 1;
         fat f = { _objcode, objcode };
-        macho_relocent(f, &s.code, stab_idx, ARM64_RELOC_PAGE21, true);
+        macho_relocent(f, &s, stab_idx, ARM64_RELOC_PAGE21, true);
         ls_add_u32(&s.code, adrp(reg));
 
-        macho_relocent(f, &s.code, stab_idx, ARM64_RELOC_PAGEOFF12, false);
+        macho_relocent(f, &s, stab_idx, ARM64_RELOC_PAGEOFF12, false);
         ls_add_u32(&s.code, add_imm(X, reg, reg, 0));
         token_consumed = true;
     }
@@ -392,19 +395,28 @@ read_type:
     //     ls_add_u32(&s.epilogue, mov(0, 0));
     // }
     if (calls_fn) {
-        s.stack_size += 0x10;
-        u32 op = stp_pre(X, 29, 30, SP, s.stack_size);
-        ls_add_u32(&s.prologue, op);
-
-        op = ldp_post(X, 29, 30, SP, s.stack_size);
-        ls_add_u32(&s.epilogue, op);
+        s.regs_to_save[s.regs_to_save_size++] = 29;
+        s.regs_to_save[s.regs_to_save_size++] = 30;
     }
-    if (reg_to_save != 0) {
-        s.stack_size += 0x10;
-        ls_add_u32(&s.prologue, store(reg_to_save, SP, 0x8));
+    for (int i = 0; i < s.regs_to_save_size; ++i) {
+        u8 reg = s.regs_to_save[i];
+        printf("stack size: 0x%zx", s.stack_size);
+        if ((i + 1) < s.regs_to_save_size) {
+            u8 reg2 = s.regs_to_save[++i];
 
-        ls_add_u32(&s.epilogue, ldr(reg_to_save, SP, 0x8));
-        reg_to_save = 0;
+            s.stack_size += 0x10;
+            u32 op = stp_pre(X, reg, reg2, SP, s.stack_size);
+            ls_add_u32(&s.prologue, op);
+
+            op = ldp_post(X, reg, reg2, SP, s.stack_size);
+            ls_add_u32(&s.epilogue, op);
+        } else {
+            s.stack_size += 0x10;
+            ls_add_u32(&s.prologue, store(reg, SP, s.stack_size));
+
+            ls_add_u32(&s.epilogue, ldr(reg, SP, s.stack_size));
+        }
+
     }
 
     usize prologue_len = s.prologue.count;
@@ -416,8 +428,9 @@ read_type:
     }
 
     usize prologue_size = prologue_len * sizeof (u32);
-    for (int i = 0; i < relocents.count; ++i) {
-        relocents.data[i].r_address += prologue_size;
+    for (int i = 0; i < s.relocents.count; ++i) {
+        u32 index = s.relocents.data[i];
+        relocents.data[index].r_address += prologue_size;
     }
 
     ls_add_u32(&s.epilogue, RET);

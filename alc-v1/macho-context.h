@@ -1,7 +1,7 @@
 #pragma once
 
 #include "list.h"
-#include "parser.h"
+#include "stack_context.h"
 #include "strgen.h"
 #include <mach-o/arm64/reloc.h>
 #include <mach-o/nlist.h>
@@ -10,6 +10,8 @@
 
 ls_char strtab;
 int strtab_idx;
+
+ls_char strings;
 
 typedef struct nlist_64 stabe;
 ls (stabe)
@@ -89,7 +91,8 @@ void macho_stab_stringlit() {
     ls_addran_char(&strtab, index.data, index.len + 1);
 }
 
-void macho_relocent(fat f, ls_u32 *stackcode, u32 symbolnum, enum reloc_type_arm64 type, bool pcrel) {
+void macho_relocent(fat f, stack_context *s, u32 symbolnum, enum reloc_type_arm64 type, bool pcrel) {
+    ls_u32 *stackcode = &s->code;
     const struct relocation_info rel = {
         .r_address = (fat_len(f) + stackcode->count) * sizeof (u32),
         .r_symbolnum = symbolnum,
@@ -99,11 +102,13 @@ void macho_relocent(fat f, ls_u32 *stackcode, u32 symbolnum, enum reloc_type_arm
         .r_extern = true,
         .r_type = type,
     };
+    ls_add_u32(&s->relocents, relocents.count);
     ls_add_relocent(&relocents, rel);
 }
 
-void macho_relocent_undef(fat f, ls_u32 *stackcode, u32 symbolnum, enum reloc_type_arm64 type, bool pcrel) {
-    struct relocation_info rel_printf = {
+void macho_relocent_undef(fat f, stack_context *s, u32 symbolnum, enum reloc_type_arm64 type, bool pcrel) {
+    ls_u32 *stackcode = &s->code;
+    struct relocation_info rel = {
         .r_address = (fat_len(f) + stackcode->count) * sizeof (u32),
         .r_symbolnum = symbolnum,
 
@@ -113,7 +118,8 @@ void macho_relocent_undef(fat f, ls_u32 *stackcode, u32 symbolnum, enum reloc_ty
         .r_type = ARM64_RELOC_BRANCH26
     };
     ls_add_int(&to_push_und, relocents.count);
-    ls_add_relocent(&relocents, rel_printf);
+    ls_add_u32(&s->relocents, relocents.count);
+    ls_add_relocent(&relocents, rel);
 
 }
 

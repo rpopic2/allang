@@ -38,7 +38,6 @@ static inline bool IsSpace(char c) {
 
 #define ReadToken while (IsAlpha(c) || IsNum(c) || c is '.' || c is '_') { c = Next();}
 
-#define printd(...) printf(__VA_ARGS__)
 
 #define TokenStart token.data = it.data;
 #define TokenEnd  token.len = it.data - token.data;
