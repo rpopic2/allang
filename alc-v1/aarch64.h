@@ -1,5 +1,6 @@
 #pragma once
 
+#include "error.h"
 #include "list.h"
 #include "stack_context.h"
 #include "typedefs.h"
@@ -7,6 +8,7 @@
 #include <stdio.h>
 
 typedef i32 i19;
+typedef i16 i12;
 typedef u8 u5;
 typedef u8 u1;
 
@@ -15,20 +17,20 @@ enum strldr_t {
     load_t, store_t
 };
 
-enum sf_t {
+typedef enum {
     W, X
-};
+} sf_t;
 
 // branches
 #define RET 0xd65f03c0
 #define BL 0x94000000
 #define CBZ 0x34000000
 
-static inline u32 cbz(enum sf_t sf, u5 reg, i19 pcrel) { 
+static inline u32 cbz(sf_t sf, u5 reg, i19 pcrel) { 
     return CBZ | sf << 31 | pcrel << 5 | reg;
 }
 
-static inline u32 cbnz(enum sf_t sf, u5 reg, i19 pcrel) { 
+static inline u32 cbnz(sf_t sf, u5 reg, i19 pcrel) { 
     return cbz(sf, reg, pcrel) | 1 << 24;
 }
 
@@ -37,6 +39,7 @@ static inline u32 cbnz(enum sf_t sf, u5 reg, i19 pcrel) {
 #define STP 0x29000000
 #define LDP 0x29400000
 #define STR_REG 0xb8200800
+#define STR_IMM 0xb9000000
 
 typedef enum {
     E_UXTW = 0b010,
@@ -45,25 +48,29 @@ typedef enum {
     E_SXTX = 0b111,
 } str_ext;
 
-static inline u32 ldpstp(enum sf_t sf, bool load, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
+static inline u32 ldpstp(sf_t sf, bool load, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
     i8 off = sf == X ? offset_i7 / 8 : offset_i7 / 4;
     return STP | sf << 31 | load << 22 | off << 14 | reg2 << 10 | base << 5 | reg1;
 }
 
-static inline u32 stp_pre(enum sf_t sf, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
+static inline u32 stp_pre(sf_t sf, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
     return ldpstp(sf, false, reg1, reg2, base, offset_i7);
 }
 
-static inline u32 ldp_post(enum sf_t sf, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
+static inline u32 ldp_post(sf_t sf, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
     return ldpstp(sf, true, reg1, reg2, base, offset_i7);
 }
 
-static inline u32 str_reg_f(enum sf_t width, u5 rt, u5 rn, u5 rm, str_ext ext, u1 amount) {
+static inline u32 str_reg_f(sf_t width, u5 rt, u5 rn, u5 rm, str_ext ext, u1 amount) {
     return STR_REG | width << 30 | rm << 16 | ext << 13 | amount << 12 | rn << 5 | rt;
 }
 
-static inline u32 str_reg(enum sf_t width, u5 rt, u5 rn, u5 rm) {
+static inline u32 str_reg(sf_t width, u5 rt, u5 rn, u5 rm) {
     return str_reg_f(width, rt, rn, rm, E_LSL, 0);
+}
+
+static inline u32 str_imm(sf_t width, u5 rt, u5 rn, i12 imm) {
+    return STR_IMM | width << 30 | imm << 10 | rn << 5 | rt;
 }
 
 
@@ -115,19 +122,19 @@ void make_prelude(stack_context *s, u8 r1, u8 r2) {
 #define MOVK 0xf2800000
 #define ADD_EXT 0x0b000000
 
-static inline u32 add_ext(enum sf_t sf, u8 rd, u8 rn, u8 rm) {
+static inline u32 add_ext(sf_t sf, u8 rd, u8 rn, u8 rm) {
     return ADD_EXT | sf << 31 | 1 << 21 | rm << 16 | rn << 5 | rd;
 }
-static inline u32 add_shft(enum sf_t sf, u8 rd, u8 rn, u8 rm) {
+static inline u32 add_shft(sf_t sf, u8 rd, u8 rn, u8 rm) {
     return ADD_EXT | sf << 31 | rm << 16 | rn << 5 | rd;
 }
 
 
-static inline u32 mov(enum sf_t sf, u8 reg, u16 literal) {
+static inline u32 mov(sf_t sf, u8 reg, u16 literal) {
     return MOV | sf << 31 | literal << 5 | reg;
 }
 
-static inline u32 mov_reg(enum sf_t sf, u8 rd, u8 rm) {
+static inline u32 mov_reg(sf_t sf, u8 rd, u8 rm) {
     return ORR | sf << 31 | rm << 16 | 0b11111 << 5 | rd;
 }
 
@@ -139,7 +146,7 @@ static inline u32 sub(u8 reg1, u8 reg2, u16 literal) {
     return SUB | (literal << 10) | reg2 << 5 | reg1;
 }
 
-static inline u32 add(enum sf_t sf, u8 reg1, u8 reg2, u16 value) {
+static inline u32 add(sf_t sf, u8 reg1, u8 reg2, u16 value) {
     return ADD_IMM | sf << 31 | (value << 0xa) | (reg2 << 5) | (reg1);
 }
 
@@ -147,6 +154,22 @@ static inline u32 adrp(u8 reg) {
     return ADRP | reg;
 }
 
-static inline u32 add_imm(enum sf_t sf, u8 reg1, u8 reg2, u16 imm12) {
+static inline u32 add_imm(sf_t sf, u8 reg1, u8 reg2, u16 imm12) {
     return ADD_IMM | sf << 31 | imm12 << 10 | reg2 << 5 | reg1;
+}
+
+// other utils
+//
+
+sf_t nreg_sf(nreg *n) {
+    sf_t op_size = W;
+    u8 size = n->size;
+    if (size <= 32) {
+        op_size = W;
+    } else if (size <= 64) { 
+        op_size = X;
+    } else {
+        CompileErr("unknown reg size %d\n", size);
+    }
+    return op_size;
 }

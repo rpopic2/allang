@@ -9,7 +9,7 @@ typedef uint64_t u64;
 typedef uint64_t usize;
 
 typedef int8_t i8;
-typedef int16_t iu16;
+typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
 typedef int64_t isize;

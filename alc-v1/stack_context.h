@@ -3,9 +3,17 @@
 #include "list.h"
 #include "str.h"
 
+typedef enum : u8 {
+    not_addr, addr_addr, stack_addr
+} ptype;
+
+struct sf_t;
+
 typedef struct {
     str name;
     u8 reg;
+    u8 size;
+    ptype is_addr;
 } nreg; // named registers
 ls (nreg);
 
@@ -31,3 +39,4 @@ void stack_context_free(stack_context *s) {
     ls_delete_u32(&s->epilogue);
     ls_delete_nreg(&s->named_regs);
 }
+

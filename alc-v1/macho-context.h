@@ -127,7 +127,7 @@ tab_find stab_search(ls_stabe *tab, str token) {
     for (int i = 0; i < stab_ext.count; ++i) { // have to also find in local stab
         stabe s = stab_ext.data[i];
         u32 index = s.n_un.n_strx;
-        if (str_c_equal(token, strtab.data + index)) {
+        if (str_equal_c(token, strtab.data + index)) {
             find = strtab.data + index;
             symbolnum = i;
         }

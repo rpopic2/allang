@@ -145,7 +145,7 @@ read_type:
         main_defined = true;
     }
 
-    if (str_c_equal(token, "is ")) {
+    if (str_equal_c(token, "is ")) {
         printdbg("found compare ");
         if (Is(" 0 ->")) {
             printdbg("special case 0 ");
@@ -163,56 +163,57 @@ read_type:
         if (Is(" :: ")) {
             printf("..is named reg");
 
-            nreg *find = NULL;
-            for (int i = 0; i < s.named_regs.count; ++i) {
-                nreg *tmp = s.named_regs.data + i;
-                if (str_equal(tmp->name, name)) {
-                    find = tmp;
-                }
-            }
-
-            int reg = named_reg_idx;
-            if (find != NULL) {
-                reg = find->reg;
-            }
-            if (reg > 28) {
-                CompileErr("Error: used up all callee-saved registers\n");
-            }
-            if (find == NULL) {
-                if (reg_to_save != 0) {
-                    make_prelude(&s, reg_to_save, reg);
-                    reg_to_save = 0;
-                } else {
-                    reg_to_save = reg;
-                }
-                ls_add_nreg(&s.named_regs, (nreg) { name, reg });
-                named_reg_idx += 1;
-            }
-            if (find != NULL) {
-                printf("found "), strprint(find->name);
-            }
-
-            enum sf_t reg_sf = W;
-            bool is_addr = false;
+            nreg n = {
+                .name = name, .size = 32, .is_addr = not_addr,
+            };
             if (Is("stack")) {
                 printdbg("type stack ");
                 c = Next();
-                reg_sf = X;
-                is_addr = true;
+                n.size = 64;
+                n.is_addr = stack_addr;
+            } else if (Is("addr")) {
+                printdbg("type addr ");
+                c = Next();
+                n.size = 64;
+                n.is_addr = addr_addr;
             }
             if (Is("i64")) { // TODO impl other types
                 printdbg("type i64 ");
                 c = Next();
-                if (!is_addr)
-                    reg_sf = X;
+                if (!n.is_addr)
+                    n.size = 64;
             }
+
+            nreg *find = nreg_find(&s, token);
+            n.reg = named_reg_idx;
+            if (find != NULL) {
+                n.reg = find->reg;
+                printf("found "), strprint(find->name);
+            }
+            if (n.reg > 28) {
+                CompileErr("Error: used up all callee-saved registers\n");
+            }
+
+            if (find == NULL) {
+                if (reg_to_save != 0) {
+                    make_prelude(&s, reg_to_save, n.reg);
+                    reg_to_save = 0;
+                } else {
+                    reg_to_save = n.reg;
+                }
+
+                ls_add_nreg(&s.named_regs, n);
+                named_reg_idx += 1;
+            }
+
             if (IsNum(c)) {
                 TokenStart;
                 ReadUntilSpace();
                 TokenEnd;
 
                 long number = strtol(token.data, &it.data, 10);
-                ls_add_u32(&s.code, mov(reg_sf, reg, number));
+                sf_t op_size = nreg_sf(&n);
+                ls_add_u32(&s.code, mov(op_size, n.reg, number));
 
                 printf("..value of '%ld'\n", number);
 
@@ -245,13 +246,29 @@ read_type:
     }
 
     if (Is("=[")) {
+
         printdbg("store ");
+        str before = { token.data - 3, 2 };
         TokenStart;
         ReadToken;
         TokenEnd;
         strprint(token);
+
+        strprint(before);
+        int reg = str_equal_c(before, "=>") ? 0 : 8; // TODO have to accept named registers
+
         nreg *find = nreg_find(&s, token);
-        ls_add_u32(&s.code, str_reg(X, 8, SP, find->reg)); // TODO replace X, 8
+        if (find == NULL) {
+            CompileErr("Error: unknown named register "), PrintErrStr(token);
+        }
+        sf_t reg_size = nreg_sf(find);
+        if (find->is_addr == stack_addr) {
+            ls_add_u32(&s.code, str_reg(reg_size, reg, SP, find->reg)); // TODO only target stack if 'stack' register, addr if addr, otherwise compile err
+        } else if (find->is_addr == addr_addr) {
+            ls_add_u32(&s.code, str_imm(reg_size, reg, find->reg, 0)); // TODO only target stack if 'stack' register, addr if addr, otherwise compile err
+        } else {
+            CompileErr("Error: trying to store to non-address register\n");
+        }
         c = Next();
         goto loop;
     }
@@ -280,16 +297,11 @@ read_type:
     }
 
     if (IsAlpha(tokc)) {
-        nreg *find = NULL;
-        for (int i = 0; i < s.named_regs.count; ++i) {
-            nreg *tmp = s.named_regs.data + i;
-            if (str_equal(tmp->name, token)) {
-                find = tmp;
-            }
-        }
+        nreg *find = nreg_find(&s, token);
 
         if (find != NULL) {
-            ls_add_u32(&s.code, mov_reg(W, reg, find->reg));
+            sf_t sf =nreg_sf(find);
+            ls_add_u32(&s.code, mov_reg(sf, reg, find->reg));
             printf("..move to reg %d", reg);
             token_consumed = true;
         } else {

@@ -5,8 +5,14 @@ add: (i32, i32 =>i32, i32)
 1, 0 add=>
 
 va :: stack i64 0
-va
-4 =[va]
+
+// easy :: "easy.al", "r" _fopen=>
+"main.al"0, "r"0 _fopen=>
+=[va]
+//easy =[va]
+
+i :: addr 123
+i =[va]
 
 
-"Hello %d!\n"0, 2 _printf=>
+"Hello %p!\n"0, 2 _printf=>

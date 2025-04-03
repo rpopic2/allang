@@ -36,7 +36,7 @@ bool str_equal(str s1, str s2) {
     return memcmp(s1.data, s2.data, s1.len) == 0;
 }
 
-bool str_c_equal(str s1, const char *s2) {
+bool str_equal_c(str s1, const char *s2) {
     return (memcmp(s1.data, s2, strlen(s2)) == 0);
 }
 
