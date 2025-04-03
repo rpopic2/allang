@@ -11,8 +11,7 @@ va :: stack i64 0
 =[va]
 //easy =[va]
 
-i :: addr 123
-i =[va]
+va
 
 
 "Hello %p!\n"0, 2 _printf=>

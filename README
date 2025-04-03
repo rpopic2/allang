@@ -1,32 +1,24 @@
 # allang: alvin's assembly like language
 by rpopic2
 
-Maps to assembly, and compiles down to machine code directly.
-Be productive at the same time by powerful abstraction features
-
-# examples
-
 ## Hello World
 
 "Hello World!" std.print=>
 
+## Ranged loops
 
 i :: 0..10 @range
     `i: `i std.print=>
 
-// "i: 0"
-// "i: 1"
-// ...
-// "i: 10"
-
-## Be expressive
+## Switch statements
 
 std.getchar=>
-is '0' -> "zero",
-is >= '0' and <= 9' -> "number"
-is 'a'..'z' @in_range
-    and 'A'..'Z' @in_range -> "alphabet"
-is '-' or '+' or '*' or '/' -> "operator"
+
+is '0' -> "zero" >>
+is >= '0' and <= 9' -> "number" >>
+is 'a'..'z' @in_range and 'A'..'Z' @in_range -> "alphabet" >>
+is '-' or '+' or '*' or '/' -> "operator" >>
 : "other"
-std.print=>
+
+<< std.print=>
 

@@ -292,7 +292,7 @@ read_type:
         if (s.code.count == 0) {
             reg1 = 0, reg2 = 1;
         }
-        ls_add_u32(&s.code, add_shft(W, reg, reg1, reg2));
+        ls_add_u32(&s.code, add_reg_shft(W, reg, reg1, reg2));
         token_consumed = true;
     }
 
@@ -300,8 +300,12 @@ read_type:
         nreg *find = nreg_find(&s, token);
 
         if (find != NULL) {
-            sf_t sf =nreg_sf(find);
-            ls_add_u32(&s.code, mov_reg(sf, reg, find->reg));
+            if (find->is_addr == stack_addr) {
+                ls_add_u32(&s.code, add_reg_ext(X, reg, SP, find->reg));
+            } else {
+                sf_t sf = nreg_sf(find);
+                ls_add_u32(&s.code, mov_reg(sf, reg, find->reg));
+            }
             printf("..move to reg %d", reg);
             token_consumed = true;
         } else {
@@ -351,7 +355,7 @@ read_type:
         ls_add_u32(&s.code, adrp(reg));
 
         macho_relocent(f, &s.code, stab_idx, ARM64_RELOC_PAGEOFF12, false);
-        ls_add_u32(&s.code, add(X, reg, reg, 0));
+        ls_add_u32(&s.code, add_imm(X, reg, reg, 0));
         token_consumed = true;
     }
 
@@ -407,7 +411,7 @@ read_type:
         u32 prologue_sp = sub(SP, SP, s.stack_size);
         write_buf(&objcode, &prologue_sp, sizeof (prologue_sp));
         ++prologue_len;
-        ls_add_u32(&s.epilogue, add(X, SP, SP, s.stack_size));
+        ls_add_u32(&s.epilogue, add_imm(X, SP, SP, s.stack_size));
     }
 
     usize prologue_size = prologue_len * sizeof (u32);

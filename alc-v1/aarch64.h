@@ -9,7 +9,9 @@
 
 typedef i32 i19;
 typedef i16 i12;
+typedef u8 u6;
 typedef u8 u5;
+typedef u8 u3;
 typedef u8 u1;
 
 #define SP 31
@@ -120,13 +122,39 @@ void make_prelude(stack_context *s, u8 r1, u8 r2) {
 #define MOV 0x52800000
 #define ORR 0x2a000000
 #define MOVK 0xf2800000
-#define ADD_EXT 0x0b000000
+#define ADD_EXT 0x0b200000
+#define ADD_SHFT 0x0b000000
+// 0b010000 
+typedef enum {
+    ASH_LSL = 0b00,
+    ASH_LSR = 0b01,
+    ASH_ASR = 0b10,
+    ASH_REVERSED = 0b11,
+} add_shift;
 
-static inline u32 add_ext(sf_t sf, u8 rd, u8 rn, u8 rm) {
-    return ADD_EXT | sf << 31 | 1 << 21 | rm << 16 | rn << 5 | rd;
+typedef enum {
+    AE_UXTB = 0b000,
+    AE_UXTH = 0b001,
+    AE_UXTW = 0b010,
+    AE_LSL = 0b011,
+    AE_UXTX = 0b011,
+    AE_SXTB = 0b100,
+    AE_SXTH = 0b101,
+    AE_SXTW = 0b110,
+    AE_SXTX = 0b111,
+} add_extend;
+
+static inline u32 add_ext_f(sf_t sf, u8 rd, u8 rn, u8 rm, add_extend option, u3 amount) {
+    return ADD_EXT | sf << 31 | rm << 16 | option << 13 | amount << 10 | rn << 5 | rd;
 }
-static inline u32 add_shft(sf_t sf, u8 rd, u8 rn, u8 rm) {
-    return ADD_EXT | sf << 31 | rm << 16 | rn << 5 | rd;
+static inline u32 add_shft_f(sf_t sf, u8 rd, u8 rn, u8 rm, add_shift shift, u6 amount) {
+    return ADD_SHFT | sf << 31 | shift << 22 | rm << 16 | amount << 10 | rn << 5 | rd;
+}
+static inline u32 add_reg_ext(sf_t sf, u8 rd, u8 rn, u8 rm) {
+    return add_ext_f(sf, rd, rn, rm, AE_LSL, 0);
+}
+static inline u32 add_reg_shft(sf_t sf, u8 rd, u8 rn, u8 rm) {
+    return add_shft_f(sf, rd, rn, rm, ASH_LSL, 0);
 }
 
 
@@ -144,10 +172,6 @@ static inline u32 movk(u8 reg, u16 literal) {
 
 static inline u32 sub(u8 reg1, u8 reg2, u16 literal) {
     return SUB | (literal << 10) | reg2 << 5 | reg1;
-}
-
-static inline u32 add(sf_t sf, u8 reg1, u8 reg2, u16 value) {
-    return ADD_IMM | sf << 31 | (value << 0xa) | (reg2 << 5) | (reg1);
 }
 
 static inline u32 adrp(u8 reg) {
