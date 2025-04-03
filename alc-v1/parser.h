@@ -71,10 +71,10 @@ loop:;
         token_consumed = true;
     }
 
-    printdbg("token '"), strprint_nl(token), printdbg("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
+    printd("token '"), strprint_nl(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
 
     if (Is("//")) {
-        printdbg("comment\n");
+        printd("comment\n");
         ReadUntilNewline();
         goto loop;
     }
@@ -122,7 +122,7 @@ read_type:
         }
 
         ++depth;
-        printdbg("\n*** new stack depth %d\n", depth);
+        printd("\n*** new stack depth %d\n", depth);
         nextsrc.len = it.data - nextsrc.data;
 
         parse_scope(nextsrc);
@@ -140,12 +140,12 @@ read_type:
     }
 
     if (str_equal_c(token, "is ")) {
-        printdbg("found compare ");
+        printd("found compare ");
         if (Is(" 0 ->")) {
-            printdbg("special case 0 ");
+            printd("special case 0 ");
             ls_add_u32(&s.code, cbnz(W, 0, 4)); // TODO
         }
-        printdbg("\n");
+        printd("\n");
         goto loop;
     }
 
@@ -161,18 +161,18 @@ read_type:
                 .name = name, .size = 32, .is_addr = not_addr,
             };
             if (Is("stack")) {
-                printdbg("type stack ");
+                printd("type stack ");
                 c = Next();
                 n.size = 64;
                 n.is_addr = stack_addr;
             } else if (Is("addr")) {
-                printdbg("type addr ");
+                printd("type addr ");
                 c = Next();
                 n.size = 64;
                 n.is_addr = addr_addr;
             }
             if (Is("i64")) { // TODO impl other types
-                printdbg("type i64 ");
+                printd("type i64 ");
                 c = Next();
                 if (!n.is_addr)
                     n.size = 64;
@@ -241,7 +241,7 @@ read_type:
 
     if (Is("=[")) {
 
-        printdbg("store ");
+        printd("store ");
         str before = { token.data - 3, 2 };
         TokenStart;
         ReadToken;
@@ -257,9 +257,9 @@ read_type:
         }
         sf_t reg_size = nreg_sf(find);
         if (find->is_addr == stack_addr) {
-            ls_add_u32(&s.code, str_reg(reg_size, reg, SP, find->reg)); // TODO only target stack if 'stack' register, addr if addr, otherwise compile err
+            ls_add_u32(&s.code, str_reg(reg_size, reg, SP, find->reg));
         } else if (find->is_addr == addr_addr) {
-            ls_add_u32(&s.code, str_imm(reg_size, reg, find->reg, 0)); // TODO only target stack if 'stack' register, addr if addr, otherwise compile err
+            ls_add_u32(&s.code, str_imm(reg_size, reg, find->reg, 0));
         } else {
             CompileErr("Error: trying to store to non-address register\n");
         }
