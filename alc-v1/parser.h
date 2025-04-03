@@ -26,7 +26,8 @@ void parse(str src) {
 }
 
 void parse_scope(str src) {
-    printf("start parse "), strprint(src);
+    printf("start parse\n"), strprint(src);
+    printf("end src\n");
     str_iter it = into_iter(src);
     str token = {};
 
@@ -113,32 +114,25 @@ read_type:
         str nextsrc = (str){ it.data };
 
         for (int i = nextsrc.len; i < src.len; ++i) {
-            c = Next();
-            if (c != '\n')
-                continue;
-            int ident = 0;
-            while (c == ' ') {
-                Next();
-                ++ident;
+            if (Next() == '\n') {
+                c = it.data[1];
+                if (c != ' ' && c != '\n')
+                    break;
             }
-            printf("has ident %d\n", ident);
-            if (ident == 0) {   // TODO need to hanle blank lines
-                printf("\n\n\tnew stack\n");
-                it.data[0] = '\0';
-                nextsrc.len = it.data - nextsrc.data;
-
-                parse_scope(nextsrc);
-
-                printf("endofrt\n\n\n");
-                break;
-            }
-            c = iter_prev(&it);
         }
+
+        ++depth;
+        printdbg("\n*** new stack depth %d\n", depth);
+        nextsrc.len = it.data - nextsrc.data;
+
+        parse_scope(nextsrc);
+        --depth;
+        printf("\n*** endofrt\n");
 
         goto loop;
     }
 
-    if (!main_defined && ident == 0) {
+    if (!main_defined && depth == 0) {
         fat f = { _objcode, objcode };
         macho_stab_ext(f, str_from_c("_main"));
         printf("main defined here\n");
@@ -368,7 +362,7 @@ read_type:
     }
     regoff = 0;
 
-    if (token.len == 0 && *it.data == '\n')
+    if (token.len == 0 && (c == '\n' || c == '\0'))
         token_consumed = true;
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
         CompileErr("token may be not consumed %d", c), strprint(token), printf("\n");
@@ -434,6 +428,6 @@ read_type:
     write_buf(&objcode, strings.data, strings.count);
 
     stack_context_free(&s);
-    printf("parse end\n");
+    printf("\nparse end\n");
 }
 
