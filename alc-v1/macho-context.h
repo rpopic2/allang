@@ -89,12 +89,10 @@ void macho_stab_stringlit() {
     ls_addran_char(&strtab, index.data, index.len + 1);
 }
 
-void macho_relocent(fat f, ls_u32 *stackcode, enum reloc_type_arm64 type, bool pcrel) {
-    int stab_idx = stab_loc.count - 1;
-
+void macho_relocent(fat f, ls_u32 *stackcode, u32 symbolnum, enum reloc_type_arm64 type, bool pcrel) {
     const struct relocation_info rel = {
         .r_address = (fat_len(f) + stackcode->count) * sizeof (u32),
-        .r_symbolnum = stab_idx,
+        .r_symbolnum = symbolnum,
 
         .r_pcrel = pcrel,
         .r_length = 2,
@@ -104,10 +102,10 @@ void macho_relocent(fat f, ls_u32 *stackcode, enum reloc_type_arm64 type, bool p
     ls_add_relocent(&relocents, rel);
 }
 
-void macho_relocent_undef(fat f, ls_u32 *stackcode, enum reloc_type_arm64 type, bool pcrel) {
+void macho_relocent_undef(fat f, ls_u32 *stackcode, u32 symbolnum, enum reloc_type_arm64 type, bool pcrel) {
     struct relocation_info rel_printf = {
         .r_address = (fat_len(f) + stackcode->count) * sizeof (u32),
-        .r_symbolnum = stab_und.count - 1,
+        .r_symbolnum = symbolnum,
 
         .r_pcrel = 1,
         .r_length = 2,

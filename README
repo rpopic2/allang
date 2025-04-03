@@ -10,7 +10,7 @@ Be productive at the same time by powerful abstraction features
 
 "Hello World!" std.print=>
 
-## Powerful macros (and it's type checked!)
+
 i :: 0..10 @range
     `i: `i std.print=>
 

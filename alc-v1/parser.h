@@ -139,6 +139,16 @@ read_type:
         main_defined = true;
     }
 
+    if (str_c_equal(token, "is ")) {
+        printdbg("found compare ");
+        if (Is(" 0 ->")) {
+            printdbg("special case 0 ");
+            ls_add_u32(&s.code, cbnz(W, 0, 4)); // TODO
+        }
+        printdbg("\n");
+        goto loop;
+    }
+
     char tokc = token.data[0];
     if (tokc is '_' or IsAlpha(tokc)) {
 
@@ -193,10 +203,27 @@ read_type:
         if (Is("=>")) {
             printf("branch linked to "), strprint(token);
             calls_fn = true;
-            macho_stab_undef(token);
-
+            char *find = NULL;
+            u32 symbolnum = stab_und.count;
+            for (int i = 0; i < stab_ext.count; ++i) { // have to also find in local stab
+                stabe s = stab_ext.data[i];
+                u32 index = s.n_un.n_strx;
+                if (str_c_equal(token, strtab.data + index)) {
+                    find = strtab.data + index;
+                    symbolnum = i;
+                }
+            }
+            strprint(token);
             fat f = { _objcode, objcode };
-            macho_relocent_undef(f, &s.code, ARM64_RELOC_BRANCH26, true);
+            if (find == NULL) {
+                macho_stab_undef(token);
+                macho_relocent_undef(f, &s.code, symbolnum, ARM64_RELOC_BRANCH26, true);
+            } else {
+                macho_relocent(f, &s.code, symbolnum, ARM64_RELOC_BRANCH26, true);
+                ls_add_int(&to_push_ext, relocents.count - 1);
+            }
+            printf("find reloc '%p%s <%d>,", find, find, symbolnum);
+            printf("'\n");
 
             ls_add_u32(&s.code, BL);
             goto loop;
@@ -222,7 +249,7 @@ read_type:
         if (s.code.count == 0) {
             reg1 = 0, reg2 = 1;
         }
-        ls_add_u32(&s.code, add_shft(R, reg, reg1, reg2));
+        ls_add_u32(&s.code, add_shft(W, reg, reg1, reg2));
         token_consumed = true;
     }
 
@@ -236,7 +263,7 @@ read_type:
         }
 
         if (find != NULL) {
-            ls_add_u32(&s.code, mov_reg(R, reg, find->reg));
+            ls_add_u32(&s.code, mov_reg(W, reg, find->reg));
             printf("..move to %d", reg);
         } else {
             CompileErr("Error: unknown named register "), PrintErrStr(token);
@@ -274,16 +301,17 @@ read_type:
         if (it.data[1] == '0') {
             printf("is null terminated string");
             c = Next();
-            c = Next();
             ls_add_char(&strings, '\0');
         }
+        c = Next();
         printf("\n");
 
+        int stab_idx = stab_loc.count - 1;
         fat f = { _objcode, objcode };
-        macho_relocent(f, &s.code, ARM64_RELOC_PAGE21, true);
+        macho_relocent(f, &s.code, stab_idx, ARM64_RELOC_PAGE21, true);
         ls_add_u32(&s.code, adrp(reg));
 
-        macho_relocent(f, &s.code, ARM64_RELOC_PAGEOFF12, false);
+        macho_relocent(f, &s.code, stab_idx, ARM64_RELOC_PAGEOFF12, false);
         ls_add_u32(&s.code, add(X, reg, reg, 0));
         token_consumed = true;
     }
@@ -314,9 +342,9 @@ read_type:
     }
 
 
-    if (s.epilogue.count == 0) {
-        ls_add_u32(&s.epilogue, mov(0, 0));
-    }
+    // if (s.epilogue.count == 0) {
+    //     ls_add_u32(&s.epilogue, mov(0, 0));
+    // }
     if (calls_fn) {
         s.stack_size += 0x10;
         u32 op = stp_pre(X, 29, 30, SP, s.stack_size);
@@ -353,6 +381,10 @@ read_type:
     write_buf(&objcode, s.epilogue.data, s.epilogue.count * sizeof(u32));
 
     const long offset = objcode - (void *)_objcode;
+    for (int i = 0; i < to_push.count; ++i) {
+        int index = to_push.data[i];
+        stab_loc.data[index].n_value += offset;
+    }
     for (int i = 0; i < to_push.count; ++i) {
         int index = to_push.data[i];
         stab_loc.data[index].n_value += offset;

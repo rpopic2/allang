@@ -6,18 +6,30 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+typedef i32 i19;
+typedef u8 u5;
+
 #define SP 31
 enum strldr_t {
     load_t, store_t
 };
 
 enum sf_t {
-    R, X
+    W, X
 };
 
 // branches
 #define RET 0xd65f03c0
 #define BL 0x94000000
+#define CBZ 0x34000000
+
+static inline u32 cbz(enum sf_t sf, u5 reg, i19 pcrel) { 
+    return CBZ | sf << 31 | pcrel << 5 | reg;
+}
+
+static inline u32 cbnz(enum sf_t sf, u5 reg, i19 pcrel) { 
+    return cbz(sf, reg, pcrel) | 1 << 24;
+}
 
 // load and stores
 
