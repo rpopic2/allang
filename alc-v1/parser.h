@@ -193,10 +193,18 @@ read_type:
             }
 
             enum sf_t reg_sf = W;
-            if (Is("i64")) {
-                printdbg("type i64");
+            bool is_addr = false;
+            if (Is("stack")) {
+                printdbg("type stack ");
                 c = Next();
                 reg_sf = X;
+                is_addr = true;
+            }
+            if (Is("i64")) { // TODO impl other types
+                printdbg("type i64 ");
+                c = Next();
+                if (!is_addr)
+                    reg_sf = X;
             }
             if (IsNum(c)) {
                 TokenStart;
@@ -236,6 +244,18 @@ read_type:
         }
     }
 
+    if (Is("=[")) {
+        printdbg("store ");
+        TokenStart;
+        ReadToken;
+        TokenEnd;
+        strprint(token);
+        nreg *find = nreg_find(&s, token);
+        ls_add_u32(&s.code, str_reg(X, 8, SP, find->reg)); // TODO replace X, 8
+        c = Next();
+        goto loop;
+    }
+
 
     int reg;
 
@@ -263,14 +283,15 @@ read_type:
         nreg *find = NULL;
         for (int i = 0; i < s.named_regs.count; ++i) {
             nreg *tmp = s.named_regs.data + i;
-            if (memcmp(tmp->name.data, token.data, token.len) == 0) {
+            if (str_equal(tmp->name, token)) {
                 find = tmp;
             }
         }
 
         if (find != NULL) {
             ls_add_u32(&s.code, mov_reg(W, reg, find->reg));
-            printf("..move to %d", reg);
+            printf("..move to reg %d", reg);
+            token_consumed = true;
         } else {
             CompileErr("Error: unknown named register "), PrintErrStr(token);
         }
@@ -331,8 +352,10 @@ read_type:
     }
     regoff = 0;
 
+    if (token.len == 0 && *it.data == '\n')
+        token_consumed = true;
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
-        printf("token may be not consumed %d", c), strprint(token), printf("\n");
+        CompileErr("token may be not consumed %d", c), strprint(token), printf("\n");
     if (c == '\n') {
         printf("\\n\n");
         ident = 0;

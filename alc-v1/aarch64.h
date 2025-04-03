@@ -8,6 +8,7 @@
 
 typedef i32 i19;
 typedef u8 u5;
+typedef u8 u1;
 
 #define SP 31
 enum strldr_t {
@@ -35,7 +36,14 @@ static inline u32 cbnz(enum sf_t sf, u5 reg, i19 pcrel) {
 
 #define STP 0x29000000
 #define LDP 0x29400000
+#define STR_REG 0xb8200800
 
+typedef enum {
+    E_UXTW = 0b010,
+    E_LSL = 0b011,
+    E_SXTW = 0b110,
+    E_SXTX = 0b111,
+} str_ext;
 
 static inline u32 ldpstp(enum sf_t sf, bool load, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
     i8 off = sf == X ? offset_i7 / 8 : offset_i7 / 4;
@@ -50,8 +58,16 @@ static inline u32 ldp_post(enum sf_t sf, u8 reg1, u8 reg2, u8 base, i8 offset_i7
     return ldpstp(sf, true, reg1, reg2, base, offset_i7);
 }
 
+static inline u32 str_reg_f(enum sf_t width, u5 rt, u5 rn, u5 rm, str_ext ext, u1 amount) {
+    return STR_REG | width << 30 | rm << 16 | ext << 13 | amount << 12 | rn << 5 | rt;
+}
 
-uint32_t strorldr(enum strldr_t store, u8 reg, u8 reg2, bool unscaled, int size, int offset) {
+static inline u32 str_reg(enum sf_t width, u5 rt, u5 rn, u5 rm) {
+    return str_reg_f(width, rt, rn, rm, E_LSL, 0);
+}
+
+
+static inline uint32_t strorldr(enum strldr_t store, u8 reg, u8 reg2, bool unscaled, int size, int offset) {
     uint32_t op = 0xb8000000;
     if (!store) {
         op |= 1 << 22;
