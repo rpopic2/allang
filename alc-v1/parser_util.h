@@ -49,6 +49,7 @@ writer_t objcode = _objcode;
 ls_char strings;
 bool main_defined;
 int depth = 0;
+nreg *target_nreg;
 
 static inline bool _if_is(const char *s, str_iter *it, int *c) {
     if (memcmp((s), it->data, strlen(s)) == 0) {
@@ -69,4 +70,8 @@ nreg *nreg_find(stack_context *s, str token) {
         }
     }
     return find;
+}
+
+bool is_target_nreg(str_iter *it) {
+    return (target_nreg != NULL && it->data[0] == '\n');
 }

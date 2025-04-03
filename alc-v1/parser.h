@@ -26,8 +26,7 @@ void parse(str src) {
 }
 
 void parse_scope(str src) {
-    printf("start parse\n"), strprint(src);
-    printf("end src\n");
+    printf("start parse\n");
     str_iter it = into_iter(src);
     str token = {};
 
@@ -59,7 +58,9 @@ loop:;
         CompileErr("Syntax error: single indentation should consist of 4 spaces");
     }
 
-    if (line_end < it.data) {
+    if (line_end + 1 < it.data) {
+        printf(" reset nreg ");
+        target_nreg = NULL; // TODO should we consume here?
         char *p = it.data;
         while (*p != '\n' && *p != '\0') {
             ++p;
@@ -124,6 +125,8 @@ read_type:
         ++depth;
         printd("\n*** new stack depth %d\n", depth);
         nextsrc.len = it.data - nextsrc.data;
+        strprint(nextsrc);
+        printf("end src\n");
 
         parse_scope(nextsrc);
         --depth;
@@ -155,7 +158,7 @@ read_type:
         str name = token;
 
         if (Is(" :: ")) {
-            printf("..is named reg");
+            printf("..is named reg\n");
 
             nreg n = {
                 .name = name, .size = 32, .is_addr = not_addr,
@@ -199,20 +202,9 @@ read_type:
                 ls_add_nreg(&s.named_regs, n);
                 named_reg_idx += 1;
             }
-
-            if (IsNum(c)) {
-                TokenStart;
-                ReadUntilSpace();
-                TokenEnd;
-
-                long number = strtol(token.data, &it.data, 10);
-                sf_t op_size = nreg_sf(&n);
-                ls_add_u32(&s.code, mov(op_size, n.reg, number));
-
-                printf("..value of '%ld'\n", number);
-
-                goto loop;
-            }
+            target_nreg = &n;
+            iter_prev(&it);
+            goto loop;
         }
 
         if (Is("=>")) {
@@ -235,6 +227,12 @@ read_type:
             printf("'\n");
 
             ls_add_u32(&s.code, BL);
+
+            if (is_target_nreg(&it)) {
+                sf_t sf = nreg_sf(target_nreg);
+                ls_add_u32(&s.code, mov_reg(sf, target_nreg->reg, 0));
+            }
+
             goto loop;
         }
     }
@@ -247,9 +245,10 @@ read_type:
         ReadToken;
         TokenEnd;
         strprint(token);
+        printd("toklen: %zu", token.len);
 
         strprint(before);
-        int reg = str_equal_c(before, "=>") ? 0 : 8; // TODO have to accept named registers
+        int reg = str_equal_c(before, "=>") ? 0 : 8; // TODO have to accept named registers.. wait design decision
 
         nreg *find = nreg_find(&s, token);
         if (find == NULL) {
@@ -268,15 +267,20 @@ read_type:
     }
 
 
+// regs
     int reg;
 
-    if (regoff > 7) {
-        CompileErr("Error: used up all scratch registers\n");
-    }
-    if (line_end + 2 >= (src.data + src.len) || (*line_end == '>')) {
-        reg = regoff;
+    if (is_target_nreg(&it)) {
+        reg = target_nreg->reg;
     } else {
-        reg = 8 + regoff;
+        if (regoff > 7) {
+            CompileErr("Error: used up all scratch registers\n");
+        }
+        if (line_end + 2 >= (src.data + src.len) || (*line_end == '>')) {
+            reg = regoff;
+        } else {
+            reg = 8 + regoff;
+        }
     }
 
     if (tokc is '+') {
@@ -309,7 +313,7 @@ read_type:
         long number = strtol(token.data, &it.data, 10);
         ls_add_u32(&s.code, mov(W, reg, number));
         token_consumed = true;
-        printf("value of '%ld'", number);
+        printf("value of '%ld to %d'", number, reg);
     } else if (tokc is '"') {
         // is going to be a string
         c = Next();
@@ -354,6 +358,9 @@ read_type:
     }
 
     if (*it.data == ',') {
+        // if (target_nreg != NULL) { // TODO
+        //     CompileErr("Syntax Error: not allowed to assign two values to one register.");
+        // }
         ++regoff;
         Next();
         printf(", ");
