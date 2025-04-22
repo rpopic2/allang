@@ -130,7 +130,7 @@ read_type:
         }
 
         ++depth;
-        printd("\n*** new stack depth %d\n", depth);
+        printd("\n*** new stack of depth %d\n", depth);
         nextsrc.len = it.data - nextsrc.data;
         strprint(nextsrc);
         printf("end src\n");

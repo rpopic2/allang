@@ -1,0 +1,13 @@
+#alias std.file
+#alias std.heap
+#alias std.print
+
+file :: "easy.al", "r" file.open=>
+
+    isnt pointing -> "file open failed" print=>
+
+buf :: 1024 heap.alloc_bytes=>
+
+filelen :: buf, 1, 1024, file file.read=>
+
+

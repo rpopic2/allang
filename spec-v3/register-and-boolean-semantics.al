@@ -1,6 +1,6 @@
 // register semantics
 
-0   // probably simplest code that you can write. moves 0 to register 0 or tmp
+0   // probably the most simple code that you can write. moves 0 to register 0 or tmp
 
 i :: 10 // a named register i. mov 10 to callee-saved registers
 i       // mov w8, i

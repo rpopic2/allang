@@ -48,7 +48,9 @@ writer_t objcode = _objcode;
 ls_char strings;
 bool main_defined;
 int depth = 0;
+
 nreg *target_nreg;
+int reg_types[32];
 
 static inline bool _if_is(const char *s, str_iter *it, int *c) {
     if (memcmp((s), it->data, strlen(s)) == 0) {

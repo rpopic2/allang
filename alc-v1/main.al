@@ -13,7 +13,7 @@ buf :: addr 1024 _malloc=>
 
 filelen :: buf, 1, 1024, file _fread=>
 
-// va :: stack i64 0
+va :: stack i64 0 =[]
 // buf =[va]
 
 "hi %d\n"0, _printf=>

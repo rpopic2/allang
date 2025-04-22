@@ -1,14 +1,14 @@
-#enum error {
+enum error {
     Ok, ExpecetedArgument
 }
 
-(args: slice str =>i32)
+(args: slice str =>error)
 
 args.len < 2 ->
     error.ExpectedArgument ret
 
-args..arg, i @foreach.index
-    "arg "i": "arg" print=>
+args..{arg, i} @foreach.index
+    `arg `i`: `arg print=>
 
 f ::
     args[1] @.at
@@ -19,3 +19,4 @@ c ::
     *
 c .to.str.decimal.1 println=>
 
+error.Ok
