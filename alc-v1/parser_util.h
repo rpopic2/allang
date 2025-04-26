@@ -73,6 +73,17 @@ nreg *nreg_find(stack_context *s, str token) {
     return find;
 }
 
+obj *obj_find(stack_context *s, str token) {
+    obj *find = NULL;
+    for (int i = 0; i < s->objects.count; ++i) {
+        obj *tmp = s->objects.data + i;
+        if (str_equal(tmp->name, token)) {
+            find = tmp;
+        }
+    }
+    return find;
+}
+
 bool is_target_nreg(str_iter *it) {
     return (target_nreg != NULL && it->data[0] == '\n');
 }

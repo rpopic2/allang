@@ -142,6 +142,9 @@ read_type:
         goto loop;
     }
 
+    if (c is ')' or c is '(') {
+        goto loop; // TODO maybe do sth useful?
+    }
     if (!main_defined && depth == 0) {
         fat f = { _objcode, objcode };
         macho_stab_ext(f, str_from_c("_main"));
@@ -284,7 +287,7 @@ read_type:
             obj o = {
                 .size = siz,
                 .is_addr = target_nreg->is_addr,
-                // .name =  // TODO
+                .name = target_nreg->name,
                 .offset = s.obj_offset,
             };
             ls_add_obj(&s.objects, o);
@@ -301,7 +304,13 @@ read_type:
         }
         sf_t reg_size = nreg_sf(find);
         if (find->is_addr == stack_addr) {
-            ls_add_u32(&s.code, str_reg(reg_size, reg, SP, find->reg));
+
+            obj *find = obj_find(&s, token);
+            if (find == NULL) {
+                CompileErr("Error: unknown named register "), PrintErrStr(token);
+            }
+
+            ls_add_u32(&s.code, str_imm(reg_size, reg, SP, find->offset));
         } else if (find->is_addr == addr_addr) {
             ls_add_u32(&s.code, str_imm(reg_size, reg, find->reg, 0));
         } else {
