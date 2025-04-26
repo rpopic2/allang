@@ -96,7 +96,7 @@ loop:;
             TokenEnd;
             // printf("arg1: "), strprint(token), printf(";");
 read_type:
-            if (Is("i32")) {    // TODO more types
+            if (Is("i32")) {    // TODO more types, it does nothing
                 printf("type of i32 ");
             } else if (Is("c8")) {
                 printf("type of c8 ");
@@ -153,7 +153,7 @@ read_type:
         printd("found compare ");
         if (Is(" 0 ->")) {
             printd("special case 0 ");
-            ls_add_u32(&s.code, cbnz(X, 0, 4)); // TODO
+            ls_add_u32(&s.code, cbnz(X, 0, 4)); // TODO reg, pcrel
         }
         printd("\n");
         goto loop;
@@ -186,6 +186,11 @@ read_type:
                 c = Next();
                 if (!n.is_addr)
                     n.size = 64;
+            } else if (Is("i32")) {
+                printd("type i32 ");
+                c = Next();
+                if (!n.is_addr)
+                    n.size = 32;
             }
 
             nreg *find = nreg_find(&s, token);
@@ -203,6 +208,7 @@ read_type:
                 s.regs_to_save[s.regs_to_save_size++] = n.reg;
                 ls_add_nreg(&s.named_regs, n);
                 named_reg_idx += 1;
+                putchar('\n');
             }
             target_nreg = &n;
             iter_prev(&it);
@@ -240,6 +246,23 @@ read_type:
         }
     }
 
+
+// regs
+    int reg;
+
+    if (is_target_nreg(&it)) {
+        reg = target_nreg->reg;
+    } else {
+        if (regoff > 7) {
+            CompileErr("Error: used up all scratch registers\n");
+        }
+        if (line_end + 2 >= (src.data + src.len) || (*line_end == '>')) {
+            reg = regoff;
+        } else {
+            reg = 8 + regoff;
+        }
+    }
+
     if (Is("=[")) {
 
         printd("store ");
@@ -248,7 +271,26 @@ read_type:
         ReadToken;
         TokenEnd;
         strprint(token);
-        printd("toklen: %zu", token.len);
+        printd("toklen: %zu..", token.len);
+
+        if (token.len is 0) {
+            size_t siz = target_nreg->size;
+            printd("new allocation.. from %d, %zu..", reg, siz);
+            sf_t reg_sf = nreg_sf(target_nreg);
+            ls_add_u32(&s.code, str_imm(reg_sf, reg, SP, s.stack_size));
+            s.stack_size += 0x10; // TODO need to align and scale by 0x10
+            // s.stack_size += siz / 8;// the type before..?
+            printd("stack_size =0x%zx..", s.stack_size);
+            obj o = {
+                .size = siz,
+                .is_addr = target_nreg->is_addr,
+                // .name =  // TODO
+                .offset = s.obj_offset,
+            };
+            ls_add_obj(&s.objects, o);
+            putchar('\n');
+            goto loop;
+        }
 
         strprint(before);
         int reg = str_equal_c(before, "=>") ? 0 : 8; // TODO have to accept named registers.. wait design decision
@@ -267,23 +309,6 @@ read_type:
         }
         c = Next();
         goto loop;
-    }
-
-
-// regs
-    int reg;
-
-    if (is_target_nreg(&it)) {
-        reg = target_nreg->reg;
-    } else {
-        if (regoff > 7) {
-            CompileErr("Error: used up all scratch registers\n");
-        }
-        if (line_end + 2 >= (src.data + src.len) || (*line_end == '>')) {
-            reg = regoff;
-        } else {
-            reg = 8 + regoff;
-        }
     }
 
     if (tokc is '+') {
@@ -314,9 +339,12 @@ read_type:
         }
     } else if (IsNum(tokc)) {
         long number = strtol(token.data, &it.data, 10);
-        ls_add_u32(&s.code, mov(W, reg, number));
+        sf_t sf = W;
+        if (target_nreg)
+            sf = nreg_sf(target_nreg);
+        ls_add_u32(&s.code, mov(sf, reg, number));
         token_consumed = true;
-        printf("value of '%ld to %d'", number, reg);
+        printf("value of '%ld to r%d(sf=%d)'", number, reg, sf);
     } else if (tokc is '"') {
         // is going to be a string
         c = Next();
@@ -404,17 +432,17 @@ read_type:
         if ((i + 1) < s.regs_to_save_size) {
             u8 reg2 = s.regs_to_save[++i];
 
-            s.stack_size += 0x10;
             u32 op = stp_pre(X, reg, reg2, SP, s.stack_size);
             ls_add_u32(&s.prologue, op);
 
             op = ldp_post(X, reg, reg2, SP, s.stack_size);
             ls_add_u32(&s.epilogue, op);
-        } else {
             s.stack_size += 0x10;
+        } else {
             ls_add_u32(&s.prologue, store(reg, SP, s.stack_size));
 
             ls_add_u32(&s.epilogue, ldr(reg, SP, s.stack_size));
+            s.stack_size += 0x10;
         }
 
     }
