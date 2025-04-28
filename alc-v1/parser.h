@@ -69,7 +69,7 @@ loop:;
         token_consumed = true;
     }
 
-    printd("token '"), strprint_nl(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
+    // printd("token '"), strprint_nl(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
 
     if (Is("//")) {
         printd("comment\n");
@@ -168,7 +168,7 @@ read_type:
         str name = token;
 
         if (Is(" :: ")) {
-            printf("..is named reg\n");
+            printf("..is expression\n");
 
             nreg n = {
                 .name = name, .size = 32, .is_addr = not_addr,
@@ -184,7 +184,7 @@ read_type:
                 n.size = 64;
                 n.is_addr = addr_addr;
             }
-            if (Is("i64")) { // TODO impl other types
+            if (Is("i64")) {
                 printd("type i64 ");
                 c = Next();
                 if (!n.is_addr)
@@ -197,7 +197,7 @@ read_type:
             }
 
             nreg *find = nreg_find(&s, token);
-            n.reg = named_reg_idx;
+            n.reg = named_reg_idx; // TODO maybe this need not to be assigned if stack obj
             if (find != NULL) {
                 n.reg = find->reg;
                 *find = n;
@@ -208,9 +208,19 @@ read_type:
             }
 
             if (find == NULL) {
-                s.regs_to_save[s.regs_to_save_size++] = n.reg;
+                bool is_stack_alloc = memcmp(line_end - 2, "=[]", 3) == 0;
+                printd("line end was %c, is_stack_alloc %d..", line_end[-2], is_stack_alloc);
+
+                if (is_stack_alloc) {
+                    n.is_addr = stack_addr;
+                }
+
+                if (n.is_addr isnt stack_addr && !is_stack_alloc) {
+                    printd("inc reg idx..");
+                    s.regs_to_save[s.regs_to_save_size++] = n.reg;
+                    named_reg_idx += 1;
+                }
                 ls_add_nreg(&s.named_regs, n);
-                named_reg_idx += 1;
                 putchar('\n');
             }
             target_nreg = &n;
@@ -280,15 +290,15 @@ read_type:
             size_t siz = target_nreg->size;
             printd("new allocation.. from %d, %zu..", reg, siz);
             sf_t reg_sf = nreg_sf(target_nreg);
-            ls_add_u32(&s.code, str_imm(reg_sf, reg, SP, s.stack_size));
-            s.stack_size += 0x10; // TODO need to align and scale by 0x10
-            // s.stack_size += siz / 8;// the type before..?
+            size_t offset = s.stack_size;
+            ls_add_u32(&s.code, str_imm(reg_sf, reg, SP, offset));
+            s.stack_size += Align0x10(siz / 8); // TODO need to align and scale by 0x10
             printd("stack_size =0x%zx..", s.stack_size);
             obj o = {
                 .size = siz,
                 .is_addr = target_nreg->is_addr,
                 .name = target_nreg->name,
-                .offset = s.obj_offset,
+                .offset = offset,
             };
             ls_add_obj(&s.objects, o);
             putchar('\n');
@@ -336,7 +346,8 @@ read_type:
 
         if (find != NULL) {
             if (find->is_addr == stack_addr) {
-                ls_add_u32(&s.code, add_reg_ext(X, reg, SP, find->reg));
+                obj *find = obj_find(&s, token);
+                ls_add_u32(&s.code, add_imm(X, reg, SP, find->offset));
             } else {
                 sf_t sf = nreg_sf(find);
                 ls_add_u32(&s.code, mov_reg(sf, reg, find->reg));
@@ -414,7 +425,7 @@ read_type:
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
         CompileErr("token may be not consumed %d", c), strprint(token), printf("\n");
     if (c == '\n') {
-        printf("\\n\n");
+        // printf("\\n\n");
         ident = 0;
         goto loop;
     }

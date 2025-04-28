@@ -27,6 +27,7 @@ static inline bool IsSpace(char c) {
 }
 
 #define is ==
+#define isnt !=
 #define or ||
 
 #define Next() iter_next(&it)
@@ -41,6 +42,8 @@ static inline bool IsSpace(char c) {
 
 #define TokenStart token.data = it.data;
 #define TokenEnd  token.len = it.data - token.data;
+
+#define Align0x10(X) ((X) + 0xf) & ~0xf
 
 u32 _objcode[1024];
 writer_t objcode = _objcode;

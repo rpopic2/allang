@@ -73,6 +73,12 @@ static inline u32 str_reg(sf_t width, u5 rt, u5 rn, u5 rm) {
 }
 
 static inline u32 str_imm(sf_t width, u5 rt, u5 rn, i12 imm) {
+    if (width == W)  {
+        imm /= 4;
+    } else {
+        imm /= 8;
+    }
+
     return STR_IMM | width << 30 | imm << 10 | rn << 5 | rt;
 }
 

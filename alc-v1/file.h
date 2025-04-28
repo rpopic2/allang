@@ -14,7 +14,7 @@ long file_len(FILE *f) {
 }
 
 str read_source() {
-    FILE *src = fopen("main.al", "r");
+    FILE *src = fopen("todo.al", "r");
     if (src == NULL)
         exit(1);
 
