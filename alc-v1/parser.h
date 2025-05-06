@@ -131,12 +131,12 @@ loop_read_type:
         // c = Next();
         printf("static label '"), strprint_nl(token); printf("', ");
 
-        fat f = { _objcode, objcode };
-        macho_stab_ext(f, token);
 
+        fat f = { _objcode, objcode };
         if (it.data[1] == '(') {
             Next();
             printf("it's a routine, args ");
+            macho_stab_ext(f, token);
             Next();
             TokenStart;
             ReadToken;
@@ -163,6 +163,8 @@ read_type:
                 goto read_type;
             }
         } else {
+            printd("add to local");
+            macho_stab_loc(f, token);
             goto loop;
         }
 
@@ -278,7 +280,7 @@ read_type:
         }
 
         if (Is("=>")) {
-            printf("branch linked to "), strprint(token);
+            printd("branch linked to "), strprint(token);
             calls_fn = true;
             tab_find find = stab_search(&stab_ext, token);
 
@@ -297,6 +299,33 @@ read_type:
             printf("'\n");
 
             ls_add_u32(&s.code, BL);
+
+            if (is_target_nreg(&it)) {
+                printd("target: %d", target_nreg->size);
+                sf_t sf = nreg_sf(target_nreg);
+                ls_add_u32(&s.code, mov_reg(sf, target_nreg->reg, 0));
+            }
+
+            goto loop;
+        }
+        if (Is("->")) {
+            printd("branch to.."), strprint(token);
+            tab_find find = stab_search(&stab_loc, token);
+
+            fat f = { _objcode, objcode };
+            if (find.find == NULL) {
+                u32 symbolnum = stab_und.count;
+                macho_stab_undef(token);
+                printf("failed <%d>,", symbolnum);
+                macho_relocent_undef(f, &s, symbolnum, ARM64_RELOC_BRANCH26, true);
+            } else {
+                macho_relocent(f, &s, find.symbolnum, ARM64_RELOC_BRANCH26, true);
+                // ls_add_int(&to_push_ext, relocents.count - 1);
+            }
+            printf("find reloc '%p%s <%d>,", find.find, find.find, find.symbolnum);
+            printf("'\n");
+
+            ls_add_u32(&s.code, B);
 
             if (is_target_nreg(&it)) {
                 printd("target: %d", target_nreg->size);
@@ -555,10 +584,13 @@ read_type:
     write_buf(&objcode, s.code.data, s.code.count * sizeof(u32));
     write_buf(&objcode, s.epilogue.data, s.epilogue.count * sizeof(u32));
 
-    const long offset = objcode - (void *)_objcode;
+    const long offset = (objcode - (void *)_objcode) - (prologue_len * sizeof (u32));
     for (int i = 0; i < to_push.count; ++i) {
         int index = to_push.data[i];
         stab_loc.data[index].n_value += offset;
+    }
+    for (int i = 0; i < stab_loc.count; ++i) {
+        stab_loc.data[i].n_value += prologue_len * sizeof (u32);
     }
 
     write_buf(&objcode, strings.data, strings.count);

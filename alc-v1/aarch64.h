@@ -26,6 +26,7 @@ typedef enum {
 // branches
 #define RET 0xd65f03c0
 #define BL 0x94000000
+#define B 0x14000000
 #define CBZ 0x34000000
 
 static inline u32 cbz(sf_t sf, u5 reg, i19 pcrel) { 

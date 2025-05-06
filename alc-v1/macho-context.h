@@ -44,14 +44,14 @@ void macho_context_init() {
 
 void macho_stab_ext(fat code, str s) {
     int len = fat_len(code) * sizeof (u32);
-    const struct nlist_64 entry_main = {
+    const struct nlist_64 entry = {
         .n_un.n_strx = strtab.count,
         .n_type = N_EXT | N_TYPE,
         .n_sect = 0x1,
         .n_desc = 0x0,
         .n_value = len, // TODO
     };
-    ls_add_stabe(&stab_ext, entry_main);
+    ls_add_stabe(&stab_ext, entry);
     printf("add stab entry, len %d, name ", stab_ext.count), strprint(s);
 
     ls_addran_char(&strtab, s.data, s.len);
@@ -67,6 +67,24 @@ void macho_stab_undef(str s) {
         .n_value = 0L,
     };
     ls_add_stabe(&stab_und, entry);
+
+    ls_addran_char(&strtab, s.data, s.len);
+    ls_add_char(&strtab, '\0');
+}
+
+void macho_stab_loc(fat code, str s) {
+    // int stab_idx = stab_loc.count;
+    int len = fat_len(code) * sizeof (u32);
+
+    const struct nlist_64 entry = {
+        .n_un.n_strx = strtab.count,
+        .n_type = N_TYPE,
+        .n_sect = 1,
+        .n_desc = 0x0,
+        .n_value = len,
+    };
+    ls_add_stabe(&stab_loc, entry);
+    // ls_add_int(&to_push, stab_idx);
 
     ls_addran_char(&strtab, s.data, s.len);
     ls_add_char(&strtab, '\0');
@@ -130,8 +148,8 @@ typedef struct {
 tab_find stab_search(ls_stabe *tab, str token) {
     char *find = NULL;
     u32 symbolnum = tab->count;
-    for (int i = 0; i < stab_ext.count; ++i) { // have to also find in local stab
-        stabe s = stab_ext.data[i];
+    for (int i = 0; i < tab->count; ++i) { // have to also find in local stab
+        stabe s = tab->data[i];
         u32 index = s.n_un.n_strx;
         if (str_equal_c(token, strtab.data + index)) {
             find = strtab.data + index;

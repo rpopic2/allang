@@ -9,7 +9,7 @@ add: (i32, i32 =>i32)
 //     i32 y,
 // }
 
-loop:
+_loop:
     va_0 :: addr i32 0 =[]
 
     buf :: i32 0 =[]
@@ -19,5 +19,6 @@ loop:
 
     [buf] =[va_0]
     "was %d\n"0, _printf=>
+    _loop->
 
 0
