@@ -12,10 +12,12 @@
 #include "file.h"
 #include "parser_util.h"
 #include "slice.h"
+#include "str.h"
 #include "typedefs.h"
 #include "list.h"
 #include "error.h"
 #include "macho-context.h"
+#include "types.h"
 
 void parse(str src) {
     macho_context_init();
@@ -40,6 +42,13 @@ void parse_scope(str src) {
     bool calls_fn = false;
 
 loop:;
+    if (*it.data is '\n') {
+        ident = 0;
+        while (it.data[1] is ' ') {
+            ++it.data;
+            ++ident;
+        }
+    }
     int c = Next();
     bool token_consumed = false;
 
@@ -47,13 +56,8 @@ loop:;
     ReadToken;
     TokenEnd;
 
-    if (token.len == 0 && c == ' ') {
-        ++ident;
-        goto loop;
-    }
-
     if (ident % 4 != 0) {
-        CompileErr("Syntax error: single indentation should consist of 4 spaces");
+        CompileErr("Syntax error: single indentation should consist of 4 spaces (was %d)", ident);
     }
 
     if (line_end + 1 < it.data) {
@@ -69,7 +73,45 @@ loop:;
         token_consumed = true;
     }
 
-    // printd("token '"), strprint_nl(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
+    if (str_equal_c(token, "struct")) {
+        printd("a struct..");
+
+        c = Next();
+        TokenStart;
+        ReadToken;
+        TokenEnd;
+
+        printd("name of '"), strprint_nl(token), printd("'");
+        if (Next() == '{') {
+            Next(), c = Next();
+            if (Is("    ")) {
+loop_read_type:
+                read_type(&it, &c);
+                TokenStart;
+                ReadToken;
+                TokenEnd;
+                printf("name is '"), strprint_nl(token), printf("', ");
+                c = Next();
+                while (c is '\n' or c is ' ') {
+                    c = Next();
+                }
+                if (c == '}') {
+                    printd("end of struct\n");
+                    goto brk;
+                }
+                printf("followed by...");
+                goto loop_read_type;
+            } else {
+                CompileErr("Syntax error: indentation required after struct.");
+            }
+        } else {
+            CompileErr("Syntax error: { expexted after the struct declaration");
+        }
+    brk:
+
+        printd("\n");
+        goto loop;
+    }
 
     if (Is("//")) {
         printd("comment\n");
@@ -77,18 +119,24 @@ loop:;
         goto loop;
     }
 
+    if (*token.data != '\n' && token.len != 1) {
+        printd("token '"), strprint(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
+    }
+
+
     if (it.data[0] == ':') {
         c = Next();
         if (c != ' ' && c != '\n') {
             CompileErr("Syntax error: space or newline required after a label: ");
         }
-        c = Next();
+        // c = Next();
         printf("static label '"), strprint_nl(token); printf("', ");
 
         fat f = { _objcode, objcode };
         macho_stab_ext(f, token);
 
-        if (c == '(') {
+        if (it.data[1] == '(') {
+            Next();
             printf("it's a routine, args ");
             Next();
             TokenStart;
@@ -115,6 +163,8 @@ read_type:
                 printf("return ");
                 goto read_type;
             }
+        } else {
+            goto loop;
         }
 
         c = Next(); // )
@@ -142,13 +192,13 @@ read_type:
         goto loop;
     }
 
-    if (c is ')' or c is '(') {
-        goto loop; // TODO maybe do sth useful?
-    }
+    // if (c is ')' or c is '(') {
+    //     goto loop; // TODO maybe do sth useful?
+    // }
     if (!main_defined && depth == 0) {
         fat f = { _objcode, objcode };
-        macho_stab_ext(f, str_from_c("_main"));
         printf("main defined here\n");
+        macho_stab_ext(f, str_from_c("_main"));
         main_defined = true;
     }
 
@@ -276,8 +326,28 @@ read_type:
         }
     }
 
-    if (Is("=[")) {
+    if (*it.data is '[') {
+        printd("load...");
+        c = Next();
+        TokenStart;
+        ReadToken;
+        TokenEnd;
+        printd("from "), strprint_nl(token);
 
+        obj *target = obj_find(&s, token);
+        size_t off = target->offset;
+        ls_add_u32(&s.code, ldr_size(reg, SP, off, (target->size / 8)));
+
+        c = Next();
+        if (it.data[0] is ' ') {
+            printd("hi");
+            // c = Next();
+        }
+        printd("..end\n");
+        goto loop;
+    }
+
+    if (Is("=[")) {
         printd("store ");
         str before = { token.data - 3, 2 };
         TokenStart;
@@ -305,7 +375,6 @@ read_type:
             goto loop;
         }
 
-        strprint(before);
         int reg = str_equal_c(before, "=>") ? 0 : 8; // TODO have to accept named registers.. wait design decision
 
         nreg *find = nreg_find(&s, token);
@@ -426,7 +495,7 @@ read_type:
         CompileErr("token may be not consumed %d", c), strprint(token), printf("\n");
     if (c == '\n') {
         // printf("\\n\n");
-        ident = 0;
+        // ident = 0;
         goto loop;
     }
     if (c != '\0') {
@@ -498,4 +567,3 @@ read_type:
     stack_context_free(&s);
     printf("\nparse end\n");
 }
-

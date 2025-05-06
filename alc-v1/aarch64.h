@@ -94,7 +94,7 @@ static inline uint32_t strorldr(enum strldr_t store, u8 reg, u8 reg2, bool unsca
     if (size == 8)
         op |= 1 << 30;
     else if (size != 4)
-        printf("!!!unimpl size %d!!!", size);
+        CompileErr("!!!unimpl size %d!!!", size);
     if (unscaled) {
         op |= offset << 12;
     } else {
@@ -110,6 +110,10 @@ static inline u32 store(u8 reg, u8 reg2, u16 offset) {
 
 static inline u32 ldr(u8 reg, u8 reg2, u16 offset) {
     return strorldr(load_t, reg, reg2, false, sizeof (u64), offset);
+}
+
+static inline u32 ldr_size(u8 reg, u8 reg2, u16 offset, size_t size) {
+    return strorldr(load_t, reg, reg2, false, size, offset);
 }
 
 void make_prelude(stack_context *s, u8 r1, u8 r2) {

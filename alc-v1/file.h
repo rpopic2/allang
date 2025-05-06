@@ -14,7 +14,9 @@ long file_len(FILE *f) {
 }
 
 str read_source() {
-    FILE *src = fopen("todo.al", "r");
+    const char *name = "todo.al";
+    printf("open file %s\n", name);
+    FILE *src = fopen(name, "r");
     if (src == NULL)
         exit(1);
 

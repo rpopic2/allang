@@ -18,7 +18,7 @@ ls (nreg);
 typedef struct {
     str name;
     u32 offset;
-    u8 size;
+    u8 size; // size in bits
     ptype is_addr;
 } obj; // named registers
 ls (obj);

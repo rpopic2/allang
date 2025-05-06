@@ -1,13 +1,23 @@
 // put_todo: (int n, str todo)
-// 	``n`: `todo print=>
+// 	n: todo print=>
 
-buf :: i32 0 =[]
+add: (i32, i32 =>i32)
+    +
 
-va_0 :: addr i32 0 =[]
+// struct point {
+//     i32 x,
+//     i32 y,
+// }
 
-buf =[va_0]
-"%d"0, _scanf=>
+loop:
+    va_0 :: addr i32 0 =[]
 
-"was %d\n"0, _printf=>
+    buf :: i32 0 =[]
+
+    buf =[va_0]
+    "%d"0, _scanf=>
+
+    [buf] =[va_0]
+    "was %d\n"0, _printf=>
 
 0
