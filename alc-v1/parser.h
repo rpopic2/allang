@@ -113,16 +113,15 @@ loop_read_type:
         goto loop;
     }
 
+    if (*token.data != '\n' && token.len != 1) {
+        printd("token '"), strprint(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
+    }
+
     if (Is("//")) {
         printd("comment\n");
         ReadUntilNewline();
         goto loop;
     }
-
-    if (*token.data != '\n' && token.len != 1) {
-        printd("token '"), strprint(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
-    }
-
 
     if (it.data[0] == ':') {
         c = Next();
@@ -195,7 +194,7 @@ read_type:
     // if (c is ')' or c is '(') {
     //     goto loop; // TODO maybe do sth useful?
     // }
-    if (!main_defined && depth == 0) {
+    if (!main_defined && token.len != 0 && depth == 0) {
         fat f = { _objcode, objcode };
         printf("main defined here\n");
         macho_stab_ext(f, str_from_c("_main"));
