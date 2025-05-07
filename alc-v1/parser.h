@@ -22,6 +22,7 @@
 void parse(str src) {
     macho_context_init();
     ls_new_char(&strings, 1024, "string literals");
+    ls_new_resolv(&resolves, 1024, "deferred address calculations");
 
     parse_scope(src);
 }
@@ -164,7 +165,7 @@ read_type:
             }
         } else {
             printd("add to local");
-            macho_stab_loc(f, token);
+            macho_stab_loc(s.code.count * sizeof (u32), token);
             goto loop;
         }
 
@@ -204,12 +205,36 @@ read_type:
     }
 
     if (str_equal_c(token, "is ")) {
-        printd("found compare ");
-        if (Is(" 0 ->")) {
-            printd("special case 0 ");
-            ls_add_u32(&s.code, cbnz(X, 0, 4)); // TODO reg, pcrel
+        printd("compare..");
+        if (Is(" 0 ")) {
+            printd("special case 0..");
+            // ls_add_u32(&s.code, cbnz(X, 0, 4)); // TODO reg, pcrel
+            TokenStart;
+            ReadToken;
+            TokenEnd;
+            strprint_nl(token);
+            if (token.len > 0 && Is("->")) {
+                printd("..b.cond..");
+                tab_find find = stab_search(&stab_loc, token);
+                int offset = 0;
+                if (find.find isnt NULL) {
+                    u64 target = stab_loc.data[find.symbolnum].n_value;
+                    offset = target - s.code.count * sizeof (u32);
+                } else {
+                    resolv tmp = { .name = token, .offset = s.code.count };
+                    ls_add_resolv(&resolves, tmp);
+                }
+                // if (abs(offset) > (524288 / 2))
+                //     CompileErr("offset was too big: %d\n", offset);
+                if (offset < 0) {
+                    const int IMM19_MINUS2 = 0x1ffffb;
+                    offset = IMM19_MINUS2 + offset;
+                }
+                printd("offset was: %d\n", offset);
+                ls_add_u32(&s.code, cbz(W, 0, offset)); // TODO reg size, reg, pcrel
+            }
         }
-        printd("\n");
+        printd("end\n");
         goto loop;
     }
 
@@ -314,10 +339,7 @@ read_type:
 
             fat f = { _objcode, objcode };
             if (find.find == NULL) {
-                u32 symbolnum = stab_und.count;
-                macho_stab_undef(token);
-                printf("failed <%d>,", symbolnum);
-                macho_relocent_undef(f, &s, symbolnum, ARM64_RELOC_BRANCH26, true);
+                macho_relocent(f, &s, find.symbolnum + 1, ARM64_RELOC_BRANCH26, true); // TODO tmp code
             } else {
                 macho_relocent(f, &s, find.symbolnum, ARM64_RELOC_BRANCH26, true);
                 // ls_add_int(&to_push_ext, relocents.count - 1);
@@ -564,6 +586,22 @@ read_type:
 
     }
 
+
+    for (int i = 0; i < resolves.count; ++i) {
+        str name = resolves.data[i].name;
+        tab_find find = stab_search(&stab_loc, name);
+        if (find.find is NULL) {
+            CompileErr("Compile Error: Could not resolve symbol: "), strprint(name);
+        } else {
+            stabe entry = stab_loc.data[find.symbolnum];
+            u32 offset = resolves.data[i].offset;
+
+            u32 objcode_len = fat_len((fat){_objcode, objcode});
+            u32 diff = (entry.n_value / 4) - offset - objcode_len;
+            s.code.data[offset] |= ((diff) << 5); // TODO this only resolves imm19 for cbz
+        }
+    }
+
     usize prologue_len = s.prologue.count;
     if (s.stack_size > 0) {
         u32 prologue_sp = sub(SP, SP, s.stack_size);
@@ -598,3 +636,4 @@ read_type:
     stack_context_free(&s);
     printf("\nparse end\n");
 }
+

@@ -30,7 +30,7 @@ typedef enum {
 #define CBZ 0x34000000
 
 static inline u32 cbz(sf_t sf, u5 reg, i19 pcrel) { 
-    return CBZ | sf << 31 | pcrel << 5 | reg;
+    return CBZ | sf << 31 | (pcrel >> 2) << 5 | reg;
 }
 
 static inline u32 cbnz(sf_t sf, u5 reg, i19 pcrel) { 

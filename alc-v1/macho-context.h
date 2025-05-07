@@ -1,6 +1,7 @@
 #pragma once
 
 #include "list.h"
+#include "parser_util.h"
 #include "stack_context.h"
 #include "strgen.h"
 #include <mach-o/arm64/reloc.h>
@@ -72,20 +73,21 @@ void macho_stab_undef(str s) {
     ls_add_char(&strtab, '\0');
 }
 
-void macho_stab_loc(fat code, str s) {
+void macho_stab_loc(int len, str s) {
     // int stab_idx = stab_loc.count;
-    int len = fat_len(code) * sizeof (u32);
+    int len2 = fat_len((fat){_objcode, objcode}) * sizeof (u32);
 
     const struct nlist_64 entry = {
         .n_un.n_strx = strtab.count,
         .n_type = N_TYPE,
         .n_sect = 1,
         .n_desc = 0x0,
-        .n_value = len,
+        .n_value = len2 + len,
     };
     ls_add_stabe(&stab_loc, entry);
     // ls_add_int(&to_push, stab_idx);
 
+    printf("add stab_loc entry, len %d, name ", len), strprint(s);
     ls_addran_char(&strtab, s.data, s.len);
     ls_add_char(&strtab, '\0');
 }

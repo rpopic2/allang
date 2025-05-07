@@ -52,6 +52,14 @@ ls_char strings;
 bool main_defined;
 int depth = 0;
 
+typedef struct {
+    str name;
+    u32 offset;
+} resolv; // entries to resolv (cbz..etc)
+ls (resolv);
+
+ls_resolv resolves;
+
 nreg *target_nreg;
 int reg_types[32];
 
@@ -90,3 +98,4 @@ obj *obj_find(stack_context *s, str token) {
 bool is_target_nreg(str_iter *it) {
     return (target_nreg != NULL && it->data[0] == '\n');
 }
+
