@@ -27,7 +27,33 @@ typedef enum {
 #define RET 0xd65f03c0
 #define BL 0x94000000
 #define B 0x14000000
+#define B_COND 0x54000000
 #define CBZ 0x34000000
+
+typedef enum {
+    COND_EQ = 0b0000,
+    COND_NE = 0b0001,
+    COND_CS = 0b0010,
+    COND_HS = 0b0010,
+    COND_CC = 0b0011,
+    COND_LO = 0b0011,
+    COND_MI = 0b0100,
+    COND_PL = 0b0101,
+    COND_VS = 0b0110,
+    COND_VC = 0b0111,
+    COND_HI = 0b1000,
+    COND_LS = 0b1001,
+    COND_GE = 0b1010,
+    COND_LT = 0b1011,
+    COND_GT = 0b1100,
+    COND_LE = 0b1101,
+    COND_AL = 0b1110,
+    COND_NV = 0b1111,
+} cflags;
+
+static inline u32 b_cond(i19 pcrel, cflags cond) {
+    return B_COND | (pcrel >> 2) << 5 | cond;
+}
 
 static inline u32 cbz(sf_t sf, u5 reg, i19 pcrel) { 
     return CBZ | sf << 31 | (pcrel >> 2) << 5 | reg;
@@ -130,6 +156,17 @@ void make_prelude(stack_context *s, u8 r1, u8 r2) {
 #define ADRP 0x90000000
 #define ADD_IMM 0x91000000
 #define SUB 0xd1000000
+#define CMP 0x7100001f
+#define CMN 0x3100001f
+
+static inline u32 cmn(sf_t sf, u8 reg, i12 literal) {
+    return CMN | sf << 31 | literal << 10 | reg << 5;
+}
+
+static inline u32 cmp(sf_t sf, u8 reg, i12 literal, bool negate) {
+    return CMN | !negate << 30 | sf << 31 | literal << 10 | reg << 5;
+}
+
 
 // data processing - reg
 #define MOV 0x52800000

@@ -1,4 +1,5 @@
 #pragma once
+#include "error.h"
 #include "file.h"
 #include "list.h"
 #include "slice.h"
@@ -97,5 +98,33 @@ obj *obj_find(stack_context *s, str token) {
 
 bool is_target_nreg(str_iter *it) {
     return (target_nreg != NULL && it->data[0] == '\n');
+}
+
+int read_int(str token, str_iter *rit, char tokc, char c) {
+    bool is_minus = false;
+    str_iter it = *rit;
+    int number = 0;
+
+    TokenStart;
+    ReadToken;
+    TokenEnd;
+
+    if (tokc is '-' && IsNum(token.data[1])) {
+        printd("minus..");
+        is_minus = true;
+        c = Next();
+        TokenStart;
+        ReadToken;
+        TokenEnd;
+        tokc = token.data[0];
+        strprint(token);
+    }
+    if (IsNum(tokc)) {
+        number = strtol(token.data, &it.data, 10);
+    } else {
+        CompileErr("Compile Error: Number expected, was %d", tokc);
+    }
+    *rit = it;
+    return number;
 }
 

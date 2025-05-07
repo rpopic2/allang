@@ -194,9 +194,6 @@ read_type:
         goto loop;
     }
 
-    // if (c is ')' or c is '(') {
-    //     goto loop; // TODO maybe do sth useful?
-    // }
     if (!main_defined && token.len != 0 && depth == 0) {
         fat f = { _objcode, objcode };
         printf("main defined here\n");
@@ -208,7 +205,6 @@ read_type:
         printd("compare..");
         if (Is(" 0 ")) {
             printd("special case 0..");
-            // ls_add_u32(&s.code, cbnz(X, 0, 4)); // TODO reg, pcrel
             TokenStart;
             ReadToken;
             TokenEnd;
@@ -231,7 +227,56 @@ read_type:
                     offset = IMM19_MINUS2 + offset;
                 }
                 printd("offset was: %d\n", offset);
-                ls_add_u32(&s.code, cbz(W, 0, offset)); // TODO reg size, reg, pcrel
+                ls_add_u32(&s.code, cbz(W, 0, offset)); // TODO reg size, reg, pcrel->need to depend on return type..type checking needed
+            } else {
+                CompileErr("Compile Error in 0 branch\n");
+            }
+        } else {
+            c = Next();
+
+            bool is_minus = false;
+            int number = 0;
+
+            TokenStart;
+            ReadToken;
+            TokenEnd;
+
+            if (c is '-' && IsNum(token.data[1])) {
+                printd("negative..");
+                is_minus = true;
+                c = Next();
+                TokenStart;
+                ReadToken;
+                TokenEnd;
+                c = token.data[0];
+            }
+            strprint(token);
+            if (IsNum(token.data[0])) {
+                number = strtol(token.data, &it.data, 10);
+            } else {
+                CompileErr("Compile Error: Number expected, was %d", c);
+                CompileErr("next was %d", it.data[1]);
+            }
+            printd("with %d..", number);
+            if (target_nreg isnt NULL) {
+                printd("target_nreg: %d, %d", target_nreg->reg, target_nreg->size);
+            }
+            ls_add_u32(&s.code, cmp(W, 0, number, is_minus)); // TODO width, reg num ->wait return type checking
+
+            c = Next();
+            TokenStart;
+            ReadToken;
+            TokenEnd;
+            if (token.len > 0) {
+                printd("ok token");
+                strprint(token);
+            }
+            resolv tmp = { .name = token, .offset = s.code.count };
+            ls_add_resolv(&resolves, tmp);
+            ls_add_u32(&s.code, b_cond(0, COND_EQ));
+
+            if (!Is("->")) {
+                CompileErr("Syntax Error: -> expected");
             }
         }
         printd("end\n");
@@ -273,7 +318,7 @@ read_type:
             }
 
             nreg *find = nreg_find(&s, token);
-            n.reg = named_reg_idx; // TODO maybe this need not to be assigned if stack obj
+            n.reg = named_reg_idx;
             if (find != NULL) {
                 n.reg = find->reg;
                 *find = n;
@@ -339,7 +384,7 @@ read_type:
 
             fat f = { _objcode, objcode };
             if (find.find == NULL) {
-                macho_relocent(f, &s, find.symbolnum + 1, ARM64_RELOC_BRANCH26, true); // TODO tmp code
+                macho_relocent(f, &s, find.symbolnum + 1, ARM64_RELOC_BRANCH26, true);
             } else {
                 macho_relocent(f, &s, find.symbolnum, ARM64_RELOC_BRANCH26, true);
                 // ls_add_int(&to_push_ext, relocents.count - 1);
@@ -412,7 +457,7 @@ read_type:
             sf_t reg_sf = nreg_sf(target_nreg);
             size_t offset = s.stack_size;
             ls_add_u32(&s.code, str_imm(reg_sf, reg, SP, offset));
-            s.stack_size += Align0x10(siz / 8); // TODO need to align and scale by 0x10
+            s.stack_size += Align0x10(siz / 8); // TODO make this packed and efficient
             printd("stack_size =0x%zx..", s.stack_size);
             obj o = {
                 .size = siz,
@@ -425,7 +470,7 @@ read_type:
             goto loop;
         }
 
-        int reg = str_equal_c(before, "=>") ? 0 : 8; // TODO have to accept named registers.. wait design decision
+        int reg = str_equal_c(before, "=>") ? 0 : 8; // TODO have to accept named registers..
 
         nreg *find = nreg_find(&s, token);
         if (find == NULL) {
@@ -460,6 +505,29 @@ read_type:
         token_consumed = true;
     }
 
+    bool is_minus = false;
+    if (tokc is '-' && IsNum(token.data[1])) {
+        printd("minus..");
+        is_minus = true;
+        c = Next();
+        TokenStart;
+        ReadToken;
+        TokenEnd;
+        tokc = token.data[0];
+        strprint(token);
+    }
+    if (IsNum(tokc)) {
+        long number = strtol(token.data, &it.data, 10);
+        if (is_minus)
+            number = -number;
+        sf_t sf = W;
+        if (target_nreg)
+            sf = nreg_sf(target_nreg);
+        ls_add_u32(&s.code, mov(sf, reg, number));
+        token_consumed = true;
+        printf("value of '%ld to r%d(sf=%d)'", number, reg, sf);
+    }
+
     if (IsAlpha(tokc)) {
         nreg *find = nreg_find(&s, token);
 
@@ -476,14 +544,6 @@ read_type:
         } else {
             CompileErr("Error: unknown named register "), PrintErrStr(token);
         }
-    } else if (IsNum(tokc)) {
-        long number = strtol(token.data, &it.data, 10);
-        sf_t sf = W;
-        if (target_nreg)
-            sf = nreg_sf(target_nreg);
-        ls_add_u32(&s.code, mov(sf, reg, number));
-        token_consumed = true;
-        printf("value of '%ld to r%d(sf=%d)'", number, reg, sf);
     } else if (tokc is '"') {
         // is going to be a string
         c = Next();
@@ -528,9 +588,6 @@ read_type:
     }
 
     if (*it.data == ',') {
-        // if (target_nreg != NULL) { // TODO
-        //     CompileErr("Syntax Error: not allowed to assign two values to one register.");
-        // }
         ++regoff;
         Next();
         printf(", ");
@@ -598,6 +655,11 @@ read_type:
 
             u32 objcode_len = fat_len((fat){_objcode, objcode});
             u32 diff = (entry.n_value / 4) - offset - objcode_len;
+
+            if (diff < 0) {
+                const int IMM19_MINUS2 = 0x1ffffb;
+                diff += IMM19_MINUS2;
+            }
             s.code.data[offset] |= ((diff) << 5); // TODO this only resolves imm19 for cbz
         }
     }

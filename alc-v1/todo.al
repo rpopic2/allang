@@ -16,10 +16,11 @@ _loop:
 
     buf =[va_0]
     "%d"0, _scanf=>
-    is 0 _break->
+    is -1 _break->
 
     [buf] =[va_0]
     "was %d\n"0, _printf=>
     _loop->
+    _break:
 
 0
