@@ -24,7 +24,9 @@ _loop:
     "%d %c %d"0, _scanf=>
         is -1 _break->
 
-    [a], [b] + =[va]
+    [op] is '+' -> [a], [b] + =[va]
+
+    // [a], [b] + =[va]
     "adds to %d\n"0, _printf=>
 
     _loop->

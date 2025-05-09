@@ -203,6 +203,27 @@ read_type:
 
     if (str_equal_c(token, "is ")) {
         printd("compare..");
+
+        u8 reg = 0;
+        sf_t sf = W; // TODO reg size, reg, pcrel->need to depend on return type..type checking needed
+
+        if (target_nreg) {
+            printd("target_nreg was: %d", target_nreg->reg);
+            reg = target_nreg->reg;
+            sf = nreg_sf(target_nreg);
+        } else {
+            printd("target_nreg was: null");
+            char *rewind = token.data - 1;
+            while (IsSpace(*rewind)) {
+                --rewind;
+            }
+            printd("last thing was.. %d(%c), ", *rewind, *rewind);
+            if (*rewind is '>')
+                reg = 0;
+            else if (*rewind is ']')
+                reg = 8;
+        }
+
         if (Is(" 0 ")) {
             printd("special case 0..");
             TokenStart;
@@ -220,14 +241,12 @@ read_type:
                     resolv tmp = { .name = token, .offset = s.code.count };
                     ls_add_resolv(&resolves, tmp);
                 }
-                // if (abs(offset) > (524288 / 2))
-                //     CompileErr("offset was too big: %d\n", offset);
                 if (offset < 0) {
                     const int IMM19_MINUS2 = 0x1ffffb;
                     offset = IMM19_MINUS2 + offset;
                 }
                 printd("offset was: %d\n", offset);
-                ls_add_u32(&s.code, cbz(W, 0, offset)); // TODO reg size, reg, pcrel->need to depend on return type..type checking needed
+                ls_add_u32(&s.code, cbz(sf, reg, offset));
             } else {
                 CompileErr("Compile Error in 0 branch\n");
             }
@@ -236,6 +255,7 @@ read_type:
 
             bool is_minus = false;
             int number = 0;
+            bool is_number_set = false;
 
             TokenStart;
             ReadToken;
@@ -249,11 +269,19 @@ read_type:
                 ReadToken;
                 TokenEnd;
                 c = token.data[0];
+            } else if (c is '\'') {
+                printd("char..");
+                c = Next();
+                number = (int)c;
+                is_number_set = true;
+                c = Next();
+                c = Next();
             }
             strprint(token);
             if (IsNum(token.data[0])) {
                 number = strtol(token.data, &it.data, 10);
-            } else {
+                is_number_set = true;
+            } else if (!is_number_set) {
                 CompileErr("Compile Error: Number expected, was %d", c);
                 CompileErr("next was %d", it.data[1]);
             }
@@ -261,22 +289,26 @@ read_type:
             if (target_nreg isnt NULL) {
                 printd("target_nreg: %d, %d", target_nreg->reg, target_nreg->size);
             }
-            ls_add_u32(&s.code, cmp(W, 0, number, is_minus)); // TODO width, reg num ->wait return type checking
+            ls_add_u32(&s.code, cmp(sf, reg, number, is_minus));
 
             c = Next();
             TokenStart;
             ReadToken;
             TokenEnd;
             if (token.len > 0) {
-                printd("ok token");
+                printd("ok token..");
                 strprint(token);
+                resolv tmp = { .name = token, .offset = s.code.count };
+                ls_add_resolv(&resolves, tmp);
+                ls_add_u32(&s.code, b_cond(0, COND_EQ));
+            } else {
+                printd("anonymous label..");
+                ls_add_u32(&s.code, b_cond(8, COND_NE));    // tmp offset needs to be done later..
             }
-            resolv tmp = { .name = token, .offset = s.code.count };
-            ls_add_resolv(&resolves, tmp);
-            ls_add_u32(&s.code, b_cond(0, COND_EQ));
 
             if (!Is("->")) {
-                CompileErr("Syntax Error: -> expected");
+                CompileErr("Syntax Error: -> expected, but found %d", c);
+                CompileErr("next was %d", it.data[1]);
             }
         }
         printd("end\n");

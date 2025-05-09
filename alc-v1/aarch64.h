@@ -111,7 +111,7 @@ static inline u32 str_imm(sf_t width, u5 rt, u5 rn, i12 imm) {
 
 
 static inline uint32_t strorldr(enum strldr_t store, u8 reg, u8 reg2, bool unscaled, int size, int offset) {
-    uint32_t op = 0xb8000000;
+    uint32_t op = 0x38000000;
     if (!store) {
         op |= 1 << 22;
     }
@@ -119,7 +119,11 @@ static inline uint32_t strorldr(enum strldr_t store, u8 reg, u8 reg2, bool unsca
     if (!unscaled)
         op |= 1 << 24;
     if (size == 8)
-        op |= 1 << 30;
+        op |= 0b11 << 30;
+    else if (size == 1)
+        ;// nop
+    else if (size == 4)
+        op |= 0b10 << 30;
     else if (size != 4)
         CompileErr("!!!unimpl size %d!!!", size);
     if (unscaled) {
