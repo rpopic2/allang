@@ -33,7 +33,7 @@ typedef struct {
     ls_u32 relocents;
     u8 regs_to_save[0x10];
     int regs_to_save_size;
-    u32 obj_offset;
+    usize spaces_left;
 } stack_context;
 
 
@@ -46,7 +46,7 @@ void stack_context_new(stack_context *s) {
     ls_new_u32(&s->relocents, 48, "relocents to push by prelude");
     s->stack_size = 0;
     s->regs_to_save_size = 0;
-    s->obj_offset = 0;
+    s->spaces_left = 0;
 }
 void stack_context_free(stack_context *s) {
     ls_delete_u32(&s->code);

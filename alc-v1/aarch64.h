@@ -156,15 +156,15 @@ void make_prelude(stack_context *s, u8 r1, u8 r2) {
 #define ADRP 0x90000000
 #define ADD_IMM 0x91000000
 #define SUB 0xd1000000
-#define CMP 0x7100001f
-#define CMN 0x3100001f
+#define SUBS_IMM 0x7100001f
+#define ADDS_IMM 0x3100001f
 
 static inline u32 cmn(sf_t sf, u8 reg, i12 literal) {
-    return CMN | sf << 31 | literal << 10 | reg << 5;
+    return ADDS_IMM | sf << 31 | literal << 10 | reg << 5;
 }
 
 static inline u32 cmp(sf_t sf, u8 reg, i12 literal, bool negate) {
-    return CMN | !negate << 30 | sf << 31 | literal << 10 | reg << 5;
+    return ADDS_IMM | !negate << 30 | sf << 31 | literal << 10 | reg << 5;
 }
 
 

@@ -10,17 +10,25 @@ add: (i32, i32 =>i32)
 // }
 
 _loop:
-    va_0 :: addr i32 0 =[]
+    va :: addr i32 0 =[]
+    vop :: addr c8 0 =[]
+    vb :: addr i32 0 =[]
 
-    buf :: i32 0 =[]
+    a :: i32 0 =[]
+    b :: i32 0 =[]
+    op :: c8 0 =[]
 
-    buf =[va_0]
-    "%d"0, _scanf=>
-    is -1 _break->
+    a =[va]
+    b =[vb]
+    op =[vop]
+    "%d %c %d"0, _scanf=>
+        is -1 _break->
 
-    [buf] =[va_0]
-    "was %d\n"0, _printf=>
+    [a], [b] + =[va]
+    "adds to %d\n"0, _printf=>
+
     _loop->
+
     _break:
 
 0

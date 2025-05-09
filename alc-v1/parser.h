@@ -315,6 +315,11 @@ read_type:
                 c = Next();
                 if (!n.is_addr)
                     n.size = 32;
+            } else if (Is("c8")) {
+                printd("type c8");
+                c = Next();
+                if (!n.is_addr)
+                    n.size = 8;
             }
 
             nreg *find = nreg_find(&s, token);
@@ -439,7 +444,7 @@ read_type:
             // c = Next();
         }
         printd("..end\n");
-        goto loop;
+        token_consumed = true;
     }
 
     if (Is("=[")) {
@@ -452,19 +457,26 @@ read_type:
         printd("toklen: %zu..", token.len);
 
         if (token.len is 0) {
-            size_t siz = target_nreg->size;
-            printd("new allocation.. from %d, %zu..", reg, siz);
+            size_t siz_bits = target_nreg->size;
+            size_t siz_bytes = siz_bits / 8;
+            printd("new allocation.. from %d, %zu..", reg, siz_bits);
             sf_t reg_sf = nreg_sf(target_nreg);
-            size_t offset = s.stack_size;
+            size_t offset = s.stack_size - s.spaces_left;
+            printd("stack_size =0x%zx, spaces_left=0x%zx.., siz=0x%zx", s.stack_size, s.spaces_left, siz_bytes);
             ls_add_u32(&s.code, str_imm(reg_sf, reg, SP, offset));
-            s.stack_size += Align0x10(siz / 8); // TODO make this packed and efficient
-            printd("stack_size =0x%zx..", s.stack_size);
+            if (s.spaces_left < siz_bytes) {
+                usize added_size = Align0x10(siz_bytes); // TODO make this packed and efficient
+                s.stack_size += added_size;
+                s.spaces_left += added_size;
+            }
+            s.spaces_left -= siz_bytes;
             obj o = {
-                .size = siz,
+                .size = siz_bits,
                 .is_addr = target_nreg->is_addr,
                 .name = target_nreg->name,
                 .offset = offset,
             };
+            printd("-->after stack_size =0x%zx, spaces_left=0x%zx..", s.stack_size, s.spaces_left);
             ls_add_obj(&s.objects, o);
             putchar('\n');
             goto loop;
