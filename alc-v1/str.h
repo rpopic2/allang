@@ -40,3 +40,4 @@ bool str_equal_c(str s1, const char *s2) {
     return (memcmp(s1.data, s2, strlen(s2)) == 0);
 }
 
+const str str_empty = { .data = NULL, .len = 0 };

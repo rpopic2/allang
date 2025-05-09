@@ -25,6 +25,13 @@ _loop:
         is -1 _break->
 
     [op] is '+' -> [a], [b] + =[va]
+    // : "invalid operator" _loop->
+
+    [op] is '+' ->
+        "test"
+        "hoever"
+        "whatever"
+
 
     // [a], [b] + =[va]
     "adds to %d\n"0, _printf=>

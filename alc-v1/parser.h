@@ -42,6 +42,12 @@ void parse_scope(str src) {
 
     bool calls_fn = false;
 
+    int tmp_put_ident = 0;
+    bool tmp_put_label = false;
+    int tmp_put_idx = 0;
+    str tmp_defer_rets = str_empty;
+    int tmp_to_resolve = 0;
+
 loop:;
     if (*it.data is '\n') {
         ident = 0;
@@ -56,6 +62,27 @@ loop:;
     TokenStart;
     ReadToken;
     TokenEnd;
+
+    if (tmp_put_label) {
+        if (tmp_put_ident > ident) {
+            printd("put label here!(%d, %d)\n", tmp_put_ident, ident);
+            tmp_put_ident = 0;
+            tmp_put_label = false;
+            char *ret;
+            asprintf(&ret, "__anonyn%d", tmp_put_idx++);
+            tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
+        }
+    }
+
+    if (tmp_defer_rets.data != NULL) {
+        int diff = s.code.count - tmp_to_resolve;
+
+        s.code.data[tmp_to_resolve] |= ((diff) << 5); // TODO this only resolves imm19 for cbz, b.cond
+        tmp_to_resolve = 0;
+        macho_stab_loc(s.code.count * sizeof (u32), tmp_defer_rets);
+        free(tmp_defer_rets.data);
+        tmp_defer_rets = str_empty;
+    }
 
     if (ident % 4 != 0) {
         CompileErr("Syntax error: single indentation should consist of 4 spaces (was %d)", ident);
@@ -212,7 +239,7 @@ read_type:
             reg = target_nreg->reg;
             sf = nreg_sf(target_nreg);
         } else {
-            printd("target_nreg was: null");
+            printd("target_nreg was: null..");
             char *rewind = token.data - 1;
             while (IsSpace(*rewind)) {
                 --rewind;
@@ -303,12 +330,21 @@ read_type:
                 ls_add_u32(&s.code, b_cond(0, COND_EQ));
             } else {
                 printd("anonymous label..");
-                ls_add_u32(&s.code, b_cond(8, COND_NE));    // tmp offset needs to be done later..
+                tmp_to_resolve = s.code.count;
+                ls_add_u32(&s.code, b_cond(0, COND_NE));    // tmp offset needs to be done later..
+                tmp_put_ident = ident;
+                tmp_put_label = true;
             }
 
             if (!Is("->")) {
                 CompileErr("Syntax Error: -> expected, but found %d", c);
                 CompileErr("next was %d", it.data[1]);
+            }
+            printd("next: %d", it.data[0]);
+            if (it.data[0] is '\n') {
+                printd("followed by newline..");
+                if (tmp_put_label)
+                    tmp_put_ident += 4;
             }
         }
         printd("end\n");
