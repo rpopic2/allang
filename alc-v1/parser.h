@@ -28,7 +28,7 @@ void parse(str src) {
 }
 
 void parse_scope(str src) {
-    printf("start parse\n");
+    printd("start parse\n");
     str_iter it = into_iter(src);
     str token = {};
 
@@ -118,7 +118,7 @@ loop_read_type:
                 TokenStart;
                 ReadToken;
                 TokenEnd;
-                printf("name is '"), strprint_nl(token), printf("', ");
+                printd("name is '"), strprint_nl(token), printd("', ");
                 c = Next();
                 while (c is '\n' or c is ' ') {
                     c = Next();
@@ -127,7 +127,7 @@ loop_read_type:
                     printd("end of struct\n");
                     goto brk;
                 }
-                printf("followed by...");
+                printd("followed by...");
                 goto loop_read_type;
             } else {
                 CompileErr("Syntax error: indentation required after struct.");
@@ -157,37 +157,37 @@ loop_read_type:
             CompileErr("Syntax error: space or newline required after a label: ");
         }
         // c = Next();
-        printf("static label '"), strprint_nl(token); printf("', ");
+        printd("static label '"), strprint_nl(token); printd("', ");
 
 
         fat f = { _objcode, objcode };
         if (it.data[1] == '(') {
             Next();
-            printf("it's a routine, args ");
+            printd("it's a routine, args ");
             macho_stab_ext(f, token);
             Next();
             TokenStart;
             ReadToken;
             TokenEnd;
-            // printf("arg1: "), strprint(token), printf(";");
+            // printd("arg1: "), strprint(token), printd(";");
 read_type:
             if (Is("i32")) {    // TODO more types, it does nothing
-                printf("type of i32 ");
+                printd("type of i32 ");
             } else if (Is("c8")) {
-                printf("type of c8 ");
+                printd("type of c8 ");
             } else if (Is("FILE")) {
-                printf("type of FILE ");
+                printd("type of FILE ");
             } else if (Is("addr")) {
                 Next();
-                printf("type of addr ");
+                printd("type of addr ");
                 goto read_type;
             }
-            printf(":%x:", it.data[0]);
+            printd(":%x:", it.data[0]);
             if (Is(", ")) {
                 goto read_type;
             }
             if (Is(" =>")) {
-                printf("return ");
+                printd("return ");
                 goto read_type;
             }
         } else {
@@ -218,18 +218,18 @@ read_type:
         printd("\n*** new stack of depth %d\n", depth);
         nextsrc.len = it.data - nextsrc.data;
         strprint(nextsrc);
-        printf("end src\n");
+        printd("end src\n");
 
         parse_scope(nextsrc);
         --depth;
-        printf("\n*** endofrt\n");
+        printd("\n*** endofrt\n");
 
         goto loop;
     }
 
     if (!main_defined && token.len != 0 && depth == 0) {
         fat f = { _objcode, objcode };
-        printf("main defined here\n");
+        printd("main defined here\n");
         macho_stab_ext(f, str_from_c("_main"));
         main_defined = true;
     }
@@ -370,7 +370,7 @@ read_type:
         str name = token;
 
         if (Is(" :: ")) {
-            printf("..is expression\n");
+            printd("..is expression\n");
 
             nreg n = {
                 .name = name, .size = 32, .is_addr = not_addr,
@@ -408,7 +408,7 @@ read_type:
             if (find != NULL) {
                 n.reg = find->reg;
                 *find = n;
-                printf("found "), strprint(find->name);
+                printd("found "), strprint(find->name);
             }
             if (n.reg > 28) {
                 CompileErr("Error: used up all callee-saved registers\n");
@@ -445,14 +445,14 @@ read_type:
             if (find.find == NULL) {
                 u32 symbolnum = stab_und.count;
                 macho_stab_undef(token);
-            printf("failed <%d>,", symbolnum);
+            printd("failed <%d>,", symbolnum);
                 macho_relocent_undef(f, &s, symbolnum, ARM64_RELOC_BRANCH26, true);
             } else {
                 macho_relocent(f, &s, find.symbolnum, ARM64_RELOC_BRANCH26, true);
                 ls_add_int(&to_push_ext, relocents.count - 1);
             }
-            printf("find reloc '%p%s <%d>,", find.find, find.find, find.symbolnum);
-            printf("'\n");
+            printd("find reloc '%p%s <%d>,", find.find, find.find, find.symbolnum);
+            printd("'\n");
 
             ls_add_u32(&s.code, BL);
 
@@ -475,8 +475,8 @@ read_type:
                 macho_relocent(f, &s, find.symbolnum, ARM64_RELOC_BRANCH26, true);
                 // ls_add_int(&to_push_ext, relocents.count - 1);
             }
-            printf("find reloc '%p%s <%d>,", find.find, find.find, find.symbolnum);
-            printf("'\n");
+            printd("find reloc '%p%s <%d>,", find.find, find.find, find.symbolnum);
+            printd("'\n");
 
             ls_add_u32(&s.code, B);
 
@@ -520,10 +520,6 @@ read_type:
         ls_add_u32(&s.code, ldr_size(reg, SP, off, (target->size / 8)));
 
         c = Next();
-        if (it.data[0] is ' ') {
-            printd("hi");
-            // c = Next();
-        }
         printd("..end\n");
         token_consumed = true;
     }
@@ -587,15 +583,26 @@ read_type:
         goto loop;
     }
 
-    if (tokc is '+') {
+    addsub add_or_sub = ADDSUB_NONE;
+    if (tokc is '+')
+        add_or_sub = ADDSUB_ADD;
+    else if (tokc is '-')
+        add_or_sub = ADDSUB_SUB;
+
+    if (add_or_sub isnt ADDSUB_NONE) {
         c = Next();
-        printf("add");
+        if (tokc is '+')
+            printd("add..");
+        else
+            printd("sub..");
         u8 reg1 = 8, reg2 = 9;
         if (s.code.count == 0) {
             reg1 = 0, reg2 = 1;
         }
-        ls_add_u32(&s.code, add_reg_shft(W, reg, reg1, reg2));
+        u32 opc = add_shft_f(W, ADDSUB_ADD, reg, reg1, reg2, ASH_LSL, 0);
+        ls_add_u32(&s.code, opc);
         token_consumed = true;
+        printd("\n");
     }
 
     bool is_minus = false;
@@ -618,7 +625,7 @@ read_type:
             sf = nreg_sf(target_nreg);
         ls_add_u32(&s.code, mov(sf, reg, number));
         token_consumed = true;
-        printf("value of '%ld to r%d(sf=%d)'", number, reg, sf);
+        printd("value of '%ld to r%d(sf=%d)'", number, reg, sf);
     }
 
     if (IsAlpha(tokc)) {
@@ -632,7 +639,7 @@ read_type:
                 sf_t sf = nreg_sf(find);
                 ls_add_u32(&s.code, mov_reg(sf, reg, find->reg));
             }
-            printf("..move to reg %d", reg);
+            printd("..move to reg %d", reg);
             token_consumed = true;
         } else {
             CompileErr("Error: unknown named register "), PrintErrStr(token);
@@ -644,31 +651,31 @@ read_type:
         while (c != '"' && c != '\0') { c = Next(); }
         TokenEnd
 
-        printf("original: `"), strprint_nl(token), printf("` ");
+        printd("original: `"), strprint_nl(token), printd("` ");
         for (int i = 0; i < token.len; ++i) {
             char d = token.data[i];
             if (d != '\\')
                 continue;
             d = token.data[i + 1];
-            printf("(has escape seq %c) ", d);
+            printd("(has escape seq %c) ", d);
             if (d == 'n') {
                 token.data[i] = '\n';
                 memmove(token.data + i + 1, token.data + i + 2, token.len - i);
                 token.len -= 1;
             }
         }
-        printf("str lit: `"), strprint_nl(token), printf("`");
+        printd("str lit: `"), strprint_nl(token), printd("`");
 
         macho_stab_stringlit();
 
         ls_addran_char(&strings, token.data, token.len);
         if (it.data[1] == '0') {
-            printf("is null terminated string");
+            printd("is null terminated string");
             c = Next();
             ls_add_char(&strings, '\0');
         }
         c = Next();
-        printf("\n");
+        printd("\n");
 
         int stab_idx = stab_loc.count - 1;
         fat f = { _objcode, objcode };
@@ -683,7 +690,7 @@ read_type:
     if (*it.data == ',') {
         ++regoff;
         Next();
-        printf(", ");
+        printd(", ");
         token_consumed = true;
         goto loop;
     }
@@ -692,9 +699,9 @@ read_type:
     if (token.len == 0 && (c == '\n' || c == '\0'))
         token_consumed = true;
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
-        CompileErr("token may be not consumed %d", c), strprint(token), printf("\n");
+        CompileErr("token may be not consumed %d", c), strprint(token), printd("\n");
     if (c == '\n') {
-        // printf("\\n\n");
+        // printd("\\n\n");
         // ident = 0;
         goto loop;
     }
@@ -717,7 +724,7 @@ read_type:
     }
     for (int i = 0; i < s.regs_to_save_size; ++i) {
         u8 reg = s.regs_to_save[i];
-        printf("stack size: 0x%zx", s.stack_size);
+        printd("stack size: 0x%zx", s.stack_size);
         if ((i + 1) < s.regs_to_save_size) {
             u8 reg2 = s.regs_to_save[++i];
 
@@ -796,6 +803,6 @@ read_type:
     write_buf(&objcode, strings.data, strings.count);
 
     stack_context_free(&s);
-    printf("\nparse end\n");
+    printd("\nparse end\n");
 }
 

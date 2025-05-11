@@ -188,6 +188,7 @@ static inline u32 cmp(sf_t sf, u8 reg, i12 literal, bool negate) {
 #define MOVK 0xf2800000
 #define ADD_EXT 0x0b200000
 #define ADD_SHFT 0x0b000000
+#define SUB_SHFT 0x4b000000
 // 0b010000 
 typedef enum {
     ASH_LSL = 0b00,
@@ -208,17 +209,24 @@ typedef enum {
     AE_SXTX = 0b111,
 } add_extend;
 
+typedef enum {
+    ADDSUB_ADD = 0, ADDSUB_SUB = 1, ADDSUB_NONE = -1
+} addsub;
+
 static inline u32 add_ext_f(sf_t sf, u8 rd, u8 rn, u8 rm, add_extend option, u3 amount) {
     return ADD_EXT | sf << 31 | rm << 16 | option << 13 | amount << 10 | rn << 5 | rd;
 }
-static inline u32 add_shft_f(sf_t sf, u8 rd, u8 rn, u8 rm, add_shift shift, u6 amount) {
-    return ADD_SHFT | sf << 31 | shift << 22 | rm << 16 | amount << 10 | rn << 5 | rd;
+static inline u32 add_shft_f(sf_t sf, addsub is_sub, u8 rd, u8 rn, u8 rm, add_shift shift, u6 amount) {
+    return ADD_SHFT | sf << 31 | is_sub << 30 | shift << 22 | rm << 16 | amount << 10 | rn << 5 | rd;
 }
 static inline u32 add_reg_ext(sf_t sf, u8 rd, u8 rn, u8 rm) {
     return add_ext_f(sf, rd, rn, rm, AE_LSL, 0);
 }
 static inline u32 add_reg_shft(sf_t sf, u8 rd, u8 rn, u8 rm) {
-    return add_shft_f(sf, rd, rn, rm, ASH_LSL, 0);
+    return add_shft_f(sf, ADDSUB_ADD, rd, rn, rm, ASH_LSL, 0);
+}
+static inline u32 sub_reg_shft(sf_t sf, u8 rd, u8 rn, u8 rm) {
+    return add_shft_f(sf, ADDSUB_SUB, rd, rn, rm, ASH_LSL, 0);
 }
 
 
