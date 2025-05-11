@@ -51,6 +51,16 @@ typedef enum {
     COND_NV = 0b1111,
 } cflags;
 
+cflags cflags_flip(cflags f) {
+    if (f == COND_EQ)
+        return COND_NE;
+    else if (f == COND_NE)
+        return COND_EQ;
+    else
+        CompileErr("invalid flip value of %d", f);
+    return COND_NV;
+}
+
 static inline u32 b_cond(i19 pcrel, cflags cond) {
     return B_COND | (pcrel >> 2) << 5 | cond;
 }

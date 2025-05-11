@@ -24,16 +24,9 @@ _loop:
     "%d %c %d"0, _scanf=>
         is -1 _break->
 
-    [op] is '+' -> [a], [b] + =[va]
-    // : "invalid operator" _loop->
+    [op] isnt '+' _loop->
 
-    [op] is '+' ->
-        "test"
-        "hoever"
-        "whatever"
-
-
-    // [a], [b] + =[va]
+    [a], [b] + =[va]
     "adds to %d\n"0, _printf=>
 
     _loop->

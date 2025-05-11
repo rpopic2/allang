@@ -69,7 +69,7 @@ loop:;
             tmp_put_ident = 0;
             tmp_put_label = false;
             char *ret;
-            asprintf(&ret, "__anonyn%d", tmp_put_idx++);
+            asprintf(&ret, "__anonyn_%d", tmp_put_idx++);
             tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
         }
     }
@@ -192,7 +192,13 @@ read_type:
             }
         } else {
             printd("add to local");
+            if (token.len is 0) {
+                char *ret;
+                asprintf(&ret, "__anonyn_%d", tmp_put_idx++);
+                token = (str){ .data = ret, .len = strlen(ret) };
+            }
             macho_stab_loc(s.code.count * sizeof (u32), token);
+
             goto loop;
         }
 
@@ -228,7 +234,14 @@ read_type:
         main_defined = true;
     }
 
+    cflags cond = COND_NV;
     if (str_equal_c(token, "is ")) {
+        cond = COND_EQ;
+    } else if (str_equal_c(token, "isnt ")) {
+        cond = COND_NE;
+    }
+
+    if (cond != COND_NV) {
         printd("compare..");
 
         u8 reg = 0;
@@ -323,15 +336,15 @@ read_type:
             ReadToken;
             TokenEnd;
             if (token.len > 0) {
-                printd("ok token..");
+                printd("branch to..");
                 strprint(token);
                 resolv tmp = { .name = token, .offset = s.code.count };
                 ls_add_resolv(&resolves, tmp);
-                ls_add_u32(&s.code, b_cond(0, COND_EQ));
+                ls_add_u32(&s.code, b_cond(0, cond));
             } else {
                 printd("anonymous label..");
                 tmp_to_resolve = s.code.count;
-                ls_add_u32(&s.code, b_cond(0, COND_NE));    // tmp offset needs to be done later..
+                ls_add_u32(&s.code, b_cond(0, cflags_flip(cond)));    // tmp offset needs to be done later..
                 tmp_put_ident = ident;
                 tmp_put_label = true;
             }
@@ -724,23 +737,30 @@ read_type:
     }
 
 
+    printd("local resolves\n");
     for (int i = 0; i < resolves.count; ++i) {
         str name = resolves.data[i].name;
         tab_find find = stab_search(&stab_loc, name);
         if (find.find is NULL) {
             CompileErr("Compile Error: Could not resolve symbol: "), strprint(name);
         } else {
+            printd("found.."), strprint_nl(name);
             stabe entry = stab_loc.data[find.symbolnum];
             u32 offset = resolves.data[i].offset;
 
             u32 objcode_len = fat_len((fat){_objcode, objcode});
-            u32 diff = (entry.n_value / 4) - offset - objcode_len;
+            int diff = (entry.n_value / 4) - offset - objcode_len;
+            printd("..diff %d", diff);
 
             if (diff < 0) {
-                const int IMM19_MINUS2 = 0x1ffffb;
-                diff += IMM19_MINUS2;
+                const int IMM19_MINUS = 0x80000;
+                diff = IMM19_MINUS + diff;
+            } else {
+                printd("diff wasnt minus");
             }
+            printd("..diff was %d..", diff);
             s.code.data[offset] |= ((diff) << 5); // TODO this only resolves imm19 for cbz
+            printd("ok\n");
         }
     }
 
