@@ -10,6 +10,7 @@
 
 #include "aarch64.h"
 #include "file.h"
+#include "option.h"
 #include "parser_util.h"
 #include "slice.h"
 #include "str.h"
@@ -47,6 +48,7 @@ void parse_scope(str src) {
     int tmp_put_idx = 0;
     str tmp_defer_rets = str_empty;
     int tmp_to_resolve = 0;
+    bool tmp_put_label_nextline = false;
 
 loop:;
     if (*it.data is '\n') {
@@ -75,6 +77,7 @@ loop:;
     }
 
     if (tmp_defer_rets.data != NULL) {
+        printd("actually put here..");
         int diff = s.code.count - tmp_to_resolve;
 
         s.code.data[tmp_to_resolve] |= ((diff) << 5); // TODO this only resolves imm19 for cbz, b.cond
@@ -95,6 +98,25 @@ loop:;
             ++p;
         }
         line_end = p - 1;
+        if (tmp_put_label_nextline) {
+            tmp_put_label_nextline = false;
+            tmp_put_label = false;
+            printd("newline put label..");
+
+            tmp_put_ident = 0;
+            tmp_put_label = false;
+            char *ret;
+            asprintf(&ret, "__anonyn_%d", tmp_put_idx++);
+            tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
+
+            int diff = s.code.count - tmp_to_resolve;
+
+            s.code.data[tmp_to_resolve] |= ((diff) << 5); // TODO this only resolves imm19 for cbz, b.cond
+            tmp_to_resolve = 0;
+            macho_stab_loc(s.code.count * sizeof (u32), tmp_defer_rets);
+            free(tmp_defer_rets.data);
+            tmp_defer_rets = str_empty;
+        }
     }
     bool is_eof = line_end[2] == '\0';
     if (is_eof) {
@@ -240,7 +262,6 @@ read_type:
     } else if (str_equal_c(token, "isnt ")) {
         cond = COND_NE;
     }
-
     if (cond != COND_NV) {
         printd("compare..");
 
@@ -335,6 +356,12 @@ read_type:
             TokenStart;
             ReadToken;
             TokenEnd;
+
+            if (!Is("->")) {
+                CompileErr("Syntax Error: -> expected, but found %d", c);
+                CompileErr("next was %d", it.data[1]);
+            }
+
             if (token.len > 0) {
                 printd("branch to..");
                 strprint(token);
@@ -343,25 +370,42 @@ read_type:
                 ls_add_u32(&s.code, b_cond(0, cond));
             } else {
                 printd("anonymous label..");
+                printd("next: %d%d", it.data[0], it.data[1]);
                 tmp_to_resolve = s.code.count;
                 ls_add_u32(&s.code, b_cond(0, cflags_flip(cond)));    // tmp offset needs to be done later..
                 tmp_put_ident = ident;
                 tmp_put_label = true;
             }
 
-            if (!Is("->")) {
-                CompileErr("Syntax Error: -> expected, but found %d", c);
-                CompileErr("next was %d", it.data[1]);
-            }
             printd("next: %d", it.data[0]);
             if (it.data[0] is '\n') {
                 printd("followed by newline..");
                 if (tmp_put_label)
                     tmp_put_ident += 4;
+            } else if (tmp_put_label) {
+                printd("one lineer..");
+                tmp_put_label_nextline = true;
             }
         }
         printd("end\n");
         goto loop;
+    }
+    if (Is(">>")) {
+        if (s.jump_pair_start.has_value)
+            CompileErr("Compile Error: new >> started before closing");
+        option_u32_assign(&s.jump_pair_start, s.code.count);
+        ls_add_u32(&s.code, B);
+        printd("jump, cur was %d", s.jump_pair_start.value);
+        printd("\n");
+    } else if (Is("<<")) {
+        if (!s.jump_pair_start.has_value)
+            CompileErr("Compile Error: no preceding >>");
+        u32 val = option_u32_consume(&s.jump_pair_start);
+        u32 diff = s.code.count - val;
+        printd("jump to here, count was %d", s.code.count);
+        printd("..diff was %d", diff);
+        s.code.data[val] |= diff;
+        printd("\n");
     }
 
     char tokc = token.data[0];
@@ -500,7 +544,7 @@ read_type:
         if (regoff > 7) {
             CompileErr("Error: used up all scratch registers\n");
         }
-        if (line_end + 2 >= (src.data + src.len) || (*line_end == '>')) {
+        if (line_end + 2 >= (src.data + src.len) || (*line_end == '>' && line_end[-1] != '>')) {
             reg = regoff;
         } else {
             reg = 8 + regoff;

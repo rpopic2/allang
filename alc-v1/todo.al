@@ -9,15 +9,15 @@ add: (i32, i32 =>i32)
 //     i32 y,
 // }
 
+va :: addr i32 0 =[]
+vop :: addr c8 0 =[]
+vb :: addr i32 0 =[]
+
+a :: i32 0 =[]
+b :: i32 0 =[]
+op :: c8 0 =[]
+
 _loop:
-    va :: addr i32 0 =[]
-    vop :: addr c8 0 =[]
-    vb :: addr i32 0 =[]
-
-    a :: i32 0 =[]
-    b :: i32 0 =[]
-    op :: c8 0 =[]
-
     a =[va]
     b =[vb]
     op =[vop]
@@ -25,9 +25,9 @@ _loop:
         is -1 _break->
 
     [op]
-    is '+' -> [a], [b] +
-    is '-' -> [a], [b] -
+    is '+' -> [a], [b] + >>
     : _loop->
+    <<
 
 
     =[va]

@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 typedef i32 i19;
+typedef i32 i26;
 typedef i16 i12;
 typedef u8 u6;
 typedef u8 u5;
@@ -59,6 +60,10 @@ cflags cflags_flip(cflags f) {
     else
         CompileErr("invalid flip value of %d", f);
     return COND_NV;
+}
+
+static inline u32 branch(i26 pcrel) {
+    return B | pcrel / 4;
 }
 
 static inline u32 b_cond(i19 pcrel, cflags cond) {
