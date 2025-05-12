@@ -279,10 +279,11 @@ read_type:
                 --rewind;
             }
             printd("last thing was.. %d(%c), ", *rewind, *rewind);
-            if (*rewind is '>')
+            if (*rewind is '>' && rewind[-1] isnt '>')
                 reg = 0;
-            else if (*rewind is ']')
+            else
                 reg = 8;
+            // else if (*rewind is ']')
         }
 
         if (Is(" 0 ")) {
@@ -391,20 +392,21 @@ read_type:
         goto loop;
     }
     if (Is(">>")) {
-        if (s.jump_pair_start.has_value)
-            CompileErr("Compile Error: new >> started before closing");
-        option_u32_assign(&s.jump_pair_start, s.code.count);
+        ls_add_u32(&s.jump_pair_start, s.code.count);
         ls_add_u32(&s.code, B);
-        printd("jump, cur was %d", s.jump_pair_start.value);
+        printd("jump pair");
         printd("\n");
     } else if (Is("<<")) {
-        if (!s.jump_pair_start.has_value)
+        if (s.jump_pair_start.count == 0)
             CompileErr("Compile Error: no preceding >>");
-        u32 val = option_u32_consume(&s.jump_pair_start);
-        u32 diff = s.code.count - val;
-        printd("jump to here, count was %d", s.code.count);
-        printd("..diff was %d", diff);
-        s.code.data[val] |= diff;
+        for (int i = 0; i < s.jump_pair_start.count; ++i) {
+            u32 val = s.jump_pair_start.data[i];
+            u32 diff = s.code.count - val;
+            printd("jump to here, count was %d", s.code.count);
+            printd("..diff was %d", diff);
+            s.code.data[val] |= diff;
+        }
+        s.jump_pair_start.count = 0;
         printd("\n");
     }
 
@@ -643,7 +645,7 @@ read_type:
         if (s.code.count == 0) {
             reg1 = 0, reg2 = 1;
         }
-        u32 opc = add_shft_f(W, ADDSUB_ADD, reg, reg1, reg2, ASH_LSL, 0);
+        u32 opc = add_shft_f(W, add_or_sub, reg, reg1, reg2, ASH_LSL, 0);
         ls_add_u32(&s.code, opc);
         token_consumed = true;
         printd("\n");

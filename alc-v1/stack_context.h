@@ -35,7 +35,7 @@ typedef struct {
     u8 regs_to_save[0x10];
     int regs_to_save_size;
     usize spaces_left;
-    option_u32 jump_pair_start;
+    ls_u32 jump_pair_start;
 } stack_context;
 
 
@@ -49,7 +49,7 @@ void stack_context_new(stack_context *s) {
     s->stack_size = 0;
     s->regs_to_save_size = 0;
     s->spaces_left = 0;
-    s->jump_pair_start = (option_u32){ .has_value = false };
+    ls_new_u32(&s->jump_pair_start, 16, "jump pairs");
 }
 void stack_context_free(stack_context *s) {
     ls_delete_u32(&s->code);
@@ -58,5 +58,6 @@ void stack_context_free(stack_context *s) {
     ls_delete_nreg(&s->named_regs);
     ls_delete_obj(&s->objects);
     ls_delete_u32(&s->relocents);
+    ls_delete_u32(&s->jump_pair_start);
 }
 
