@@ -74,10 +74,10 @@ static inline bool _if_is(const char *s, str_iter *it, int *c) {
 
 void parse_scope(str src);
 
-nreg *nreg_find(stack_context *s, str token) {
+nreg *nreg_find(ls_nreg *s, str token) {
     nreg *find = NULL;
-    for (int i = 0; i < s->named_regs.count; ++i) {
-        nreg *tmp = s->named_regs.data + i;
+    for (int i = 0; i < s->count; ++i) {
+        nreg *tmp = s->data + i;
         if (str_equal(tmp->name, token)) {
             find = tmp;
         }

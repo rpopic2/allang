@@ -24,12 +24,13 @@ _loop:
     "%d %c %d"0, _scanf=>
         is -1 _break->
 
-    [op]
-    is '+' -> [a], [b] + >>
-    is '-' -> [a], [b] - >>
+    [a], [b], [op] &o
+    o is '+' -> + >>
+    o is '-' -> - >>
+    o is '*' -> * >>
+    o is '/' -> / >>
     : _loop->
     <<
-
 
     =[va]
     "%d\n"0, _printf=>

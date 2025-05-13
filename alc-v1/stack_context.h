@@ -1,7 +1,6 @@
 #pragma once
 
 #include "list.h"
-#include "option.h"
 #include "str.h"
 
 typedef enum : u8 {
@@ -36,6 +35,7 @@ typedef struct {
     int regs_to_save_size;
     usize spaces_left;
     ls_u32 jump_pair_start;
+    ls_nreg scratch_aliases;
 } stack_context;
 
 
@@ -50,6 +50,7 @@ void stack_context_new(stack_context *s) {
     s->regs_to_save_size = 0;
     s->spaces_left = 0;
     ls_new_u32(&s->jump_pair_start, 16, "jump pairs");
+    ls_new_nreg(&s->scratch_aliases, 16, "scratch register aliases (&)");
 }
 void stack_context_free(stack_context *s) {
     ls_delete_u32(&s->code);
@@ -59,5 +60,6 @@ void stack_context_free(stack_context *s) {
     ls_delete_obj(&s->objects);
     ls_delete_u32(&s->relocents);
     ls_delete_u32(&s->jump_pair_start);
+    ls_delete_nreg(&s->scratch_aliases);
 }
 

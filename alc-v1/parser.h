@@ -50,6 +50,8 @@ void parse_scope(str src) {
     int tmp_to_resolve = 0;
     bool tmp_put_label_nextline = false;
 
+    nreg *target_scratch = NULL;
+
 loop:;
     if (*it.data is '\n') {
         ident = 0;
@@ -97,6 +99,7 @@ loop:;
         while (*p != '\n' && *p != '\0') {
             ++p;
         }
+        regoff = 0;
         line_end = p - 1;
         if (tmp_put_label_nextline) {
             tmp_put_label_nextline = false;
@@ -272,6 +275,10 @@ read_type:
             printd("target_nreg was: %d", target_nreg->reg);
             reg = target_nreg->reg;
             sf = nreg_sf(target_nreg);
+        } else if (target_scratch){
+            printd("target_scratch was: %d", target_scratch->reg);
+            reg = target_scratch->reg;
+            sf = nreg_sf(target_scratch);
         } else {
             printd("target_nreg was: null..");
             char *rewind = token.data - 1;
@@ -449,7 +456,7 @@ read_type:
                     n.size = 8;
             }
 
-            nreg *find = nreg_find(&s, token);
+            nreg *find = nreg_find(&s.named_regs, token);
             n.reg = named_reg_idx;
             if (find != NULL) {
                 n.reg = find->reg;
@@ -553,6 +560,24 @@ read_type:
         }
     }
 
+    if (*it.data is '&') {
+        printd("alias..");
+        c = Next();
+        TokenStart;
+        ReadToken;
+        TokenEnd;
+        strprint(token);
+        nreg tmp = {
+            .is_addr = false,
+            .name = token,
+            .reg = reg,
+            .size = 32,
+        };
+        printd("reg was %d, %d", reg, regoff);
+        ls_add_nreg(&s.scratch_aliases, tmp);
+        token_consumed = true;
+    }
+
     if (*it.data is '[') {
         printd("load...");
         c = Next();
@@ -560,6 +585,7 @@ read_type:
         ReadToken;
         TokenEnd;
         printd("from "), strprint_nl(token);
+        printd(" to %d", reg);
 
         obj *target = obj_find(&s, token);
         size_t off = target->offset;
@@ -607,7 +633,7 @@ read_type:
 
         int reg = str_equal_c(before, "=>") ? 0 : 8; // TODO have to accept named registers..
 
-        nreg *find = nreg_find(&s, token);
+        nreg *find = nreg_find(&s.named_regs, token);
         if (find == NULL) {
             CompileErr("Error: unknown named register "), PrintErrStr(token);
         }
@@ -650,6 +676,17 @@ read_type:
         token_consumed = true;
         printd("\n");
     }
+    if (tokc is '*') {
+        c = Next();
+        u8 reg1 = 8, reg2 = 9;
+        ls_add_u32(&s.code, mul(W, 8, reg1, reg2));
+        token_consumed = true;
+    } else if (tokc is '/') {
+        c = Next();
+        u8 reg1 = 8, reg2 = 9;
+        ls_add_u32(&s.code, sdiv(W, 8, reg1, reg2));
+        token_consumed = true;
+    }
 
     bool is_minus = false;
     if (tokc is '-' && IsNum(token.data[1])) {
@@ -675,7 +712,15 @@ read_type:
     }
 
     if (IsAlpha(tokc)) {
-        nreg *find = nreg_find(&s, token);
+        nreg *find = nreg_find(&s.named_regs, token);
+        if (find is NULL) {
+            target_scratch = nreg_find(&s.scratch_aliases, token);
+            if (target_scratch is NULL) {
+                CompileErr("Error: unknown named or scratch alias register(mov) "), PrintErrStr(token);
+            } else {
+                goto loop;
+            }
+        }
 
         if (find != NULL) {
             if (find->is_addr == stack_addr) {
@@ -688,7 +733,7 @@ read_type:
             printd("..move to reg %d", reg);
             token_consumed = true;
         } else {
-            CompileErr("Error: unknown named register "), PrintErrStr(token);
+            CompileErr("Error: unknown named register(mov) "), PrintErrStr(token);
         }
     } else if (tokc is '"') {
         // is going to be a string
@@ -740,7 +785,6 @@ read_type:
         token_consumed = true;
         goto loop;
     }
-    regoff = 0;
 
     if (token.len == 0 && (c == '\n' || c == '\0'))
         token_consumed = true;

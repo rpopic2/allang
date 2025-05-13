@@ -194,7 +194,9 @@ static inline u32 cmp(sf_t sf, u8 reg, i12 literal, bool negate) {
 #define ADD_EXT 0x0b200000
 #define ADD_SHFT 0x0b000000
 #define SUB_SHFT 0x4b000000
-// 0b010000 
+#define MADD 0x1b000000
+#define SDIV 0x1ac00c00
+
 typedef enum {
     ASH_LSL = 0b00,
     ASH_LSR = 0b01,
@@ -257,6 +259,14 @@ static inline u32 adrp(u8 reg) {
 
 static inline u32 add_imm(sf_t sf, u8 reg1, u8 reg2, u16 imm12) {
     return ADD_IMM | sf << 31 | imm12 << 10 | reg2 << 5 | reg1;
+}
+
+static inline u32 mul(sf_t sf, u5 rd, u5 rn, u5 rm) {
+    return MADD | sf << 31 | rm << 16 | 0b11111 << 10 | rn << 5 | rd;
+}
+
+static inline u32 sdiv(sf_t sf, u5 rd, u5 rn, u5 rm) {
+    return SDIV | sf << 31 | rm << 16 | rn << 5 | rd;
 }
 
 // other utils
