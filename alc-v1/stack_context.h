@@ -4,13 +4,13 @@
 #include "str.h"
 
 typedef enum : u8 {
-    not_addr, addr_addr, stack_addr
+    ptype_not_addr, ptype_addr_addr, ptype_stack_addr
 } ptype;
 
 typedef struct {
     str name;
     u8 reg;
-    u8 size;
+    u8 bsize;
     ptype is_addr;
 } nreg; // named registers
 ls (nreg);

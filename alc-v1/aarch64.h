@@ -274,7 +274,7 @@ static inline u32 sdiv(sf_t sf, u5 rd, u5 rn, u5 rm) {
 
 sf_t nreg_sf(nreg *n) {
     sf_t op_size = W;
-    u8 size = n->size;
+    u8 size = n->bsize;
     if (size <= 32) {
         op_size = W;
     } else if (size <= 64) { 

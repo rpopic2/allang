@@ -4,10 +4,12 @@
 add: (i32, i32 =>i32)
     +
 
-// struct point {
-//     i32 x,
-//     i32 y,
-// }
+struct point {
+    i32 x,
+    i32 y,
+}
+
+// p :: point { 1, 2 }
 
 va :: addr i32 0 =[]
 vop :: addr c8 0 =[]

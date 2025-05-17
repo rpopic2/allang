@@ -28,7 +28,7 @@ void strprint_nl(str s) {
     }
 }
 
-#define str_from_c(X) (str){(X), strlen(X)}
+#define str_from_c(X) (str){ (X), strlen((X)) }
 
 bool str_equal(str s1, str s2) {
     if (s1.len != s2.len)

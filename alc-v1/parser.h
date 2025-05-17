@@ -10,9 +10,9 @@
 
 #include "aarch64.h"
 #include "file.h"
-#include "option.h"
 #include "parser_util.h"
 #include "slice.h"
+#include "stack_context.h"
 #include "str.h"
 #include "typedefs.h"
 #include "list.h"
@@ -22,10 +22,12 @@
 
 void parse(str src) {
     macho_context_init();
+    types_init();
     ls_new_char(&strings, 1024, "string literals");
     ls_new_resolv(&resolves, 1024, "deferred address calculations");
 
     parse_scope(src);
+    types_destroy();
 }
 
 void parse_scope(str src) {
@@ -135,33 +137,46 @@ loop:;
         TokenEnd;
 
         printd("name of '"), strprint_nl(token), printd("'");
-        if (Next() == '{') {
-            Next(), c = Next();
-            if (Is("    ")) {
-loop_read_type:
-                read_type(&it, &c);
-                TokenStart;
-                ReadToken;
-                TokenEnd;
-                printd("name is '"), strprint_nl(token), printd("', ");
-                c = Next();
-                while (c is '\n' or c is ' ') {
-                    c = Next();
-                }
-                if (c == '}') {
-                    printd("end of struct\n");
-                    goto brk;
-                }
-                printd("followed by...");
-                goto loop_read_type;
-            } else {
-                CompileErr("Syntax error: indentation required after struct.");
-            }
-        } else {
+        if (Next() != '{') {
             CompileErr("Syntax error: { expexted after the struct declaration");
         }
+        Next(), c = Next();
+
+        type_info structure = {
+            .bsize = 0, .addr_type = ptype_not_addr, .name = token
+        };
+        ls_new_voidp(&structure.members, 8, "structure");
+
+        if (Is("    ")) {   // TODO need to accept one liner
+loop_read_type:;
+               type_info *t = read_type(&it, &c);
+               structure.bsize += t->bsize;
+               ls_add_voidp(&structure.members, t);
+               TokenStart;
+               ReadToken;
+               TokenEnd;
+               printd("name is '"), strprint_nl(token), printd("', ");
+               c = Next();
+               while (c is '\n' or c is ' ') {
+                   c = Next();
+               }
+               if (c == '}') {
+                   printd("end of struct\n");
+                   goto brk;
+               }
+               printd("followed by...");
+               goto loop_read_type;
+        } else {
+            CompileErr("Syntax error: indentation required after struct.");
+        }
+
     brk:
 
+        printd("test");
+        for (int i = 0; i < structure.members.count; ++i) {
+            type_info *p = structure.members.data[i];
+            printd(", %d: ", i), strprint_nl(p->name);
+        }
         printd("\n");
         goto loop;
     }
@@ -356,7 +371,7 @@ read_type:
             }
             printd("with %d..", number);
             if (target_nreg isnt NULL) {
-                printd("target_nreg: %d, %d", target_nreg->reg, target_nreg->size);
+                printd("target_nreg: %d, %d", target_nreg->reg, target_nreg->bsize);
             }
             ls_add_u32(&s.code, cmp(sf, reg, number, is_minus));
 
@@ -426,35 +441,32 @@ read_type:
             printd("..is expression\n");
 
             nreg n = {
-                .name = name, .size = 32, .is_addr = not_addr,
+                .name = name, .bsize = 32, .is_addr = ptype_not_addr,
             };
             if (Is("stack")) {
                 printd("type stack ");
                 c = Next();
-                n.size = 64;
-                n.is_addr = stack_addr;
+                n.bsize = 64;
+                n.is_addr = ptype_stack_addr;
             } else if (Is("addr")) {
                 printd("type addr ");
                 c = Next();
-                n.size = 64;
-                n.is_addr = addr_addr;
+                n.bsize = 64;
+                n.is_addr = ptype_addr_addr;
             }
-            if (Is("i64")) {
-                printd("type i64 ");
-                c = Next();
-                if (!n.is_addr)
-                    n.size = 64;
-            } else if (Is("i32")) {
-                printd("type i32 ");
-                c = Next();
-                if (!n.is_addr)
-                    n.size = 32;
-            } else if (Is("c8")) {
-                printd("type c8");
-                c = Next();
-                if (!n.is_addr)
-                    n.size = 8;
+            TokenStart;
+            ReadToken;
+            TokenEnd;
+            c = Next();
+            printd("tok: " ), strprint_nl(token), printd(";");
+            type_info *t = type_find(token);
+            if (t is NULL) {
+                printd("invalid type");
+                goto loop;
             }
+            printd("type "), strprint_nl(t->name), printd(" ");
+            if (!n.is_addr)
+                n.bsize = t->bsize;
 
             nreg *find = nreg_find(&s.named_regs, token);
             n.reg = named_reg_idx;
@@ -472,10 +484,10 @@ read_type:
                 printd("line end was %c, is_stack_alloc %d..", line_end[-2], is_stack_alloc);
 
                 if (is_stack_alloc) {
-                    n.is_addr = stack_addr;
+                    n.is_addr = ptype_stack_addr;
                 }
 
-                if (n.is_addr isnt stack_addr && !is_stack_alloc) {
+                if (n.is_addr isnt ptype_stack_addr && !is_stack_alloc) {
                     printd("inc reg idx..");
                     s.regs_to_save[s.regs_to_save_size++] = n.reg;
                     named_reg_idx += 1;
@@ -510,7 +522,7 @@ read_type:
             ls_add_u32(&s.code, BL);
 
             if (is_target_nreg(&it)) {
-                printd("target: %d", target_nreg->size);
+                printd("target: %d", target_nreg->bsize);
                 sf_t sf = nreg_sf(target_nreg);
                 ls_add_u32(&s.code, mov_reg(sf, target_nreg->reg, 0));
             }
@@ -534,7 +546,7 @@ read_type:
             ls_add_u32(&s.code, B);
 
             if (is_target_nreg(&it)) {
-                printd("target: %d", target_nreg->size);
+                printd("target: %d", target_nreg->bsize);
                 sf_t sf = nreg_sf(target_nreg);
                 ls_add_u32(&s.code, mov_reg(sf, target_nreg->reg, 0));
             }
@@ -571,7 +583,7 @@ read_type:
             .is_addr = false,
             .name = token,
             .reg = reg,
-            .size = 32,
+            .bsize = 32,
         };
         printd("reg was %d, %d", reg, regoff);
         ls_add_nreg(&s.scratch_aliases, tmp);
@@ -606,7 +618,7 @@ read_type:
         printd("toklen: %zu..", token.len);
 
         if (token.len is 0) {
-            size_t siz_bits = target_nreg->size;
+            size_t siz_bits = target_nreg->bsize;
             size_t siz_bytes = siz_bits / 8;
             printd("new allocation.. from %d, %zu..", reg, siz_bits);
             sf_t reg_sf = nreg_sf(target_nreg);
@@ -638,7 +650,7 @@ read_type:
             CompileErr("Error: unknown named register "), PrintErrStr(token);
         }
         sf_t reg_size = nreg_sf(find);
-        if (find->is_addr == stack_addr) {
+        if (find->is_addr == ptype_stack_addr) {
 
             obj *find = obj_find(&s, token);
             if (find == NULL) {
@@ -646,7 +658,7 @@ read_type:
             }
 
             ls_add_u32(&s.code, str_imm(reg_size, reg, SP, find->offset));
-        } else if (find->is_addr == addr_addr) {
+        } else if (find->is_addr == ptype_addr_addr) {
             ls_add_u32(&s.code, str_imm(reg_size, reg, find->reg, 0));
         } else {
             CompileErr("Error: trying to store to non-address register\n");
@@ -723,7 +735,7 @@ read_type:
         }
 
         if (find != NULL) {
-            if (find->is_addr == stack_addr) {
+            if (find->is_addr == ptype_stack_addr) {
                 obj *find = obj_find(&s, token);
                 ls_add_u32(&s.code, add_imm(X, reg, SP, find->offset));
             } else {

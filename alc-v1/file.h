@@ -23,10 +23,16 @@ str read_source() {
     long src_len = file_len(src);
 
     char *src_buf = malloc(src_len);
-    if (src_buf == NULL)
+    if (src_buf == NULL) {
+        printf("malloc failed");
         exit(2);
+    }
 
-    fread(src_buf, sizeof (char), src_len, src);
+    unsigned long byte_read = fread(src_buf, sizeof (char), src_len, src);
+    if (byte_read > src_len) {
+        printf("buffer overflow");
+        exit(2);
+    }
     fclose(src);
 
     str tmp = { .data = src_buf, .len = src_len };
