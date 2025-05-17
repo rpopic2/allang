@@ -172,6 +172,7 @@ loop_read_type:;
 
     brk:
 
+        ls_add_type_info(&types, structure);
         printd("test");
         for (int i = 0; i < structure.members.count; ++i) {
             type_info *p = structure.members.data[i];
@@ -458,12 +459,13 @@ read_type:
             ReadToken;
             TokenEnd;
             c = Next();
-            printd("tok: " ), strprint_nl(token), printd(";");
             type_info *t = type_find(token);
             if (t is NULL) {
-                printd("invalid type");
+                printd("invalid type: ");
+                strprint_nl(token), printd(".");
                 goto loop;
             }
+            n.type = t;
             printd("type "), strprint_nl(t->name), printd(" ");
             if (!n.is_addr)
                 n.bsize = t->bsize;
@@ -666,7 +668,7 @@ read_type:
         c = Next();
         goto loop;
     }
-
+// arithmetics
     addsub add_or_sub = ADDSUB_NONE;
     if (tokc is '+')
         add_or_sub = ADDSUB_ADD;
@@ -700,6 +702,7 @@ read_type:
         token_consumed = true;
     }
 
+// literals
     bool is_minus = false;
     if (tokc is '-' && IsNum(token.data[1])) {
         printd("minus..");
@@ -721,6 +724,31 @@ read_type:
         ls_add_u32(&s.code, mov(sf, reg, number));
         token_consumed = true;
         printd("value of '%ld to r%d(sf=%d)'", number, reg, sf);
+    }
+    if (tokc is '{') {
+        printd("start of struct literal..");
+        c = Next();
+        c = Next();
+        type_info *t = target_nreg->type;
+        if (t->bsize <= 64) {
+            u32 offset = 0;
+            for (int i = 0; i < t->members.count; ++i) {
+                type_info *u = t->members.data[i];
+                int n = read_int(token, &it, c);
+                printd("<%d>, ", n);
+                if (i < t->members.count - 1 && *it.data != ',')
+                    CompileErr("Syntax Error: Comma expected at struct literal");
+                c = Next();
+                c = Next();
+                // TODO stub impl just for point, with two i32s, next we'll do stub impl for str and generalize.. may need to refer to aapcs
+                if (offset == 0) {
+                    ls_add_u32(&s.code, mov(X, reg, n));
+                } else {
+                    ls_add_u32(&s.code, movk_imm(X, reg, n, 32));
+                }
+                offset += u->bsize;
+            }
+        }
     }
 
     if (IsAlpha(tokc)) {
@@ -801,7 +829,7 @@ read_type:
     if (token.len == 0 && (c == '\n' || c == '\0'))
         token_consumed = true;
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
-        CompileErr("token may be not consumed %d", c), strprint(token), printd("\n");
+        CompileErr("token is not consumed %d", c), strprint(token), printd("\n");
     if (c == '\n') {
         // printd("\\n\n");
         // ident = 0;

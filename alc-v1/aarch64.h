@@ -177,6 +177,7 @@ void make_prelude(stack_context *s, u8 r1, u8 r2) {
 #define SUB 0xd1000000
 #define SUBS_IMM 0x7100001f
 #define ADDS_IMM 0x3100001f
+#define MOVK_IMM 0x72800000
 
 static inline u32 cmn(sf_t sf, u8 reg, i12 literal) {
     return ADDS_IMM | sf << 31 | literal << 10 | reg << 5;
@@ -184,6 +185,10 @@ static inline u32 cmn(sf_t sf, u8 reg, i12 literal) {
 
 static inline u32 cmp(sf_t sf, u8 reg, i12 literal, bool negate) {
     return ADDS_IMM | !negate << 30 | sf << 31 | literal << 10 | reg << 5;
+}
+
+static inline u32 movk_imm(sf_t sf, u5 rd, i16 imm, u8 lsl) {
+    return MOVK_IMM | sf << 31 | (lsl / 16) << 21 | imm << 5 | rd;
 }
 
 

@@ -9,7 +9,7 @@ struct point {
     i32 y,
 }
 
-// p :: point { 1, 2 }
+p :: point { 1, 2 }
 
 va :: addr i32 0 =[]
 vop :: addr c8 0 =[]

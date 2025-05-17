@@ -7,11 +7,13 @@ typedef enum : u8 {
     ptype_not_addr, ptype_addr_addr, ptype_stack_addr
 } ptype;
 
+struct type_info;
 typedef struct {
     str name;
     u8 reg;
     u8 bsize;
     ptype is_addr;
+    void *type; // type_info *
 } nreg; // named registers
 ls (nreg);
 
