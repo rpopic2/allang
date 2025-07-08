@@ -72,7 +72,7 @@ static inline bool _if_is(const char *s, str_iter *it, int *c) {
     return false;
 }
 
-void parse_scope(str src);
+void parse_scope(str src, bool has_params);
 
 nreg *nreg_find(ls_nreg *s, str token) {
     nreg *find = NULL;

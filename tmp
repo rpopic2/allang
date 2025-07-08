@@ -1,0 +1,64 @@
+// start canvas
+    canvas_group. { time: 0.7, frame_time: 1.0f @/@ 60.0f }
+    fade_in=>
+        | "fade_sound"
+            audio.play=>
+
+    "win_sound"
+    audio.play=>
+
+// start hello world
+    "hello world"
+    std.print=>
+
+
+shared_resource :: std.string std.array.new=>
+~ shared_resource. delete=>
+
+lock ::
+    shared_resource
+    std.mutex.lock=>
+~ lock. unlock=>
+
+#alias std.
+save_page: (.mutex .string .array shared_resource=>)
+    { seconds : 2 } .thread.sleep=>
+    [shared_resource.get] "fake content" add=>
+
+save_page=>
+
+[user.seasons.count] > 0
+and [shada.local.seen_season_recap] < seasons.CUR_SEASON_ID ->
+    // do sth
+
+is_on ? "contracted" : "sold-out"
+. localize=> asset_manager.load=> %
+
+soldout_image. %
+set_sprite=>
+
+//
+
+[is_on] ? "contracted" : "sold-out"
+asset_manager.load=> %sprite
+
+soldout_image. %sprite
+set_sprite=>
+
+//
+
+sprite ::
+    [is_on] ? "contracted" : "sold-out"
+    asset_manager.load=>
+
+soldout_image. sprite
+set_sprite=>
+
+//
+
+%sprite ::
+    [is_on] ? "contracted" : "sold-out"
+    asset_manager.load=>
+
+soldout_image. %sprite
+set_sprite=>

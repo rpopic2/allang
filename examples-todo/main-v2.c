@@ -4,7 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
-const char * const FILE_NAME = "todo.txt";
+const char *FILE_NAME = "todo.txt";
 
 int filelen(FILE *file) {
     fseek(file, 0L, SEEK_END);
@@ -48,10 +48,9 @@ char *find_line_end(char *ptr) {
 
 int main(int argc, char *argv[]) {
     if (argc == 1) {
-        FILE *file;
-        char *buf;
-        int filelen;
-        read_file(&file, &buf, &filelen);
+        FILE *file = fopen(FILE_NAME, "r");
+        char *buf = malloc(1024);
+        int len = filelen(file);
         printf("%s", buf);
         exit(0);
     }

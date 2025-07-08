@@ -75,32 +75,36 @@ type_info *read_type(str_iter *it, int *c) {
     printd("read type\n");
     // str_iter it = *pit;
     // int c = *pc;
-    type_info info = {
+    type_info tmp_info = {
 
     };
     if (_if_is("stack", it, c)) {
-        printd("type stack ");
+        printd("type isstack ");
         *c = iter_next(it);
-        info.bsize = 64;
-        info.addr_type = ptype_stack_addr;
+        tmp_info.bsize = 64;
+        tmp_info.addr_type = ptype_stack_addr;
     } else if (_if_is("addr", it, c)) {
-        printd("type addr ");
+        printd("type is addr ");
         *c = iter_next(it);
-        info.bsize = 64;
-        info.addr_type = ptype_addr_addr;
+        tmp_info.bsize = 64;
+        tmp_info.addr_type = ptype_addr_addr;
     }
 
     str name = { .data = it->data };
-    while (*it->data != ' ' && *it->data != '\n' && *it->data != '\0') {
+    while (*it->data != ' ' && *it->data != '\n' && *it->data != '\0' && *it->data != ')') {
         ++it->data;
     };
     name.len = it->data - name.data;
 
     type_info *find = type_find(name);
-    printd("type find %d", find->bsize); strprint(find->name);
-    if (find)
-        return find;
-    return NULL;
+    if (find == NULL) {
+        return NULL;
+    }
+    if (tmp_info.addr_type != ptype_not_addr) {
+      find->addr_type = tmp_info.addr_type;
+      find->bsize = tmp_info.bsize;
+    }
+    return find;
 
     // if (_if_is("i64", it, c)) {
     //     printd("type i64 ");

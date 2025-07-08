@@ -26,12 +26,13 @@ void parse(str src) {
     ls_new_char(&strings, 1024, "string literals");
     ls_new_resolv(&resolves, 1024, "deferred address calculations");
 
-    parse_scope(src);
+    parse_scope(src, false);
     types_destroy();
 }
 
-void parse_scope(str src) {
+void parse_scope(str src, bool has_params) {
     printd("start parse\n");
+
     str_iter it = into_iter(src);
     str token = {};
 
@@ -53,6 +54,69 @@ void parse_scope(str src) {
     bool tmp_put_label_nextline = false;
 
     nreg *target_scratch = NULL;
+
+    if (has_params) {
+        int c = Next();
+        if (it.data[1] == '(') {
+            Next();
+            Next();
+            TokenStart;
+            ReadToken;
+            TokenEnd;
+            printd("is a routine, args ");
+            
+            int param_index = 0;
+read_type:;
+            if (it.data[0] is ')') {
+                printd("end of args\n");
+                goto ok;
+            }
+            type_info *t = read_type(&it, &c);
+            if (t is NULL) {
+                goto loop;
+            }
+            printd("type of "), strprint_nl(t->name), printd(" (size: %d)\n", t->bsize);
+
+            Next();
+            TokenStart;
+            ReadToken;
+            TokenEnd;
+            printd("param name: '"), strprint_nl(token), printd("'\n");
+
+            nreg n = {
+                .name = token, .type = t, .reg = named_reg_idx, .bsize = t->bsize
+            };
+            ls_add_nreg(&s.named_regs, n);
+            named_reg_idx += 1;
+
+            sf_t sf = nreg_sf(&n);
+            ls_add_u32(&s.code, mov_reg(sf, n.reg, param_index));
+
+            param_index += 1;
+
+            if (Is(", ")) {
+                goto read_type;
+            }
+            if (Is(" =>")) {
+                printd("return ");
+                goto read_type;
+            }
+            goto read_type;
+        } else {
+            printd("add to local");
+            if (token.len is 0) {
+                char *ret;
+                asprintf(&ret, "__anonyn_%d", tmp_put_idx++);
+                token = (str){ .data = ret, .len = strlen(ret) };
+            }
+            macho_stab_loc(s.code.count * sizeof (u32), token);
+
+            goto loop;
+        }
+ok:;
+        c = Next(); // \n
+        printd("next was %d", c);
+    }
 
 loop:;
     if (*it.data is '\n') {
@@ -147,33 +211,42 @@ loop:;
         };
         ls_new_voidp(&structure.members, 8, "structure");
 
-        if (Is("    ")) {   // TODO need to accept one liner
+        while (c == ' ' || c == '\n') {
+            c = Next();
+        }
+        if (c == '}') {
+            printd("empty struct\n");
+            goto brk;
+        } else if (Is("    ")) {   // TODO need to accept one liner
 loop_read_type:;
-               type_info *t = read_type(&it, &c);
-               structure.bsize += t->bsize;
-               ls_add_voidp(&structure.members, t);
-               TokenStart;
-               ReadToken;
-               TokenEnd;
-               printd("name is '"), strprint_nl(token), printd("', ");
-               c = Next();
-               while (c is '\n' or c is ' ') {
-                   c = Next();
-               }
-               if (c == '}') {
-                   printd("end of struct\n");
-                   goto brk;
-               }
-               printd("followed by...");
-               goto loop_read_type;
+                type_info *t = read_type(&it, &c);
+                if (t is NULL) {
+                    CompileErr("Syntax error: invalid type: "), strprint(token), printd("\n");
+                    goto loop;
+                }
+                structure.bsize += t->bsize;
+                ls_add_voidp(&structure.members, t);
+                TokenStart;
+                ReadToken;
+                TokenEnd;
+                printd("name is '"), strprint_nl(token), printd("', ");
+                c = Next();
+                while (c is '\n' or c is ' ') {
+                  c = Next();
+                }
+                if (c == '}') {
+                  printd("end of struct\n");
+                  goto brk;
+                }
+                printd("followed by...");
+                goto loop_read_type;
         } else {
-            CompileErr("Syntax error: indentation required after struct.");
+            CompileErr("Syntax error: indentation required after struct or '}' for empty struct.");
         }
 
     brk:
 
         ls_add_type_info(&types, structure);
-        printd("test");
         for (int i = 0; i < structure.members.count; ++i) {
             type_info *p = structure.members.data[i];
             printd(", %d: ", i), strprint_nl(p->name);
@@ -200,51 +273,9 @@ loop_read_type:;
         // c = Next();
         printd("static label '"), strprint_nl(token); printd("', ");
 
+        fat f = {_objcode, objcode};
+        macho_stab_ext(f, token);
 
-        fat f = { _objcode, objcode };
-        if (it.data[1] == '(') {
-            Next();
-            printd("it's a routine, args ");
-            macho_stab_ext(f, token);
-            Next();
-            TokenStart;
-            ReadToken;
-            TokenEnd;
-            // printd("arg1: "), strprint(token), printd(";");
-read_type:
-            if (Is("i32")) {    // TODO more types, it does nothing
-                printd("type of i32 ");
-            } else if (Is("c8")) {
-                printd("type of c8 ");
-            } else if (Is("FILE")) {
-                printd("type of FILE ");
-            } else if (Is("addr")) {
-                Next();
-                printd("type of addr ");
-                goto read_type;
-            }
-            printd(":%x:", it.data[0]);
-            if (Is(", ")) {
-                goto read_type;
-            }
-            if (Is(" =>")) {
-                printd("return ");
-                goto read_type;
-            }
-        } else {
-            printd("add to local");
-            if (token.len is 0) {
-                char *ret;
-                asprintf(&ret, "__anonyn_%d", tmp_put_idx++);
-                token = (str){ .data = ret, .len = strlen(ret) };
-            }
-            macho_stab_loc(s.code.count * sizeof (u32), token);
-
-            goto loop;
-        }
-
-        c = Next(); // )
-        c = Next(); // \n
         str nextsrc = (str){ it.data };
 
         for (int i = nextsrc.len; i < src.len; ++i) {
@@ -261,7 +292,7 @@ read_type:
         strprint(nextsrc);
         printd("end src\n");
 
-        parse_scope(nextsrc);
+        parse_scope(nextsrc, true);
         --depth;
         printd("\n*** endofrt\n");
 
@@ -461,7 +492,7 @@ read_type:
             c = Next();
             type_info *t = type_find(token);
             if (t is NULL) {
-                printd("invalid type: ");
+                CompileErr("Compile error: invalid type: ");
                 strprint_nl(token), printd(".");
                 goto loop;
             }
@@ -748,6 +779,8 @@ read_type:
                 }
                 offset += u->bsize;
             }
+        } else {
+            CompileErr("Error: struct literal not implemented for >64 bits\n");
         }
     }
 

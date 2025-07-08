@@ -1,44 +1,22 @@
-// put_todo: (int n, str todo)
-// 	n: todo print=>
+struct file {
 
-add: (i32, i32 =>i32)
-    +
-
-struct point {
-    i32 x,
-    i32 y,
 }
+struct void { }
 
-p :: point { 1, 2 }
+filelen: (addr file File =>i32 Retval)
+    File, 0, 2 _fseek=>
+    Length :: i32 File _ftell=>
+    File, 0, 0 _fseek=>
+    Length
 
-va :: addr i32 0 =[]
-vop :: addr c8 0 =[]
-vb :: addr i32 0 =[]
+Va :: stack i32 0 =[]
 
-a :: i32 0 =[]
-b :: i32 0 =[]
-op :: c8 0 =[]
+File :: addr file "todo.txt"0, "rw"0 _fopen=>
+Buffer :: addr void 1024 _malloc=>
+File_Length :: i32 File filelen=>
+File_Length =[Va]
+"%d\n"0 _printf=>
 
-_loop:
-    a =[va]
-    b =[vb]
-    op =[vop]
-    "%d %c %d"0, _scanf=>
-        is -1 _break->
-
-    [a], [b], [op] &o
-    o is '+' -> + >>
-    o is '-' -> - >>
-    o is '*' -> * >>
-    o is '/' -> / >>
-    : _loop->
-    <<
-
-    =[va]
-    "%d\n"0, _printf=>
-
-    _loop->
-
-    _break:
+File _fclose=>
 
 0
