@@ -30,6 +30,22 @@ void parse(str src) {
     types_destroy();
 }
 
+void add_nreg(stack_context *s, str type_name, str param_name, int from_reg, ptype addr_type, int bsize, u8 *named_reg_idx) {
+    type_info *t = type_find(type_name);
+    nreg n = {
+        .name = param_name,
+        .type = t,
+        .reg = *named_reg_idx,
+        .is_addr = addr_type,
+        .bsize = bsize
+    };
+    s->regs_to_save[s->regs_to_save_size++] = n.reg;
+    ls_add_nreg(&s->named_regs, n);
+    sf_t sf = nreg_sf(&n);
+    ls_add_u32(&s->code, mov_reg(sf, n.reg, from_reg));
+    *named_reg_idx += 1;
+}
+
 void parse_scope(str src, bool has_params) {
     printd("start parse\n");
 
@@ -75,9 +91,10 @@ read_type:;
             if (t is NULL) {
                 goto loop;
             }
-            printd("type of "), strprint_nl(t->name), printd(" (size: %d)\n", t->bsize);
+            printd("type of "), strprint_nl(t->name), printd(" (size: %d)", t->bsize);
 
-            Next();
+            c = Next();
+            printd("next was %d", it.data[0]);
             TokenStart;
             ReadToken;
             TokenEnd;
@@ -297,6 +314,15 @@ loop_read_type:;
         printd("\n*** endofrt\n");
 
         goto loop;
+    }
+
+    if (Is("(i32 Argc, addr addr c8 Argv)")) {
+        printd("read args\n");
+        if (main_defined) {
+            CompileErr("Error: Arguments must be declared before main code\n");
+        }
+        add_nreg(&s, str_from_c("i32"), str_from_c("Argc"), 0, ptype_not_addr, 64, &named_reg_idx); // w0
+        add_nreg(&s, str_from_c("c8"), str_from_c("Argv"), 1, ptype_addr_addr_addr, 64, &named_reg_idx); // x1
     }
 
     if (!main_defined && token.len != 0 && depth == 0) {

@@ -73,8 +73,7 @@ type_info *type_find(str name) {
 
 type_info *read_type(str_iter *it, int *c) {
     printd("read type\n");
-    // str_iter it = *pit;
-    // int c = *pc;
+    
     type_info tmp_info = {
 
     };
@@ -83,11 +82,18 @@ type_info *read_type(str_iter *it, int *c) {
         *c = iter_next(it);
         tmp_info.bsize = 64;
         tmp_info.addr_type = ptype_stack_addr;
+    } else if (_if_is("addr addr", it, c)) {
+        printd("type is addr addr ");
+        *c = iter_next(it);
+        tmp_info.bsize = 64;
+        tmp_info.addr_type = ptype_addr_addr_addr;
     } else if (_if_is("addr", it, c)) {
         printd("type is addr ");
         *c = iter_next(it);
         tmp_info.bsize = 64;
         tmp_info.addr_type = ptype_addr_addr;
+
+
     }
 
     str name = { .data = it->data };
@@ -105,23 +111,5 @@ type_info *read_type(str_iter *it, int *c) {
       find->bsize = tmp_info.bsize;
     }
     return find;
-
-    // if (_if_is("i64", it, c)) {
-    //     printd("type i64 ");
-    //     *c = iter_next(it);
-    //     if (!info.addr_type)
-    //         info.size = 64;
-    // } else if (_if_is("i32", it, c)) {
-    //     printd("type i32 ");
-    //     *c = iter_next(it);
-    //     if (!info.addr_type)
-    //         info.size = 32;
-    // } else {
-    //     char tmp = *it->data;
-    //     printd("%c(%d)", tmp, tmp);
-    // }
-    // // *pit = it;
-    // // *pc = c;
-    // return info;
 }
 

@@ -12,7 +12,7 @@ file :: addr "easy.al"0, "r"0 _fopen=>
 buf :: addr 1024 _malloc=>
     is 0 -> "malloc failed"0 _printf=>
 
-filelen :: buf, 1, 1024, file _fread=>
+filelen :: i32 buf, 1, 1024, file _fread=>
 
 
 va :: stack i64 filelen =[]

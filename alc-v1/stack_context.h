@@ -4,7 +4,7 @@
 #include "str.h"
 
 typedef enum : u8 {
-    ptype_not_addr, ptype_addr_addr, ptype_stack_addr
+    ptype_not_addr, ptype_addr_addr, ptype_stack_addr, ptype_addr_addr_addr,
 } ptype;
 
 struct type_info;
