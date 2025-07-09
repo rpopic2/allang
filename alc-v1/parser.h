@@ -136,7 +136,7 @@ ok:;
     }
 
 loop:;
-    if (*it.data is '\n') {
+    if (*it.data is '\n' && it.data[1] isnt '\n') {
         ident = 0;
         while (it.data[1] is ' ') {
             ++it.data;
@@ -624,7 +624,8 @@ loop_read_type:;
         if (regoff > 7) {
             CompileErr("Error: used up all scratch registers\n");
         }
-        if (line_end + 2 >= (src.data + src.len) || (*line_end == '>' && line_end[-1] != '>')) {
+        if (line_end + 3 >= (src.data + src.len) || (*line_end == '>' && line_end[-1] != '>' && line_end[-2] != ' ')) {
+            printd("-3 was %c", line_end[-3]);
             reg = regoff;
         } else {
             reg = 8 + regoff;
