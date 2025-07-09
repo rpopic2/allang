@@ -273,7 +273,13 @@ loop_read_type:;
     }
 
     if (*token.data != '\n' && token.len != 1) {
-        printd("token '"), strprint(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
+        printd("token '"), strprint_nl(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
+    }
+
+    if (str_equal_c(token, "ret")) {
+        printd("ret\n");
+        ls_add_u32(&s.code, RET);
+        goto loop;
     }
 
     if (Is("//")) {
@@ -624,7 +630,9 @@ loop_read_type:;
         if (regoff > 7) {
             CompileErr("Error: used up all scratch registers\n");
         }
-        if (line_end + 3 >= (src.data + src.len) || (*line_end == '>' && line_end[-1] != '>' && line_end[-2] != ' ')) {
+        if (line_end + 3 >= (src.data + src.len)
+            || (*line_end == '>' && line_end[-1] != '>' && line_end[-2] != ' ')
+            || (str_equal_c((str){it.data + 1, 3}, "ret"))) {
             printd("-3 was %c", line_end[-3]);
             reg = regoff;
         } else {

@@ -28,5 +28,6 @@ Argc is 1 ->
     "todo.txt:\n %s\n"0, _printf=>
 
     File _fclose=>
+    0 ret
 
 0
