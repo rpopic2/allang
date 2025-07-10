@@ -100,9 +100,10 @@ bool is_target_nreg(str_iter *it) {
     return (target_nreg != NULL && it->data[0] == '\n');
 }
 
-int read_int(str token, str_iter *rit, char c) {
+int read_int(str token, str_iter *rit) {
     bool is_minus = false;
     str_iter it = *rit;
+    char c = *it.data;
     int number = 0;
 
     if (!IsNum(c) && c != '-') {
@@ -125,6 +126,9 @@ int read_int(str token, str_iter *rit, char c) {
         strprint(token);
     }
     number = strtol(token.data, &it.data, 10);
+    if (is_minus) {
+        number = -number;
+    }
     *rit = it;
     return number;
 }

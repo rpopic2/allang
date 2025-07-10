@@ -664,13 +664,51 @@ loop_read_type:;
         TokenStart;
         ReadToken;
         TokenEnd;
-        printd("from "), strprint_nl(token);
-        printd(" to %d", reg);
+        printd("from "), strprint_nl(token), printd(" to %d", reg);
 
         obj *target = obj_find(&s, token);
-        size_t off = target->offset;
-        ls_add_u32(&s.code, ldr_size(reg, SP, off, (target->size / 8)));
+        if (target == NULL) {
+            nreg *nreg_target = nreg_find(&s.named_regs, token);
+            int offset = 0;
+            if (nreg_target != NULL) {
+                if (c is ',') {
+                    c = Next(), c = Next();
+                    offset = read_int(token, &it);
+                    printd("offset int was %d", offset);
+                    c = *it.data;
+                    if (c isnt ' ') {
+                        CompileErr("Syntax Error: space expected");
+                        goto loop;
+                    }
+                    c = Next();
+                    if (Is("addr")) {
+                        offset *= ADDRESS_SIZE;
+                    } else {
+                        type_info *tinfo = read_type(&it, &c);
+                        if (tinfo == NULL) {
+                            CompileErr("Unknown type in offset expression");
+                            goto loop;
+                        }
+                        printd("offset multiplied by %d", tinfo->bsize / 8);
+                        offset *= (tinfo->bsize / 8);
+                    }
+                }
+                printd("offset is %d", offset);
 
+                u32 opc = ldr_size(reg, nreg_target->reg, offset, (nreg_target->bsize / 8));
+                ls_add_u32(&s.code, opc);
+                printd("from nreg..end\n");
+                token_consumed = true;
+            } else {
+                CompileErr("Error: unknown object or named register "), PrintErrStr(token);
+                goto loop;
+            }
+        } else {
+          size_t off = target->offset;
+          ls_add_u32(&s.code, ldr_size(reg, SP, off, (target->size / 8)));
+        }
+
+        printd("next was %x, %c", c, c);
         c = Next();
         printd("..end\n");
         token_consumed = true;
@@ -800,7 +838,7 @@ loop_read_type:;
             u32 offset = 0;
             for (int i = 0; i < t->members.count; ++i) {
                 type_info *u = t->members.data[i];
-                int n = read_int(token, &it, c);
+                int n = read_int(token, &it);
                 printd("<%d>, ", n);
                 if (i < t->members.count - 1 && *it.data != ',')
                     CompileErr("Syntax Error: Comma expected at struct literal");

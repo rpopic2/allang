@@ -51,13 +51,23 @@ i :: "hello" // shadows i!
 i, j, k :: 1, 2, 3
 
 
-i : 1 + 4    // add 1 and 4 to register i
+i = 1 + 4    // add 1 and 4 to register i
+1 + 4 =i
+i(1 + 4)
 
-1 + 4       // do 1 + 4 and move to scratch register
+i(++)
+i(+ 4)
+i(- 3)
+
+i: 1 + 4
+
+i{1 + 4}
+
+1 + 4       // do 1 + 4 and to a scratch register
 i         // and move the result above to i.. which is probably what you don't want to do! generates warning.
 
 i
-+ 4     // warning! it can be written in one line!
++ 4     // loads i to a scratch, add 4 to the scratch.
 
 
 // multiple line assignment

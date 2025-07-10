@@ -22,12 +22,17 @@ Argc is 1 ->
     // File_Length :: i32 File filelen=>
     File_Length :: i32 Buffer, 1, 1024, File _fread=>
     File_Length =[Va]
-    "%d\n"0 _printf=>
+    "file len: %d\n"0 _printf=>
 
     Buffer =[Va]
-    "todo.txt:\n %s\n"0, _printf=>
+    "todo.txt:\n%s\n"0, _printf=>
 
     File _fclose=>
     0 ret
 
+[Argv] =[Va]
+"first arg: %s\n"0 _printf=>
+
+[Argv, 1 addr] =[Va]
+"second arg: %s\n"0 _printf=>
 0

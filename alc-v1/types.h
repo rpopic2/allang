@@ -7,6 +7,8 @@
 #include "str.h"
 #include "typedefs.h"
 
+#define ADDRESS_SIZE 8
+
 typedef struct {
     i32 bsize;
     ptype addr_type;
@@ -73,7 +75,7 @@ type_info *type_find(str name) {
 
 type_info *read_type(str_iter *it, int *c) {
     printd("read type\n");
-    
+
     type_info tmp_info = {
 
     };
@@ -92,15 +94,14 @@ type_info *read_type(str_iter *it, int *c) {
         *c = iter_next(it);
         tmp_info.bsize = 64;
         tmp_info.addr_type = ptype_addr_addr;
-
-
     }
 
     str name = { .data = it->data };
-    while (*it->data != ' ' && *it->data != '\n' && *it->data != '\0' && *it->data != ')') {
+    while (*it->data != ' ' && *it->data != '\n' && *it->data != '\0' && *it->data != ')' && *it->data != ']') {
         ++it->data;
     };
     name.len = it->data - name.data;
+    strprint(name);
 
     type_info *find = type_find(name);
     if (find == NULL) {

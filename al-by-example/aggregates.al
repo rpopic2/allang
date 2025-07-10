@@ -95,14 +95,22 @@ arr.0 // get first element
 // i++, ++i-like behaviour
 
 marr :: 10 std.heap.alloc_bytes
-[marr(+1)] // moves the ptr, this is like ++i
-[marr](+1) // like i++
-[marr(+5)] // add 5 and move marr
-[maar](+3) // load from marr and add 3 bytes
+[marr(+ 1 addr)] // moves the ptr, this is like ++i
+[marr](+ 1 addr) // like i++
+[marr(+ 5 addr)] // add 5 and move marr
+[maar](+ 3 addr) // load from marr and add 3 bytes
+[maar](+ 1 auto)
+
+[(+ 1 auto)maar]
+[maar](+ 1 auto)
+
+[(++auto)maar]
+
+i(++)
 
 i :: 0
 @loop
-    i(+1)
+    i(+ 1)
     arr[i] @at // use bound checked one
     is Error <- // stop if end of array
     print=>
@@ -125,7 +133,7 @@ hi: // same stuff, but put into a label
 // # struct literals. same as arrays!
 
 hi | 8, true, 10 | // same, but it is not a slice, just data in readonly memory
-hi | i: 10 , j: 8 | // rest of them zeroed out
+hi | i = 10 , j = 8 | // rest of them zeroed out
 
 | i64 header: MH_MAGIC_64, i32 cputype: CPU_TYPE_ARM64, i32 cpu_subtype: CPU_SUBTYPE_LITTLE_ENDIAN |
 

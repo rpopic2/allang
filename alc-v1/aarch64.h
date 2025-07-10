@@ -159,7 +159,8 @@ static inline u32 ldr(u8 reg, u8 reg2, u16 offset) {
 }
 
 static inline u32 ldr_size(u8 reg, u8 reg2, u16 offset, size_t size) {
-    return strorldr(load_t, reg, reg2, false, size, offset);
+    bool unscaled = (offset % size != 0);
+    return strorldr(load_t, reg, reg2, unscaled, size, offset);
 }
 
 void make_prelude(stack_context *s, u8 r1, u8 r2) {
