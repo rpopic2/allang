@@ -664,12 +664,17 @@ loop_read_type:;
         TokenStart;
         ReadToken;
         TokenEnd;
-        printd("from "), strprint_nl(token), printd(" to %d", reg);
+
+
+        printd("from "), strprint_nl(token);
+
+        int reg2 = SP;
+        int offset = 0;
+        int size = 0;
 
         obj *target = obj_find(&s, token);
         if (target == NULL) {
             nreg *nreg_target = nreg_find(&s.named_regs, token);
-            int offset = 0;
             if (nreg_target != NULL) {
                 if (c is ',') {
                     c = Next(), c = Next();
@@ -695,8 +700,9 @@ loop_read_type:;
                 }
                 printd("offset is %d", offset);
 
-                u32 opc = ldr_size(reg, nreg_target->reg, offset, (nreg_target->bsize / 8));
-                ls_add_u32(&s.code, opc);
+                size = nreg_target->bsize / 8;
+                reg2 = nreg_target->reg;
+
                 printd("from nreg..end\n");
                 token_consumed = true;
             } else {
@@ -704,12 +710,25 @@ loop_read_type:;
                 goto loop;
             }
         } else {
-          size_t off = target->offset;
-          ls_add_u32(&s.code, ldr_size(reg, SP, off, (target->size / 8)));
+            size = target->size / 8;
+            reg2 = SP;
+            offset = target->offset;
         }
 
-        printd("next was %x, %c", c, c);
         c = Next();
+
+        int dst_reg = reg;
+        if (target_nreg != NULL) {
+            if (it.data[0] == '\n') {
+                printd("target: %d", target_nreg->reg);
+                dst_reg = target_nreg->reg;
+            }
+        }
+
+        u32 opc = ldr_size(dst_reg, reg2, offset, size);
+        ls_add_u32(&s.code, opc);
+
+        printd("next was %x, %c", c, c);
         printd("..end\n");
         token_consumed = true;
     }
@@ -723,6 +742,8 @@ loop_read_type:;
         strprint(token);
         printd("toklen: %zu..", token.len);
 
+        printd("target_nreg: %p", target_nreg);
+
         if (token.len is 0) {
             size_t siz_bits = target_nreg->bsize;
             size_t siz_bytes = siz_bits / 8;
@@ -730,7 +751,8 @@ loop_read_type:;
             sf_t reg_sf = nreg_sf(target_nreg);
             size_t offset = s.stack_size - s.spaces_left;
             printd("stack_size =0x%zx, spaces_left=0x%zx.., siz=0x%zx", s.stack_size, s.spaces_left, siz_bytes);
-            ls_add_u32(&s.code, str_imm(reg_sf, reg, SP, offset));
+            u32 opc = str_imm(reg_sf, reg, SP, offset);
+            ls_add_u32(&s.code, opc);
             if (s.spaces_left < siz_bytes) {
                 usize added_size = Align0x10(siz_bytes); // TODO make this packed and efficient
                 s.stack_size += added_size;

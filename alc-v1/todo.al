@@ -33,6 +33,12 @@ Argc is 1 ->
 [Argv] =[Va]
 "first arg: %s\n"0 _printf=>
 
-[Argv, 1 addr] =[Va]
+Foo :: i32 3
+Arg1 :: addr c8 [Argv, 1 addr]
+=[Va]
 "second arg: %s\n"0 _printf=>
+
+// Cmd :: c8 [Arg1, 1 c8]
+// =[Va]
+// "command: %c\n"0 _printf=>
 0
