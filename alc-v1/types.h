@@ -10,7 +10,7 @@
 #define ADDRESS_SIZE 8
 
 typedef struct {
-    i32 bsize;
+    i32 bsize;  // size in bits
     ptype addr_type;
     str name;
     ls_voidp members;   // actually list of ls_type_info *

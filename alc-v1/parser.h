@@ -530,8 +530,11 @@ loop_read_type:;
             }
             n.type = t;
             printd("type "), strprint_nl(t->name), printd(" ");
-            if (!n.is_addr)
+            printd("is_addr: %d\n", n.is_addr);
+            if (n.is_addr == ptype_not_addr) {
+                printd("not addr, size is %d\n", t->bsize);
                 n.bsize = t->bsize;
+            }
 
             nreg *find = nreg_find(&s.named_regs, token);
             n.reg = named_reg_idx;
@@ -688,6 +691,7 @@ loop_read_type:;
                     c = Next();
                     if (Is("addr")) {
                         offset *= ADDRESS_SIZE;
+                        size = ADDRESS_SIZE;
                     } else {
                         type_info *tinfo = read_type(&it, &c);
                         if (tinfo == NULL) {
@@ -696,12 +700,16 @@ loop_read_type:;
                         }
                         printd("offset multiplied by %d", tinfo->bsize / 8);
                         offset *= (tinfo->bsize / 8);
+                        size = tinfo->bsize / 8;
                     }
+                } else {
+                    size = nreg_target->bsize / 8;
                 }
                 printd("offset is %d", offset);
 
-                size = nreg_target->bsize / 8;
                 reg2 = nreg_target->reg;
+                
+                printd("size: %d\n", size);
 
                 printd("from nreg..end\n");
                 token_consumed = true;

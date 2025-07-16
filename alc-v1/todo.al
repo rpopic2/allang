@@ -18,27 +18,37 @@ Argc =[Va]
 
 Argc is 1 ->
     File :: addr file "todo.txt"0, "rw"0 _fopen=>
-    Buffer :: addr void 1024 _malloc=>
-    // File_Length :: i32 File filelen=>
-    File_Length :: i32 Buffer, 1, 1024, File _fread=>
+    File_Length :: i32 File filelen=>
+    Buffer :: addr void File_Length _malloc=>
+    Buffer, 1, 1024, File _fread=>
     File_Length =[Va]
     "file len: %d\n"0 _printf=>
 
     Buffer =[Va]
     "todo.txt:\n%s\n"0, _printf=>
 
+    Buffer _free=>
     File _fclose=>
     0 ret
 
 [Argv] =[Va]
 "first arg: %s\n"0 _printf=>
 
-Foo :: i32 3
 Arg1 :: addr c8 [Argv, 1 addr]
-=[Va]
+Arg1 =[Va]
 "second arg: %s\n"0 _printf=>
 
-// Cmd :: c8 [Arg1, 1 c8]
-// =[Va]
-// "command: %c\n"0 _printf=>
+Cmd :: c8 [Arg1, 1 c8]
+Cmd =[Va]
+"command: %c\n"0 _printf=>
+Cmd is 'c' ->
+    "create\n"0 _printf=>
+    File :: addr file "todo.txt"0, "a"0 _fopen=>
+    Item :: addr c8 [Argv, 2 addr]
+    Item_Length :: i32 Item _strlen=>
+    Item, 1, Item_Length, File _fwrite=>
+    "\n", 1, Item_Length, File _fwrite=>
+
+Cmd is 'd' ->
+
 0
