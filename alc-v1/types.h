@@ -74,23 +74,21 @@ type_info *type_find(str name) {
 }
 
 type_info *read_type(str_iter *it, int *c) {
-    printd("read type\n");
-
     type_info tmp_info = {
 
     };
     if (_if_is("stack", it, c)) {
-        printd("type isstack ");
+        printd("type stack ");
         *c = iter_next(it);
         tmp_info.bsize = 64;
         tmp_info.addr_type = ptype_stack_addr;
     } else if (_if_is("addr addr", it, c)) {
-        printd("type is addr addr ");
+        printd("type addr addr ");
         *c = iter_next(it);
         tmp_info.bsize = 64;
         tmp_info.addr_type = ptype_addr_addr_addr;
     } else if (_if_is("addr", it, c)) {
-        printd("type is addr ");
+        printd("type addr ");
         *c = iter_next(it);
         tmp_info.bsize = 64;
         tmp_info.addr_type = ptype_addr_addr;
@@ -101,7 +99,7 @@ type_info *read_type(str_iter *it, int *c) {
         ++it->data;
     };
     name.len = it->data - name.data;
-    strprint(name);
+    // strprint_nl(name);
 
     type_info *find = type_find(name);
     if (find == NULL) {

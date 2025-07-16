@@ -94,7 +94,6 @@ typedef enum {
 
 static inline u32 ldpstp(sf_t sf, bool load, u8 reg1, u8 reg2, u8 base, i8 offset_i7) {
     i8 off = sf == X ? (offset_i7 / 8) : (offset_i7 / 4);
-    printf("ldp off: %x", off);
     return STP | sf << 31 | load << 22 | off << 15 | reg2 << 10 | base << 5 | reg1;
 }
 
@@ -126,7 +125,6 @@ static inline u32 str_imm(sf_t width, u5 rt, u5 rn, i12 imm) {
 
 
 static inline uint32_t strorldr(enum strldr_t store, u8 reg, u8 reg2, bool unscaled, int size, int offset) {
-    printd("stoorlder size: %d", size);
     uint32_t op = 0x38000000;
     if (!store) {
         op |= 1 << 22;
@@ -137,7 +135,7 @@ static inline uint32_t strorldr(enum strldr_t store, u8 reg, u8 reg2, bool unsca
     if (size == 8)
         op |= 0b11 << 30;
     else if (size == 1)
-        ;// nop - size bits remain 0b00 for 8-bit loads
+        ;// nop
     else if (size == 4)
         op |= 0b10 << 30;
     else if (size != 4)

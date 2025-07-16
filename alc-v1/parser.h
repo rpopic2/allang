@@ -47,7 +47,7 @@ void add_nreg(stack_context *s, str type_name, str param_name, int from_reg, pty
 }
 
 void parse_scope(str src, bool has_params) {
-    printd("start parse\n");
+    printd("start parse\n\n");
 
     str_iter it = into_iter(src);
     str token = {};
@@ -79,26 +79,25 @@ void parse_scope(str src, bool has_params) {
             TokenStart;
             ReadToken;
             TokenEnd;
-            printd("is a routine, args ");
+            printd("\n=> Routine"), strprint_nl(token), printd(": ");
             
             int param_index = 0;
 read_type:;
             if (it.data[0] is ')') {
-                printd("end of args\n");
+                printd("end\n");
                 goto ok;
             }
             type_info *t = read_type(&it, &c);
             if (t is NULL) {
                 goto loop;
             }
-            printd("type of "), strprint_nl(t->name), printd(" (size: %d)", t->bsize);
+            strprint_nl(t->name), printd(" ");
 
             c = Next();
-            printd("next was %d", it.data[0]);
             TokenStart;
             ReadToken;
             TokenEnd;
-            printd("param name: '"), strprint_nl(token), printd("'\n");
+            strprint_nl(token), printd(" ");
 
             nreg n = {
                 .name = token, .type = t, .reg = named_reg_idx, .bsize = t->bsize
@@ -115,7 +114,7 @@ read_type:;
                 goto read_type;
             }
             if (Is(" =>")) {
-                printd("return ");
+                printd("returns ");
                 goto read_type;
             }
             goto read_type;
@@ -131,8 +130,7 @@ read_type:;
             goto loop;
         }
 ok:;
-        c = Next(); // \n
-        printd("next was %d", c);
+        c = Next(); // should be \n
     }
 
 loop:;
@@ -269,7 +267,8 @@ loop_read_type:;
     }
 
     if (*token.data != '\n' && token.len != 1) {
-        printd("token '"), strprint_nl(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
+        // printd("\ntoken '"), strprint_nl(token), printd("' (len: %zu, ident: %d, c: %c%d): ", token.len, ident, c, c);
+        printd("\ntoken '"), strprint_nl(token), printd("': ");
     }
 
     if (str_equal_c(token, "ret")) {
@@ -306,7 +305,7 @@ loop_read_type:;
         }
 
         ++depth;
-        printd("\n*** new stack of depth %d\n", depth);
+        printd("\n*** new stack, depth %d\n", depth);
         nextsrc.len = it.data - nextsrc.data;
         strprint(nextsrc);
         printd("end src\n");
@@ -460,13 +459,10 @@ loop_read_type:;
                 tmp_put_label = true;
             }
 
-            printd("next: %d", it.data[0]);
             if (it.data[0] is '\n') {
-                printd("followed by newline..");
                 if (tmp_put_label)
                     tmp_put_ident += 4;
             } else if (tmp_put_label) {
-                printd("one lineer..");
                 tmp_put_label_nextline = true;
             }
         }
@@ -498,7 +494,7 @@ loop_read_type:;
         str name = token;
 
         if (Is(" :: ")) {
-            printd("..is expression\n");
+            printd(":: expression\n");
 
             nreg n = {
                 .name = name, .bsize = 32, .is_addr = ptype_not_addr,
@@ -545,14 +541,14 @@ loop_read_type:;
 
             if (find == NULL) {
                 bool is_stack_alloc = memcmp(line_end - 2, "=[]", 3) == 0;
-                printd("line end was %c, is_stack_alloc %d..", line_end[-2], is_stack_alloc);
+                // printd("line end was %c, is_stack_alloc %d..", line_end[-2], is_stack_alloc);
 
                 if (is_stack_alloc) {
                     n.is_addr = ptype_stack_addr;
                 }
 
                 if (n.is_addr isnt ptype_stack_addr && !is_stack_alloc) {
-                    printd("inc reg idx..");
+                    // printd("inc reg idx..");
                     s.regs_to_save[s.regs_to_save_size++] = n.reg;
                     named_reg_idx += 1;
                 }
@@ -569,24 +565,22 @@ loop_read_type:;
             calls_fn = true;
             tab_find find = stab_search(&stab_ext, token);
 
-            strprint(token);
             fat f = { _objcode, objcode };
             if (find.find == NULL) {
                 u32 symbolnum = stab_und.count;
                 macho_stab_undef(token);
-            printd("failed <%d>,", symbolnum);
+                printd("failed to find symbol, adding to undef");
                 macho_relocent_undef(f, &s, symbolnum, ARM64_RELOC_BRANCH26, true);
             } else {
                 macho_relocent(f, &s, find.symbolnum, ARM64_RELOC_BRANCH26, true);
                 ls_add_int(&to_push_ext, relocents.count - 1);
             }
-            printd("find reloc '%p%s <%d>,", find.find, find.find, find.symbolnum);
-            printd("'\n");
+            // printd("find reloc '%p%s <%d>,", find.find, find.find, find.symbolnum);
+            // printd("'\n");
 
             ls_add_u32(&s.code, BL);
 
             if (is_target_nreg(&it)) {
-                printd("target: %d", target_nreg->bsize);
                 sf_t sf = nreg_sf(target_nreg);
                 ls_add_u32(&s.code, mov_reg(sf, target_nreg->reg, 0));
             }
@@ -746,23 +740,21 @@ loop_read_type:;
     }
 
     if (Is("=[")) {
-        printd("store ");
+        printd("store to ");
         str before = { token.data - 3, 2 };
         TokenStart;
         ReadToken;
         TokenEnd;
         strprint(token);
-        printd("toklen: %zu..", token.len);
-
-        printd("target_nreg: %p", target_nreg);
 
         if (token.len is 0) {
             size_t siz_bits = target_nreg->bsize;
             size_t siz_bytes = siz_bits / 8;
-            printd("new allocation.. from %d, %zu..", reg, siz_bits);
+            // printd("new allocation.. from %d, %zu..", reg, siz_bits);
+            printd("new allocation..");
             sf_t reg_sf = nreg_sf(target_nreg);
             size_t offset = s.stack_size - s.spaces_left;
-            printd("stack_size =0x%zx, spaces_left=0x%zx.., siz=0x%zx", s.stack_size, s.spaces_left, siz_bytes);
+            // printd("stack_size =0x%zx, spaces_left=0x%zx.., siz=0x%zx", s.stack_size, s.spaces_left, siz_bytes);
             u32 opc = str_imm(reg_sf, reg, SP, offset);
             ls_add_u32(&s.code, opc);
             if (s.spaces_left < siz_bytes) {
@@ -861,7 +853,7 @@ loop_read_type:;
             sf = nreg_sf(target_nreg);
         ls_add_u32(&s.code, mov(sf, reg, number));
         token_consumed = true;
-        printd("value of '%ld to r%d(sf=%d)'", number, reg, sf);
+        printd("%ld to r%d", number, reg);
     }
     if (tokc is '{') {
         printd("start of struct literal..");
@@ -910,7 +902,6 @@ loop_read_type:;
                 sf_t sf = nreg_sf(find);
                 ls_add_u32(&s.code, mov_reg(sf, reg, find->reg));
             }
-            printd("..move to reg %d", reg);
             token_consumed = true;
         } else {
             CompileErr("Error: unknown named register(mov) "), PrintErrStr(token);
@@ -994,7 +985,7 @@ loop_read_type:;
     }
     for (int i = 0; i < s.regs_to_save_size; ++i) {
         u8 reg = s.regs_to_save[i];
-        printd("stack size: 0x%zx", s.stack_size);
+        // printd("stack size: 0x%zx", s.stack_size);
         if ((i + 1) < s.regs_to_save_size) {
             u8 reg2 = s.regs_to_save[++i];
 
