@@ -178,12 +178,8 @@ loop:;
 
     if (line_end + 1 < it.data) {
         target_nreg = NULL;
-        char *p = it.data;
-        while (*p != '\n' && *p != '\0') {
-            ++p;
-        }
+        line_end = find_line_end(it.data);
         regoff = 0;
-        line_end = p - 1;
         if (tmp_put_label_nextline) {
             tmp_put_label_nextline = false;
             tmp_put_label = false;
@@ -633,13 +629,21 @@ loop_read_type:;
         if (regoff > 7) {
             CompileErr("Error: used up all scratch registers\n");
         }
-        if (line_end + 3 >= (src.data + src.len)
-            || (*line_end == '>' && line_end[-1] != '>' && line_end[-2] != ' ')
-            || (str_equal_c((str){it.data + 1, 3}, "ret"))) {
-            printd("-3 was %c", line_end[-3]);
+        if (should_use_x0_reg(line_end, src, &it)) {
             reg = regoff;
         } else {
-            reg = 8 + regoff;
+            char *iter = line_end + 2;
+            while (*iter == ' ') {
+                iter++;
+            }
+            while (IsToken(*iter)) {
+                iter++;
+            }
+            if (iter[0] == '=' && iter[1] == '>') {
+                reg = regoff;
+            } else {
+                reg = 8 + regoff;
+            }
         }
     }
 

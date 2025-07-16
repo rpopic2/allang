@@ -18,11 +18,14 @@ Argc =[Va]
 
 Argc is 1 ->
     File :: addr file "todo.txt"0, "rw"0 _fopen=>
+
     File_Length :: i32 File filelen=>
-    Buffer :: addr void File_Length _malloc=>
-    Buffer, 1, 1024, File _fread=>
     File_Length =[Va]
     "file len: %d\n"0 _printf=>
+
+    Buffer :: addr void File_Length _malloc=>
+    Buffer, 1, 1024, File
+    _fread=>
 
     Buffer =[Va]
     "todo.txt:\n%s\n"0, _printf=>
