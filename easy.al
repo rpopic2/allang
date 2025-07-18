@@ -1,2 +1,1 @@
-_main:
-    0 ret
+"hello" _printf=>

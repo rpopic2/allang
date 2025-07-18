@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
@@ -41,3 +42,27 @@ bool str_equal_c(str s1, const char *s2) {
 }
 
 const str str_empty = { .data = NULL, .len = 0 };
+
+typedef struct {
+    union {
+        struct {
+            char *data;
+            size_t len;
+        };
+        str as_str;
+    };
+} owned_str;
+
+owned_str owned_str_new_cat(str s1, str s2) {
+    owned_str result;
+    result.len = s1.len + s2.len;
+    result.data = malloc(result.len);
+    memcpy(result.data, s1.data, s1.len);
+    memcpy(result.data + s1.len, s2.data, s2.len);
+    return result;
+}
+
+void owned_str_free(owned_str self) {
+    free(self.data);
+}
+

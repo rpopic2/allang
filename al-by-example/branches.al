@@ -154,6 +154,7 @@ baz: (i32 a, i32 b =>i32)
     "hi" print=>
     [a] + [b] ret // registers invalidated after call
 
+
 // #address of label, and function pointers
 
 foo: (=>i32)
