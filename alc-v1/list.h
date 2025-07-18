@@ -33,6 +33,12 @@
         self->data[self->count] = value; \
         self->count += 1; \
     } \
+    void ls_remove_##T(ls_## T *self, int index) { \
+        for (int i = index; i < self->count - 1; ++i) { \
+            self->data[i] = self->data[i + 1]; \
+        } \
+        self->count -= 1; \
+    } \
     void ls_delete_##T(ls_## T *self) { \
         free(self->data); \
     } \

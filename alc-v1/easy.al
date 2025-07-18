@@ -1,2 +1,3 @@
+loop:
+    "Hello" _printf=>
 0
-hello guys~~~

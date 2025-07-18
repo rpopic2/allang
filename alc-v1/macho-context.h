@@ -53,7 +53,7 @@ void macho_stab_ext(fat code, str s) {
         .n_value = len, // TODO
     };
     ls_add_stabe(&stab_ext, entry);
-    // printf("add stab entry, len %d, name ", stab_ext.count), strprint(s);
+    printf("add stab entry, len %d, name ", stab_ext.count), strprint(s);
 
     ls_addran_char(&strtab, s.data, s.len);
     ls_add_char(&strtab, '\0');
@@ -114,7 +114,7 @@ void macho_stab_stringlit() {
 void macho_relocent(fat f, stack_context *s, u32 symbolnum, enum reloc_type_arm64 type, bool pcrel) {
     ls_u32 *stackcode = &s->code;
     const struct relocation_info rel = {
-        .r_address = (fat_len(f) + stackcode->count) * sizeof (u32),
+        .r_address = stackcode->count * sizeof (u32),
         .r_symbolnum = symbolnum,
 
         .r_pcrel = pcrel,
@@ -124,12 +124,13 @@ void macho_relocent(fat f, stack_context *s, u32 symbolnum, enum reloc_type_arm6
     };
     ls_add_u32(&s->relocents, relocents.count);
     ls_add_relocent(&relocents, rel);
+    printd("relocent %d, r_address: 0x%x\n", relocents.count, rel.r_address);
 }
 
 void macho_relocent_undef(fat f, stack_context *s, u32 symbolnum, enum reloc_type_arm64 type, bool pcrel) {
     ls_u32 *stackcode = &s->code;
     struct relocation_info rel = {
-        .r_address = (fat_len(f) + stackcode->count) * sizeof (u32),
+        .r_address = stackcode->count * sizeof (u32),
         .r_symbolnum = symbolnum,
 
         .r_pcrel = 1,

@@ -50,7 +50,7 @@ static inline bool IsSpace(char c) {
 u32 _objcode[1024];
 writer_t objcode = _objcode;
 
-ls_char strings;
+// ls_char strings;
 bool main_defined;
 int depth = 0;
 
@@ -73,7 +73,7 @@ static inline bool _if_is(const char *s, str_iter *it, int *c) {
     return false;
 }
 
-void parse_scope(str src, bool has_params);
+void parse_scope(str src, bool has_params, str name);
 
 nreg *nreg_find(ls_nreg *s, str token) {
     nreg *find = NULL;

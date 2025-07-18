@@ -26,7 +26,10 @@ void parse(str src) {
     ls_new_char(&strings, 1024, "string literals");
     ls_new_resolv(&resolves, 1024, "deferred address calculations");
 
-    parse_scope(src, false);
+    parse_scope(src, false, str_from_c("_main"));
+
+    write_buf(&objcode, strings.data, strings.count);
+
     types_destroy();
 }
 
@@ -46,7 +49,9 @@ void add_nreg(stack_context *s, str type_name, str param_name, int from_reg, pty
     *named_reg_idx += 1;
 }
 
-void parse_scope(str src, bool has_params) {
+int anonyn_index = 0;
+
+void parse_scope(str src, bool isnt_main, str name) {
     printd("start parse\n\n");
 
     str_iter it = into_iter(src);
@@ -60,27 +65,34 @@ void parse_scope(str src, bool has_params) {
     stack_context_new(&s);
     char *line_end = NULL;
 
+    bool is_routine = false;
+    if (!isnt_main)
+        is_routine = true;
+
     bool calls_fn = false;
 
-    int tmp_put_ident = 0;
-    bool tmp_put_label = false;
-    int tmp_put_idx = 0;
+    int pending_lable_ident = 4 * depth;
+    bool pending_put_label = false;
     str tmp_defer_rets = str_empty;
     int tmp_to_resolve = 0;
     bool tmp_put_label_nextline = false;
 
     nreg *target_scratch = NULL;
 
-    if (has_params) {
+    if (isnt_main) {
         int c = Next();
         if (it.data[1] == '(') {
+            printd("\n=> Routine "), strprint_nl(name), printd(": ");
+            is_routine = true;
+            // fat f = {_objcode, objcode};
+            // macho_stab_ext(f, name);
+
             Next();
             Next();
             TokenStart;
             ReadToken;
             TokenEnd;
-            printd("\n=> Routine"), strprint_nl(token), printd(": ");
-            
+
             int param_index = 0;
 read_type:;
             if (it.data[0] is ')') {
@@ -103,6 +115,7 @@ read_type:;
                 .name = token, .type = t, .reg = named_reg_idx, .bsize = t->bsize
             };
             ls_add_nreg(&s.named_regs, n);
+            s.regs_to_save[s.regs_to_save_size++] = n.reg;
             named_reg_idx += 1;
 
             sf_t sf = nreg_sf(&n);
@@ -119,13 +132,20 @@ read_type:;
             }
             goto read_type;
         } else {
-            printd("add to local");
+            printd("=> Local label ");
+            if (!main_defined && depth == 1) {
+                // fat f = { _objcode, objcode };
+                // printd("main defined here\n");
+                // macho_stab_ext(f, str_from_c("_main"));
+                // main_defined = true;
+            }
+
             if (token.len is 0) {
                 char *ret;
-                asprintf(&ret, "__anonyn_%d", tmp_put_idx++);
+                asprintf(&ret, "__anonyn_%d", anonyn_index++);
                 token = (str){ .data = ret, .len = strlen(ret) };
             }
-            macho_stab_loc(s.code.count * sizeof (u32), token);
+            // macho_stab_loc(s.code.count * sizeof (u32), token);
 
             goto loop;
         }
@@ -148,13 +168,13 @@ loop:;
     ReadToken;
     TokenEnd;
 
-    if (tmp_put_label) {
-        if (tmp_put_ident > ident) {
-            printd("put label here!(%d, %d)\n", tmp_put_ident, ident);
-            tmp_put_ident = 0;
-            tmp_put_label = false;
+    if (pending_put_label) {
+        if (pending_lable_ident > ident) {
+            printd("put label here!(%d, %d)\n", pending_lable_ident, ident);
+            pending_lable_ident = 0;
+            pending_put_label = false;
             char *ret;
-            asprintf(&ret, "__anonyn_%d", tmp_put_idx++);
+            asprintf(&ret, "__anonyn_%d", anonyn_index++);
             tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
         }
     }
@@ -180,13 +200,13 @@ loop:;
         regoff = 0;
         if (tmp_put_label_nextline) {
             tmp_put_label_nextline = false;
-            tmp_put_label = false;
+            pending_put_label = false;
             printd("newline put label..");
 
-            tmp_put_ident = 0;
-            tmp_put_label = false;
+            pending_lable_ident = 0;
+            pending_put_label = false;
             char *ret;
-            asprintf(&ret, "__anonyn_%d", tmp_put_idx++);
+            asprintf(&ret, "__anonyn_%d", anonyn_index++);
             tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
 
             int diff = s.code.count - tmp_to_resolve;
@@ -291,9 +311,6 @@ loop_read_type:;
         // c = Next();
         printd("static label '"), strprint_nl(token); printd("', ");
 
-        fat f = {_objcode, objcode};
-        macho_stab_ext(f, token);
-
         str nextsrc = (str){ it.data };
 
         for (int i = nextsrc.len; i < src.len; ++i) {
@@ -310,7 +327,7 @@ loop_read_type:;
         strprint(nextsrc);
         printd("end src\n");
 
-        parse_scope(nextsrc, true);
+        parse_scope(nextsrc, true, token);
         --depth;
         printd("\n*** endofrt\n");
 
@@ -326,12 +343,8 @@ loop_read_type:;
         add_nreg(&s, str_from_c("c8"), str_from_c("Argv"), 1, ptype_addr_addr_addr, 64, &named_reg_idx); // x1
     }
 
-    if (!main_defined && token.len != 0 && depth == 0) {
-        fat f = { _objcode, objcode };
-        printd("main defined here\n");
-        macho_stab_ext(f, str_from_c("_main"));
-        main_defined = true;
-    }
+    // if (!main_defined && token.len != 0 && depth == 0) {
+    // }
 
     cflags cond = COND_NV;
     if (str_equal_c(token, "is ")) {
@@ -455,14 +468,14 @@ loop_read_type:;
                 printd("next: %d%d", it.data[0], it.data[1]);
                 tmp_to_resolve = s.code.count;
                 ls_add_u32(&s.code, b_cond(0, cflags_flip(cond)));    // tmp offset needs to be done later..
-                tmp_put_ident = ident;
-                tmp_put_label = true;
+                pending_lable_ident = ident;
+                pending_put_label = true;
             }
 
             if (it.data[0] is '\n') {
-                if (tmp_put_label)
-                    tmp_put_ident += 4;
-            } else if (tmp_put_label) {
+                if (pending_put_label)
+                    pending_lable_ident += 4;
+            } else if (pending_put_label) {
                 tmp_put_label_nextline = true;
             }
         }
@@ -1032,6 +1045,15 @@ loop_read_type:;
         }
     }
 
+    fat f = {_objcode, objcode};
+    macho_stab_ext(f, name);
+
+    // if (!main_defined && depth == 0) {
+    //     printd("main defined here at write position\n");
+    //     macho_stab_ext(f, str_from_c("_main"));
+    //     main_defined = true;
+    // }
+
     usize prologue_len = s.prologue.count;
     if (s.stack_size > 0) {
         u32 prologue_sp = sub(SP, SP, s.stack_size);
@@ -1040,28 +1062,30 @@ loop_read_type:;
         ls_add_u32(&s.epilogue, add_imm(X, SP, SP, s.stack_size));
     }
 
-    usize prologue_size = prologue_len * sizeof (u32);
-    for (int i = 0; i < s.relocents.count; ++i) {
-        u32 index = s.relocents.data[i];
-        relocents.data[index].r_address += prologue_size;
-    }
-
     ls_add_u32(&s.epilogue, RET);
 
     write_buf(&objcode, s.prologue.data, s.prologue.count * sizeof(u32));
+
+
+    for (int i = 0; i < s.relocents.count; ++i) {
+        u32 index = s.relocents.data[i];
+        relocents.data[index].r_address += fat_len((fat){_objcode, objcode}) * sizeof(u32);
+        printd("index: %u, r_address: 0x%x\n", index, relocents.data[index].r_address);
+    }
+
     write_buf(&objcode, s.code.data, s.code.count * sizeof(u32));
     write_buf(&objcode, s.epilogue.data, s.epilogue.count * sizeof(u32));
 
-    const long offset = (objcode - (void *)_objcode) - (prologue_len * sizeof (u32));
-    for (int i = 0; i < to_push.count; ++i) {
-        int index = to_push.data[i];
-        stab_loc.data[index].n_value += offset;
+    if (is_routine) {
+        const long offset = (objcode - (void *)_objcode) - (prologue_len * sizeof (u32));
+        for (int i = 0; i < to_push.count; ++i) {
+            int index = to_push.data[i];
+            stab_loc.data[index].n_value += offset;
+        }
+        for (int i = 0; i < stab_loc.count; ++i) {
+            stab_loc.data[i].n_value += prologue_len * sizeof (u32);
+        }
     }
-    for (int i = 0; i < stab_loc.count; ++i) {
-        stab_loc.data[i].n_value += prologue_len * sizeof (u32);
-    }
-
-    write_buf(&objcode, strings.data, strings.count);
 
     stack_context_free(&s);
     printd("\nparse end\n");
