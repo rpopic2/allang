@@ -103,6 +103,45 @@ foo.bar=> print=> // 100
 //         100
 //     200 //invalid. put it before other nested labels.
 
+
+// # local variable semantics
+
+foo:
+    I :: 123
+    bar:
+        J :: 456
+        K :: super.I + J
+        // all variables resolevs to local ones by default
+        Super.*I(+ 2)   // need to put mut sign(*) to change the value
+
+// foo.bar-> // jumping to it would make the program in unpredictable state.
+// if foo didn't have any code to run, this would compile.
+
+foo:
+    I :: 123
+    baz: (=>)
+        super.I // ? can access to it?
+    baz=>
+
+foo:
+    Pointer :: std.allocate 10 bytes =>
+
+    bar:
+        2 =*[Pointer, 1 auto]
+
+    std.free Pointer =>
+    bar->   // dangling!
+
+foo:
+    Pointer :: std.allocate 10 bytes =>
+
+    bar: (addr byte Pointer* =>)
+        2 =*[Pointer, 1 byte]
+
+    Pointer* bar=>
+    std.free Pointer =>
+    Pointer* bar=>   // compiler err!
+
 // #subroutines
 
 x :: 1
