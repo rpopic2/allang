@@ -1,3 +1,42 @@
+# allang core
 - make it recognise a type
 - make a str type
 - make struct follow aapcs
+
+labels
+- nested labels
+- scoping rules
+
+memory safety
+- addr mutable
+- addr ownership
+
+type safety
+- type checker
+
+macors
+- sizeof countof
+- enum
+- inline
+- loop
+
+boolean
+- boolean literals
+- operations
+
+# allang extension 1
+
+- % (move to)
+- function pointers (ptr)
+- patter matching with & (alias)
+
+- union
+- enum union
+
+- ternary operator
+
+- struct expansion macro (@struct_name)
+- generics
+
+- leak
+- shared pointers

@@ -1,6 +1,6 @@
 // using c libraries
 
-@inline File :: (addr cstr Mode =>File~)
+@inline File :: (addr cstr with_mode Mode =>File~)
         "todo.txt", Mode fopen=> =Self
         Self isnt pointing -> "File does not exist" panic
 
@@ -12,7 +12,7 @@
 (i32 Argc, addr addr c8 Argv)
 
 Argc is 1 ->
-        @File "r"
+        @File with_mode "r"
         ~ fclose=>
         @File.Length *File
         Buffer ::
@@ -64,12 +64,13 @@ Command is 'd' ->
         Target_Index @times
                 Iter skip_line=>
 
-        write contents before the deletion:
+        ::
                 Buffer, #sizeof c8, Iter as usize - Buffer as usize, *File
                 fwrite=>
+
         Iter skip_line=>
 
-        write contents after the deletion:
+        ::
                 Iter as usize - Buffer as usize %
                 File.Length - % %
                 Iter, #sizeof c8, % File

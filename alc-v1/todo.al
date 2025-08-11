@@ -44,13 +44,13 @@ Arg1 =[Va]
 Cmd :: c8 [Arg1, 1 c8]
 Cmd =[Va]
 "command: %c\n"0 _printf=>
-// Cmd is 'c' ->
-    // "create\n"0 _printf=>
-    // File :: addr file "todo.txt"0, "a"0 _fopen=>
-    // Item :: addr c8 [Argv, 2 addr]
-    // Item_Length :: i32 Item _strlen=>
-    // Item, 1, Item_Length, File _fwrite=>
-    // "\n", 1, Item_Length, File _fwrite=>
+Cmd is 'c' ->
+    "create\n"0 _printf=>
+    File :: addr file "todo.txt"0, "a"0 _fopen=>
+    Item :: addr c8 [Argv, 2 addr]
+    Item_Length :: i32 Item _strlen=>
+    Item, 1, Item_Length, File _fwrite=>
+    "\n", 1, Item_Length, File _fwrite=>
 
 Cmd is 'd' ->
     "delete\n"0 _printf=>
@@ -63,7 +63,7 @@ Cmd is 'd' ->
     Arg2 :: addr c8 [Argv, 2 addr]
     Index :: i64 Arg2 _atoi=>
     continue:
-        "hi" _printf=>
+        "hi"0 _printf=>
         continue->
 
 0

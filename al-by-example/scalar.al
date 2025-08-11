@@ -3,7 +3,7 @@
 
 i :: 0 //i defaults to i32. literal '0' is not always i32!
 j :: i64 1 // i64. i64 1 is syntax for i64 literal.
-d :: usiz 234
+d :: usize 234
 d :: 0.3 // defaults to f64. dot is mandatory.
 f :: f32 0.2
 b :: true

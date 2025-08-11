@@ -3,6 +3,7 @@
 foo: // this is a label. you can reference the next line of code with this.
     "foo" print=>
 
+
 // #branches (jump)
 ->foo // branches to to the label foo. note that after printing foo, it will branch to it again, making this an infinite loop.
 

@@ -454,7 +454,7 @@ loop_read_type:;
 
             if (!Is("->")) {
                 CompileErr("Syntax Error: -> expected, but found %d", c);
-                CompileErr("next was %d", it.data[1]);
+                // CompileErr("next was %d", it.data[1]);
             }
 
             if (token.len > 0) {
@@ -482,6 +482,7 @@ loop_read_type:;
         printd("end\n");
         goto loop;
     }
+
     if (Is(">>")) {
         ls_add_u32(&s.jump_pair_start, s.code.count);
         ls_add_u32(&s.code, B);
