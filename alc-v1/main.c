@@ -7,8 +7,13 @@
 #include "parser.h"
 #include "typedefs.h"
 
-int main(void) {
-    str src = read_source();
+int main(int argc, const char **argv) {
+    str src;
+    if (argc == 1) {
+        src = read_source("main.al");
+    } else {
+        src = read_source(argv[1]);
+    }
 
     parse(src);
 

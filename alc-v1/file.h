@@ -13,8 +13,7 @@ long file_len(FILE *f) {
     return filelen;
 }
 
-str read_source() {
-    const char *name = "todo.al";
+str read_source(const char *name) {
     printf("open file %s\n", name);
     FILE *src = fopen(name, "r");
     if (src == NULL)

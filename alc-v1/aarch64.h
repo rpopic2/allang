@@ -174,7 +174,8 @@ void make_prelude(stack_context *s, u8 r1, u8 r2) {
 
 // data processing - imm
 #define ADRP 0x90000000
-#define ADD_IMM 0x91000000
+#define ADD_IMM_WAT 0x91000000
+#define ADD_IMM 0x11000000
 #define SUB 0xd1000000
 #define SUBS_IMM 0x7100001f
 #define ADDS_IMM 0x3100001f
@@ -188,6 +189,7 @@ static inline u32 cmp(sf_t sf, u8 reg, i12 literal, bool negate) {
     return ADDS_IMM | !negate << 30 | sf << 31 | literal << 10 | reg << 5;
 }
 
+
 static inline u32 movk_imm(sf_t sf, u5 rd, i16 imm, u8 lsl) {
     return MOVK_IMM | sf << 31 | (lsl / 16) << 21 | imm << 5 | rd;
 }
@@ -200,6 +202,7 @@ static inline u32 movk_imm(sf_t sf, u5 rd, i16 imm, u8 lsl) {
 #define ADD_EXT 0x0b200000
 #define ADD_SHFT 0x0b000000
 #define SUB_SHFT 0x4b000000
+#define SUBS_SHFT 0x6b000000
 #define MADD 0x1b000000
 #define SDIV 0x1ac00c00
 
@@ -242,6 +245,8 @@ static inline u32 sub_reg_shft(sf_t sf, u8 rd, u8 rn, u8 rm) {
     return add_shft_f(sf, ADDSUB_SUB, rd, rn, rm, ASH_LSL, 0);
 }
 
+static inline u32 cmp_shft(sf_t sf, u5 wn, u5 wm, add_shift shift, u6 amount) { return SUBS_SHFT | sf << 31 | wn << 5 | wm << 16 | shift << 22 | amount << 10 | 0b11111;
+}
 
 static inline u32 mov(sf_t sf, u8 reg, u16 literal) {
     return MOV | sf << 31 | literal << 5 | reg;
@@ -265,6 +270,10 @@ static inline u32 adrp(u8 reg) {
 
 static inline u32 add_imm(sf_t sf, u8 reg1, u8 reg2, u12 imm12) {
     return ADD_IMM | sf << 31 | imm12 << 10 | reg2 << 5 | reg1;
+}
+
+static inline u32 addsub_imm(sf_t sf, addsub is_sub, u8 reg1, u8 reg2, u12 imm12) {
+    return ADD_IMM | sf << 31 | is_sub << 30 | imm12 << 10 | reg2 << 5 | reg1;
 }
 
 static inline u32 mul(sf_t sf, u5 rd, u5 rn, u5 rm) {

@@ -72,7 +72,7 @@ void parse_scope(str src, bool isnt_main, str name) {
 
     bool calls_fn = false;
 
-    int pending_lable_ident = 4 * depth;
+    int pending_label_ident = 4 * depth;
     bool pending_put_label = false;
     int pending_nreg_count = 0;
 
@@ -172,17 +172,18 @@ loop:;
     TokenEnd;
 
     if (pending_put_label) {
-        if (pending_lable_ident > ident) {
-            printd("put label here!(%d, %d)\n", pending_lable_ident, ident);
-            pending_lable_ident = 0;
+        if (pending_label_ident > ident) {
+            printd("put label here!(%d, %d)\n", pending_label_ident, ident);
+            pending_label_ident = 0;
             pending_put_label = false;
             char *ret;
             asprintf(&ret, "__anonyn_%d", anonyn_index++);
             tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
 
-            s.named_regs.count = pending_nreg_count;
-            named_reg_idx = NAMED_REG_START + pending_nreg_count;
-            pending_nreg_count = s.named_regs.count;
+            printd("restore nreg\n");
+            // s.named_regs.count = pending_nreg_count;
+            // named_reg_idx = NAMED_REG_START + pending_nreg_count;
+            // pending_nreg_count = s.named_regs.count;
             s.regs_to_save_size = s.named_regs.count;
         }
     }
@@ -211,7 +212,7 @@ loop:;
             pending_put_label = false;
             printd("newline put label..");
 
-            pending_lable_ident = 0;
+            pending_label_ident = 0;
             pending_put_label = false;
             char *ret;
             asprintf(&ret, "__anonyn_%d", anonyn_index++);
@@ -367,6 +368,14 @@ loop_read_type:;
         cond = COND_EQ;
     } else if (str_equal_c(token, "isnt ")) {
         cond = COND_NE;
+    } else if (str_equal_c(token, "<= ")) {
+        cond = COND_LE;
+    } else if (str_equal_c(token, ">= ")) {
+        cond = COND_GE;
+    } else if (token.data[0] == '<') {
+        cond = COND_LT;
+    } else if (token.data[0] == '>') {
+        cond = COND_GT;
     }
     if (cond != COND_NV) {
         printd("compare..");
@@ -458,18 +467,31 @@ loop_read_type:;
                 c = Next();
             }
             strprint(token);
+            bool is_set = false;
             if (IsNum(token.data[0])) {
                 number = strtol(token.data, &it.data, 10);
                 is_number_set = true;
             } else if (!is_number_set) {
-                CompileErr("Compile Error: Number expected, was %d", c);
-                CompileErr("next was %d", it.data[1]);
+                nreg *find = nreg_find(&s.named_regs, token);
+                if (!find) {
+                    CompileErr("Compile Error: Number expected, was %d", c);
+                    CompileErr("next was %d", it.data[1]);
+                    strprint(token);
+
+                    for (int i = 0; i < s.named_regs.count; ++i) {
+                        printf("%d: ", i), strprint(s.named_regs.data[i].name);
+                    }
+                    goto loop;
+                }
+                ls_add_u32(&s.code, cmp_shft(sf, reg, find->reg, ASH_LSL, 0));
+                is_set = true;
             }
             printd("with %d..", number);
             if (target_nreg isnt NULL) {
                 printd("target_nreg: %d, %d", target_nreg->reg, target_nreg->bsize);
             }
-            ls_add_u32(&s.code, cmp(sf, reg, number, is_minus));
+            if (!is_set)
+                ls_add_u32(&s.code, cmp(sf, reg, number, is_minus));
 
             c = Next();
             TokenStart;
@@ -492,14 +514,15 @@ loop_read_type:;
                 printd("next: %d%d", it.data[0], it.data[1]);
                 tmp_to_resolve = s.code.count;
                 ls_add_u32(&s.code, b_cond(0, cflags_flip(cond)));    // tmp offset needs to be done later..
-                pending_lable_ident = ident;
-                pending_nreg_count = s.named_regs.count;
+                pending_label_ident = ident;
+                // pending_nreg_count = s.named_regs.count;
+                printd("save nreg\n");
                 pending_put_label = true;
             }
 
             if (it.data[0] is '\n') {
                 if (pending_put_label)
-                    pending_lable_ident += 4;
+                    pending_label_ident += 4;
             } else if (pending_put_label) {
                 tmp_put_label_nextline = true;
             }
@@ -567,12 +590,15 @@ loop_read_type:;
                 n.bsize = t->bsize;
             }
 
-            nreg *find = nreg_find(&s.named_regs, token);
+            nreg *find = nreg_find(&s.named_regs, name);
             n.reg = named_reg_idx;
-            if (find != NULL) {
+            if (find) {
                 n.reg = find->reg;
                 *find = n;
                 printd("found "), strprint(find->name);
+            } else {
+
+                printd("not found "), strprint(token);
             }
             if (n.reg > 28) {
                 CompileErr("Error: used up all callee-saved registers\n");
@@ -667,6 +693,7 @@ loop_read_type:;
             CompileErr("Error: used up all scratch registers\n");
         }
         if (should_use_x0_reg(line_end, src, &it)) {
+            printd("use x0, %c(%d) %c(%d)\n", line_end[0], line_end[0], line_end[-1], *(line_end - 1));
             reg = regoff;
         } else {
             char *iter = line_end + 2;
@@ -798,6 +825,8 @@ loop_read_type:;
             sf_t reg_sf = nreg_sf(target_nreg);
             size_t offset = s.stack_size - s.spaces_left;
             // printd("stack_size =0x%zx, spaces_left=0x%zx.., siz=0x%zx", s.stack_size, s.spaces_left, siz_bytes);
+            if (token.data[-4] == '>')
+                reg = 0;
             u32 opc = str_imm(reg_sf, reg, SP, offset);
             ls_add_u32(&s.code, opc);
             if (s.spaces_left < siz_bytes) {
@@ -829,7 +858,7 @@ loop_read_type:;
 
             obj *find = obj_find(&s, token);
             if (find == NULL) {
-                CompileErr("Error: unknown named register "), PrintErrStr(token);
+                CompileErr("Error: unknown named object "), PrintErrStr(token);
             }
 
             ls_add_u32(&s.code, str_imm(reg_size, reg, SP, find->offset));
@@ -863,10 +892,32 @@ loop_read_type:;
             else
                 printd("sub..");
             u8 reg1 = 8, reg2 = 9;
-            if (s.code.count == 0) {
-                reg1 = 0, reg2 = 1;
+            u32 opc;
+            if (IsNum(it.data[1])) {
+                printd("is num!\n");
+                c = Next();
+                int num = read_int(token, &it);
+                opc = addsub_imm(W, add_or_sub, reg, reg1, num);
+                c = *it.data;
+            } else {
+                if (IsToken(it.data[1])) {
+                    c = Next();
+                    TokenStart;
+                    ReadToken;
+                    TokenEnd;
+                    nreg *find = nreg_find(&s.named_regs, token);
+                    if (find) {
+                        reg2 = find->reg;
+                    } else {
+                        CompileErr("Syntax Error: Expected number literal or named register\n");
+                    }
+                }
+                printd("regs\n");
+                if (s.code.count == 0) {
+                    reg1 = 0, reg2 = 1;
+                }
+                opc = add_shft_f(W, add_or_sub, reg, reg1, reg2, ASH_LSL, 0);
             }
-            u32 opc = add_shft_f(W, add_or_sub, reg, reg1, reg2, ASH_LSL, 0);
             ls_add_u32(&s.code, opc);
             token_consumed = true;
             printd("\n");
@@ -941,6 +992,11 @@ loop_read_type:;
             target_scratch = nreg_find(&s.scratch_aliases, token);
             if (target_scratch is NULL) {
                 CompileErr("Error: unknown named or scratch alias register(mov) "), PrintErrStr(token);
+
+                for (int i = 0; i < s.named_regs.count; ++i) {
+                    nreg tmp = s.named_regs.data[i];
+                    printd("%d: ", i), strprint(tmp.name);
+                }
             } else {
                 goto loop;
             }
@@ -958,8 +1014,37 @@ loop_read_type:;
                 printd("(%d)++", find->reg);
             } else {
                 sf_t sf = nreg_sf(find);
-                printd("simple mov %d->%d", reg, find->reg);
-                ls_add_u32(&s.code, mov_reg(sf, reg, find->reg));
+                char op = it.data[1];
+                printd("after: %d", op);
+
+                if (op == '-') {
+                    c = Next();
+                    c = Next();
+                    c = Next();
+                    TokenStart;
+                    ReadToken;
+                    TokenEnd;
+                    if (IsNum(*token.data)) {
+                        it.data--;
+                        int number = read_int(token, &it);
+                        u32 opc = addsub_imm(W, add_or_sub, reg, find->reg, number);
+                        ls_add_u32(&s.code, opc);
+                        c = *it.data;
+                        goto loop;
+                    }
+                    if (target_nreg) {
+                        reg = target_nreg->reg;
+                    }
+                    nreg *find2 = nreg_find(&s.named_regs, token);
+                    if (!find2) {
+                        CompileErr("Error: rhs is missing: "), strprint(token);
+                    } else {
+                        ls_add_u32(&s.code, sub_reg_shft(sf, reg, find->reg, find2->reg));
+                    }
+                } else {
+                    printd("simple mov %d<-%d", reg, find->reg);
+                    ls_add_u32(&s.code, mov_reg(sf, reg, find->reg));
+                }
             }
             token_consumed = true;
         } else {
