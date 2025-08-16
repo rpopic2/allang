@@ -53,7 +53,7 @@ void macho_stab_ext(fat code, str s) {
         .n_value = len, // TODO
     };
     ls_add_stabe(&stab_ext, entry);
-    printf("add stab entry, len %d, name ", stab_ext.count), strprint(s);
+    // printd("add stab entry, len %d, name ", stab_ext.count), strprint(s);
 
     ls_addran_char(&strtab, s.data, s.len);
     ls_add_char(&strtab, '\0');

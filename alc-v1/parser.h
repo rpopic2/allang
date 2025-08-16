@@ -57,7 +57,8 @@ void parse_scope(str src, bool isnt_main, str name) {
     str_iter it = into_iter(src);
     str token = {};
 
-    u8 named_reg_idx = 19;
+    const u8 NAMED_REG_START = 19;
+    u8 named_reg_idx = NAMED_REG_START;
     int regoff = 0;
     int ident = 0;
 
@@ -73,6 +74,8 @@ void parse_scope(str src, bool isnt_main, str name) {
 
     int pending_lable_ident = 4 * depth;
     bool pending_put_label = false;
+    int pending_nreg_count = 0;
+
     str tmp_defer_rets = str_empty;
     int tmp_to_resolve = 0;
     bool tmp_put_label_nextline = false;
@@ -176,6 +179,21 @@ loop:;
             char *ret;
             asprintf(&ret, "__anonyn_%d", anonyn_index++);
             tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
+
+            for (int i = 0; i < s.named_regs.count; ++i) {
+                nreg tmp = s.named_regs.data[i];
+                printd("%d: ", i), strprint(tmp.name);
+            }
+
+            s.named_regs.count = pending_nreg_count;
+            named_reg_idx = NAMED_REG_START + pending_nreg_count;
+            pending_nreg_count = s.named_regs.count;
+            s.regs_to_save_size = s.named_regs.count;
+
+            for (int i = 0; i < s.named_regs.count; ++i) {
+                nreg tmp = s.named_regs.data[i];
+                printd("%d: ", i), strprint(tmp.name);
+            }
         }
     }
 
@@ -469,6 +487,7 @@ loop_read_type:;
                 tmp_to_resolve = s.code.count;
                 ls_add_u32(&s.code, b_cond(0, cflags_flip(cond)));    // tmp offset needs to be done later..
                 pending_lable_ident = ident;
+                pending_nreg_count = s.named_regs.count;
                 pending_put_label = true;
             }
 
