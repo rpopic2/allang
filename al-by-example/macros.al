@@ -1,3 +1,6 @@
+"hello world" print=>
+
+
 // # inline
 
 // please use inline sparingly. only inline small functions.

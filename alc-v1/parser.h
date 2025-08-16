@@ -180,20 +180,10 @@ loop:;
             asprintf(&ret, "__anonyn_%d", anonyn_index++);
             tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
 
-            for (int i = 0; i < s.named_regs.count; ++i) {
-                nreg tmp = s.named_regs.data[i];
-                printd("%d: ", i), strprint(tmp.name);
-            }
-
             s.named_regs.count = pending_nreg_count;
             named_reg_idx = NAMED_REG_START + pending_nreg_count;
             pending_nreg_count = s.named_regs.count;
             s.regs_to_save_size = s.named_regs.count;
-
-            for (int i = 0; i < s.named_regs.count; ++i) {
-                nreg tmp = s.named_regs.data[i];
-                printd("%d: ", i), strprint(tmp.name);
-            }
         }
     }
 
@@ -326,6 +316,13 @@ loop_read_type:;
         if (c != ' ' && c != '\n') {
             CompileErr("Syntax error: space or newline required after a label: ");
         }
+
+        if (it.data[1] != '(') {
+            macho_stab_loc(s.code.count * sizeof (u32), token);
+            printd("don't parse as new scope\n");
+            goto loop;
+        }
+
         // c = Next();
         printd("static label '"), strprint_nl(token); printd("', ");
 
@@ -338,6 +335,7 @@ loop_read_type:;
                     break;
             }
         }
+
 
         ++depth;
         printd("\n*** new stack, depth %d\n", depth);
@@ -446,7 +444,15 @@ loop_read_type:;
             } else if (c is '\'') {
                 printd("char..");
                 c = Next();
-                number = (int)c;
+                if (c == '\\') {
+                    c = Next();
+                    if (c == 'n')
+                        number = '\n';
+                    else
+                        CompileErr("Error: escape sequence not found for %c", c);
+                } else {
+                    number = (int)c;
+                }
                 is_number_set = true;
                 c = Next();
                 c = Next();
@@ -471,7 +477,7 @@ loop_read_type:;
             TokenEnd;
 
             if (!Is("->")) {
-                CompileErr("Syntax Error: -> expected, but found %d", c);
+                CompileErr("Syntax Error: -> expected, but found '%c'(%d)", c, c);
                 // CompileErr("next was %d", it.data[1]);
             }
 
@@ -570,6 +576,10 @@ loop_read_type:;
             }
             if (n.reg > 28) {
                 CompileErr("Error: used up all callee-saved registers\n");
+                for (int i = 0; i < s.named_regs.count; ++i) {
+                    nreg tmp = s.named_regs.data[i];
+                    printd("%d: ", i), strprint(tmp.name);
+                }
             }
 
             if (find == NULL) {
@@ -582,7 +592,7 @@ loop_read_type:;
 
                 if (n.is_addr isnt ptype_stack_addr && !is_stack_alloc) {
                     // printd("inc reg idx..");
-                    s.regs_to_save[s.regs_to_save_size++] = n.reg;
+                    s.regs_to_save[s.regs_to_save_size++] = n.reg; // TODO this regs_to_save_size should be maximum of nreg index used.
                     named_reg_idx += 1;
                 }
                 ls_add_nreg(&s.named_regs, n);
@@ -739,7 +749,7 @@ loop_read_type:;
                 printd("offset is %d", offset);
 
                 reg2 = nreg_target->reg;
-                
+
                 printd("size: %d\n", size);
 
                 printd("from nreg..end\n");
@@ -839,19 +849,28 @@ loop_read_type:;
         add_or_sub = ADDSUB_SUB;
 
     if (add_or_sub isnt ADDSUB_NONE) {
-        c = Next();
-        if (tokc is '+')
-            printd("add..");
-        else
-            printd("sub..");
-        u8 reg1 = 8, reg2 = 9;
-        if (s.code.count == 0) {
-            reg1 = 0, reg2 = 1;
+        if (tokc is '+' && token.data[-1] == '+') {
+            u32 opc = add_imm(W, reg, reg, 1);
+            ls_add_u32(&s.code, opc);
+            token_consumed = true;
+            printd("plusplus");
+        } else if (token.data[-1] != ' ') {
+            CompileErr("Syntax Error: space expected before arithmetic operators\n");
+        } else {
+            c = Next();
+            if (tokc is '+')
+                printd("add..");
+            else
+                printd("sub..");
+            u8 reg1 = 8, reg2 = 9;
+            if (s.code.count == 0) {
+                reg1 = 0, reg2 = 1;
+            }
+            u32 opc = add_shft_f(W, add_or_sub, reg, reg1, reg2, ASH_LSL, 0);
+            ls_add_u32(&s.code, opc);
+            token_consumed = true;
+            printd("\n");
         }
-        u32 opc = add_shft_f(W, add_or_sub, reg, reg1, reg2, ASH_LSL, 0);
-        ls_add_u32(&s.code, opc);
-        token_consumed = true;
-        printd("\n");
     }
     if (tokc is '*') {
         c = Next();
@@ -931,8 +950,15 @@ loop_read_type:;
             if (find->is_addr == ptype_stack_addr) {
                 obj *find = obj_find(&s, token);
                 ls_add_u32(&s.code, add_imm(X, reg, SP, find->offset));
+            } else if (Is("++")) {
+                sf_t sf = nreg_sf(find);
+                u32 opc = add_imm(sf, find->reg, find->reg, 1);
+                ls_add_u32(&s.code, opc);
+                token_consumed = true;
+                printd("(%d)++", find->reg);
             } else {
                 sf_t sf = nreg_sf(find);
+                printd("simple mov %d->%d", reg, find->reg);
                 ls_add_u32(&s.code, mov_reg(sf, reg, find->reg));
             }
             token_consumed = true;

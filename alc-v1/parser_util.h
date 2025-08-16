@@ -143,6 +143,6 @@ char *find_line_end(char *p) {
 
 bool should_use_x0_reg(char *line_end, str src, str_iter *it) {
     return line_end + 3 >= (src.data + src.len)    // is end of file
-            || (*line_end == '>' && line_end[-1] != '>' && line_end[-2] != ' ') // line ends with => or ->
+            || (*line_end == '>' && line_end[-1] != '>' && line_end[-2] != ' ' && line_end[-1] == '=') // line ends with =>
             || (str_equal_c((str){it->data + 1, 3}, "ret")); // line ends with ret
 }

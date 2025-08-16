@@ -1,6 +1,6 @@
 // using c libraries
 
-@inline File :: (addr cstr with_mode Mode =>File~)
+@inline File :: (addr cstr 'with_mode' Mode =>File~)
         "todo.txt", Mode fopen=> =Self
         Self isnt pointing -> "File does not exist" panic
 
@@ -71,9 +71,11 @@ Command is 'd' ->
         Iter skip_line=>
 
         ::
-                Iter as usize - Buffer as usize %
-                File.Length - % %
+                Iter as usize - Buffer as usize =%
+                File.Length - % =%
                 Iter, #sizeof c8, % File
                 fwrite=>
 
         Ok ret
+
+Error ret

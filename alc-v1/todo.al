@@ -60,10 +60,16 @@ Cmd is 'd' ->
     Buffer, 1, 1024, File
     _fread=>
 
-    Arg2 :: addr c8 [Argv, 2 addr]
-    Index :: i64 Arg2 _atoi=>
-    continue:
-        "hi"0 _printf=>
-        continue->
+    Index :: i64 [Argv, 2 addr] _atoi=>
+    Index =[Va]
+    "requested index: %d\n"0 _printf=>
 
+    Iter :: addr c8 Buffer
+    continue:
+        Iter++
+        Iter =[Va]
+        "it: %p\n"0 _printf=>
+        [Iter, 0 c8] isnt '\n' continue->
+
+    "ok!"0 _printf=>
 0

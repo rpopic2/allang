@@ -10,6 +10,7 @@
 typedef i32 i19;
 typedef i32 i26;
 typedef i16 i12;
+typedef u8 u12;
 typedef u8 u6;
 typedef u8 u5;
 typedef u8 u3;
@@ -262,7 +263,7 @@ static inline u32 adrp(u8 reg) {
     return ADRP | reg;
 }
 
-static inline u32 add_imm(sf_t sf, u8 reg1, u8 reg2, u16 imm12) {
+static inline u32 add_imm(sf_t sf, u8 reg1, u8 reg2, u12 imm12) {
     return ADD_IMM | sf << 31 | imm12 << 10 | reg2 << 5 | reg1;
 }
 
