@@ -58,6 +58,10 @@ cflags cflags_flip(cflags f) {
         return COND_NE;
     else if (f == COND_NE)
         return COND_EQ;
+    else if (f == COND_LT)
+        return COND_GE;
+    else if (f == COND_GT)
+        return COND_LE;
     else
         CompileErr("invalid flip value of %d", f);
     return COND_NV;

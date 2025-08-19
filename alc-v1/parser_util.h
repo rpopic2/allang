@@ -108,7 +108,7 @@ int read_int(str token, str_iter *rit) {
     int number = 0;
 
     if (!IsNum(c) && c != '-') {
-        CompileErr("Compile Error: Number expected, was %d", c);
+        CompileErr("Compile Error: Number expected while reading int, was %d", c);
     }
 
     TokenStart;

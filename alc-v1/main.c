@@ -119,5 +119,7 @@ int main(int argc, const char **argv) {
     fwrite(obj_buf, sizeof (char), total_size, file);
     fclose(file);
     free(obj_buf);
+
+    return has_compile_err;
 }
 

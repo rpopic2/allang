@@ -3,6 +3,7 @@
 #include "typedefs.h"
 #include <stdbool.h>
 #include <stdio.h>
+
 typedef struct {
     bool has_value;
     u32 value;

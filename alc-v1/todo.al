@@ -3,6 +3,9 @@ struct file {
 }
 struct void { }
 
+// @inline hi: (i32 a, i32 b)
+//     +
+
 _filelen: (addr file File =>i32 Retval)
     File, 0, 2 _fseek=>
     Length :: i32 File _ftell=>
@@ -69,15 +72,17 @@ Cmd is 'd' ->
     _fread=>
     File _fclose=>
 
-    Index :: i64 [Argv, 2 addr] _atoi=>
-    Index =[Va]
+    IndexToDelete :: i64 [Argv, 2 addr] _atoi=>
+    IndexToDelete =[Va]
     "requested index: %d\n"0 _printf=>
+
+    File :: addr file "todo.txt"0, "w"0 _fopen=>
 
     Iter :: addr c8 Buffer
 
     I :: i32 0
     _loop:
-        I is Index _break->
+        I is IndexToDelete _break->
         _loop2:
             Iter++
             [Iter, 0 c8] isnt '\n' _loop2->
@@ -86,10 +91,6 @@ Cmd is 'd' ->
     _break:
     Iter++
 
-    File :: addr file "todo.txt"0, "w"0 _fopen=>
-
-    Iter - Buffer =[Va]
-    "write %ld bytes\n"0 _printf=>
     Buffer, 1, Iter - Buffer, File _fwrite=>
 
     _loop3:
@@ -98,12 +99,15 @@ Cmd is 'd' ->
     Iter++
 
     Write_Length :: i64 Iter - Buffer
-    Write_Length =[Va]
-    "write2 %ld bytes\n"0 _printf=>
+
+    Write_Length :: i64
+        [File_Length] - Write_Length
 
     Iter, 1, Write_Length, File _fwrite=>
 
     File _fclose=>
 
     "ok2!\n"0 _printf=>
+
 0
+

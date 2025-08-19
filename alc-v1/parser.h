@@ -49,7 +49,7 @@ void add_nreg(stack_context *s, str type_name, str param_name, int from_reg, pty
     *named_reg_idx += 1;
 }
 
-int anonyn_index = 0;
+int anony_index = 0;
 
 void parse_scope(str src, bool isnt_main, str name) {
     printd("start parse\n\n");
@@ -81,6 +81,9 @@ void parse_scope(str src, bool isnt_main, str name) {
     bool tmp_put_label_nextline = false;
 
     nreg *target_scratch = NULL;
+
+    nreg *target_assignment = NULL;
+    int target_assignment_ident = 0;
 
     if (isnt_main) {
         int c = Next();
@@ -145,7 +148,7 @@ read_type:;
 
             if (token.len is 0) {
                 char *ret;
-                asprintf(&ret, "__anonyn_%d", anonyn_index++);
+                asprintf(&ret, "__anony_%d", anony_index++);
                 token = (str){ .data = ret, .len = strlen(ret) };
             }
             // macho_stab_loc(s.code.count * sizeof (u32), token);
@@ -177,7 +180,7 @@ loop:;
             pending_label_ident = 0;
             pending_put_label = false;
             char *ret;
-            asprintf(&ret, "__anonyn_%d", anonyn_index++);
+            asprintf(&ret, "__anonyn_%d", anony_index++);
             tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
 
             printd("restore nreg\n");
@@ -186,6 +189,14 @@ loop:;
             // pending_nreg_count = s.named_regs.count;
             s.regs_to_save_size = s.named_regs.count;
         }
+    }
+
+    if (target_assignment && target_assignment_ident == ident) {
+        printd("multiline end\n");
+        u32 opc = mov_reg(nreg_sf(target_assignment), target_assignment->reg, 8);
+        ls_add_u32(&s.code, opc);
+
+        target_assignment = NULL;
     }
 
     if (tmp_defer_rets.data != NULL) {
@@ -215,7 +226,7 @@ loop:;
             pending_label_ident = 0;
             pending_put_label = false;
             char *ret;
-            asprintf(&ret, "__anonyn_%d", anonyn_index++);
+            asprintf(&ret, "__anonyn_%d", anony_index++);
             tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
 
             int diff = s.code.count - tmp_to_resolve;
@@ -300,7 +311,8 @@ loop_read_type:;
         printd("\ntoken '"), strprint_nl(token), printd("': ");
     }
 
-    if (str_equal_c(token, "ret")) {
+    if (str_equal_c(token, "ret") && IsSpace(it.data[0])) {
+        printd("3: %d", it.data[0]);
         printd("ret\n");
         ls_add_u32(&s.code, RET);
         goto loop;
@@ -372,10 +384,12 @@ loop_read_type:;
         cond = COND_LE;
     } else if (str_equal_c(token, ">= ")) {
         cond = COND_GE;
-    } else if (token.data[0] == '<') {
+    } else if (str_equal_c(token, "< ")) {
         cond = COND_LT;
-    } else if (token.data[0] == '>') {
+        c = Next();
+    } else if (str_equal_c(token, "> ")) {
         cond = COND_GT;
+        c = Next();
     }
     if (cond != COND_NV) {
         printd("compare..");
@@ -597,8 +611,7 @@ loop_read_type:;
                 *find = n;
                 printd("found "), strprint(find->name);
             } else {
-
-                printd("not found "), strprint(token);
+                printd("not found "), strprint(name);
             }
             if (n.reg > 28) {
                 CompileErr("Error: used up all callee-saved registers\n");
@@ -626,6 +639,12 @@ loop_read_type:;
             }
             target_nreg = &n;
             iter_prev(&it);
+
+            if (it.data[0] == '\n') {
+                target_assignment = &n;
+                target_assignment_ident = ident;
+                printd("multiline assign, ident: %d\n", ident);
+            }
             goto loop;
         }
 
@@ -693,7 +712,7 @@ loop_read_type:;
             CompileErr("Error: used up all scratch registers\n");
         }
         if (should_use_x0_reg(line_end, src, &it)) {
-            printd("use x0, %c(%d) %c(%d)\n", line_end[0], line_end[0], line_end[-1], *(line_end - 1));
+            // printd("use x0, %c(%d) %c(%d)\n", line_end[0], line_end[0], line_end[-1], *(line_end - 1));
             reg = regoff;
         } else {
             char *iter = line_end + 2;
@@ -804,7 +823,6 @@ loop_read_type:;
         u32 opc = ldr_size(dst_reg, reg2, offset, size);
         ls_add_u32(&s.code, opc);
 
-        printd("next was %x, %c", c, c);
         printd("..end\n");
         token_consumed = true;
     }
@@ -1012,6 +1030,12 @@ loop_read_type:;
                 ls_add_u32(&s.code, opc);
                 token_consumed = true;
                 printd("(%d)++", find->reg);
+            } else if (Is("--")) {
+                sf_t sf = nreg_sf(find);
+                u32 opc = addsub_imm(sf, ADDSUB_SUB, find->reg, find->reg, 1);
+                ls_add_u32(&s.code, opc);
+                token_consumed = true;
+                printd("(%d)--", find->reg);
             } else {
                 sf_t sf = nreg_sf(find);
                 char op = it.data[1];
@@ -1104,7 +1128,7 @@ loop_read_type:;
     if (token.len == 0 && (c == '\n' || c == '\0'))
         token_consumed = true;
     if (!token_consumed && !(c == '\n' && it.data[1] == '\0'))
-        CompileErr("token is not consumed %d", c), strprint(token), printd("\n");
+        CompileErr("token was not consumed %d", c), strprint(token), printd("\n");
     if (c == '\n') {
         // printd("\\n\n");
         // ident = 0;

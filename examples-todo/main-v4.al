@@ -38,7 +38,7 @@ Command ::
 Command is 'c' ->
         @File "a"
         ~ . fclose=>
-        Arg.2 :: [Argv, 2, addr c8]
+        Arg.2 :: [Argv, 2 addr c8]
 
         *Arg.2, *File
         fwrite=>

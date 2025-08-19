@@ -5,7 +5,7 @@
 
 labels
 - nested labels
-- scoping rules
+v scoping rules
 
 memory safety
 - addr mutable
