@@ -1,9 +1,3 @@
-# allang: alvin's assembly like language
-by rpopic2
-
-ex) dead simple todo list interoperrating with c standard library
-
-```
 #import stdio
 #import stdlib
 
@@ -115,5 +109,4 @@ usage: (=>)
         delete entry at 0: -d 0
     EOF
     printf=>
-```
 

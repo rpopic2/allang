@@ -3,8 +3,15 @@
 - make a str type
 - make struct follow aapcs
 
+- multiline expressions
+- bug in todo.al: running with -p flag (any invalid flags) will segfault
+    -> if not jump label is placed at incorrect place
+- bug in fib.al: retuning issues
+
+- defer
+
 labels
-- nested labels
+v nested labels
 v scoping rules
 
 memory safety

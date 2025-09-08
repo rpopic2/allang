@@ -14,10 +14,11 @@ long file_len(FILE *f) {
 }
 
 str read_source(const char *name) {
-    printf("open file %s\n", name);
     FILE *src = fopen(name, "r");
-    if (src == NULL)
+    if (src == NULL) {
+        printf("cannot find file %s\n", name);
         exit(1);
+    }
 
     long src_len = file_len(src);
 
