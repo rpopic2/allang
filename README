@@ -6,18 +6,7 @@ ex) dead simple todo list interoperrating with c standard library
 ```
 #import stdio
 #import stdlib
-
-file:
-    @inline open: (cstr 'filemode' Mode =>File~)
-            "todo.txt", Mode fopen=> =Self
-            Self isnt pointing -> "File does not exist", Error panic
-            Self
-
-    @inline len: (addr FILE *File =>i32)
-            *File 1 fseek=>
-            File ftell=> =Self
-            *File 0 fseek=>
-            Self
+#import string
 
 main: (i32 Argc, addr addr c8 Argv =>Error?)
 
@@ -33,7 +22,7 @@ main: (i32 Argc, addr addr c8 Argv =>Error?)
             Self isnt pointing -> "malloc failed" panic
         ~ free=>
 
-        *Buffer, #sizeof c8, File Length *File
+        *Buffer, #sizeof c8, File Length, *File
         fread=>
 
         :: print_file
@@ -55,7 +44,7 @@ main: (i32 Argc, addr addr c8 Argv =>Error?)
         'd' delete->
 
 create:
-    File :: filemode "a" @file.open
+    File :: 'filemode' "a" @file.open
     ~ fclose=>
 
     File, [Argv, 2 addr c8], fwrite=>
@@ -64,8 +53,7 @@ create:
 #allow_loop
 @inline read_until_newline: (code =>code)
     @loop
-        Iter++
-        [Iter, 0 c8] isnt '\n' continue->
+        [Iter++, 0 c8] isnt '\n' continue->
 
 delete:
     Buffer ::
@@ -115,5 +103,17 @@ usage: (=>)
         delete entry at 0: -d 0
     EOF
     printf=>
-```
 
+file:
+    @inline open: (cstr 'filemode' Mode =>File~)
+            "todo.txt", Mode fopen=> =Self
+            Self isnt pointing -> "File does not exist", Error panic
+            Self
+
+    @inline len: (addr FILE *File =>i32)
+            *File 1 fseek=>
+            File ftell=> =Self
+            *File 0 fseek=>
+            Self
+
+```
