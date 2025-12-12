@@ -180,7 +180,7 @@ loop:;
             pending_label_ident = 0;
             pending_put_label = false;
             char *ret;
-            asprintf(&ret, "__anonyn_%d", anony_index++);
+            asprintf(&ret, "__anonym_%d", anony_index++);
             tmp_defer_rets = (str){ .data = ret, .len = strlen(ret) };
 
             printd("restore nreg\n");

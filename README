@@ -17,9 +17,7 @@ main: (i32 Argc, addr addr c8 Argv =>Error?)
 
         File Length :: *File @file.len
 
-        Buffer ::
-            File Length malloc=> =Self
-            Self isnt pointing -> "malloc failed" panic
+        Buffer :: File Length @buffer.new
         ~ free=>
 
         *Buffer, #sizeof c8, File Length, *File
@@ -51,24 +49,22 @@ create:
 
 
 #allow_loop
-@inline read_until_newline: (code =>code)
+@inline read_until_newline: (code, iter c8 *Iter =>code)
     @loop
-        [Iter++, 0 c8] isnt '\n' continue->
+        [*Iter++, 0 c8] isnt '\n' continue->
 
 delete:
     Buffer ::
         File :: 'filemode' "r" @flie.open
         ~ fclose=>
-
         File Length :: *File @file.len
-
-        File Length malloc=> =Self
+        File Length @buffer.new
 
         Self, #sizeof c8, File Length *File
         fread=>
     ~ free=>
 
-    Index To Delete :: i64 [Argv, 2 addr] atoi=>
+    Index To Delete :: [Argv, 2 addr] atoi=>
 
     File :: 'filemode' "w" @file.open
     ~ fclose=>
@@ -86,14 +82,14 @@ delete:
     Buffer, #sizeof c8, Iter - Buffer, *File
     fwrite=>
 
-    @read_untile_newline
-    Iter++
+    *Iter @read_untile_newline
+    *Iter++
 
     Write_Length ::
         Iter - Buffer =$
         File_Length - $
 
-    Iter, 1, Write_Length, File
+    Iter, 1, Write_Length, *File
     fwrite=>
 
 usage: (=>)
@@ -106,14 +102,20 @@ usage: (=>)
 
 file:
     @inline open: (cstr 'filemode' Mode =>File~)
-            "todo.txt", Mode fopen=> =Self
-            Self isnt pointing -> "File does not exist", Error panic
-            Self
+        "todo.txt", Mode fopen=> =Self
+        Self isnt pointing -> "File does not exist", Error panic
+        Self
 
     @inline len: (addr FILE *File =>i32)
-            *File 1 fseek=>
-            File ftell=> =Self
-            *File 0 fseek=>
-            Self
+        *File 1 fseek=>
+        File ftell=> =Self
+        *File 0 fseek=>
+        Self
+
+buffer:
+    @inline new: (usize Size)
+        Size malloc=> =Self
+        Self isnt pointing -> "malloc failed", Error panic
 
 ```
+
