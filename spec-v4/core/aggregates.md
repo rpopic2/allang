@@ -86,3 +86,16 @@ R is { Error } ->
 T is { Ok, &Value } ->
     `value was `Value print=>
 
+
+# copying structs
+
+[Large_Struct]  // error! structs larger than 16 bytes cannot be loaded
+Large_Struct @copyto Dest   // now copies the struct
+Large_Struct @copyto_unchecked Dest   // type unchecked version
+
+
+# struct equality
+
+Large_Struct @equals Dest   // compares all memory
+Large_Struct @sometype.equals Dest  // or use user-defined equals macro
+

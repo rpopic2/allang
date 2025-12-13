@@ -2,6 +2,7 @@
 
 print=>         // function call (branch to to function and return)
 ret             // returns from function
+<=              // considering
 
 continue->      // branches to a label called continue
 <-              // breaks from current block
@@ -12,18 +13,18 @@ Sum ::
     1, 2        // moved to parameter registers. parameter comes before functions.
     add=>       // returned value save to register Sum
 
-I :: 0
-I print=>
-I ret           // named registers survive after a function call
+i :: 0
+i print=>
+i ret           // named registers survive after a function call
 
 # conditional branches
 
 // >, >=, <, <=, is, isnt | are available.
 
-I is 0 ->
+i is 0 ->
     "zero" print=>  // printed only when I is zero.
 
-I >= 3 ->
+i >= 3 ->
     "greater or equal" print=>
 
 // equal, carry, minus, overflow | are available.
@@ -37,7 +38,7 @@ U subs 1 isnt negative ->
 
 1 syscall>          // calls system call 1
 
-# boolean operations
+# conditional bracnehs with boolean
 
 I is 0 or I is 3 ->
     ...

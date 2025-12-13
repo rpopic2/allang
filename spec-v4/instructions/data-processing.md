@@ -46,14 +46,17 @@ I(+= 4)         // can be abbriviated like this
 I(LSL= 4)
 I(-4)           // moves -4
 I(-= 4)         // moves i - 4
+// I(- 4)       // this is invalid syntax
 
 # moving named registers
 
-I               // moves i register
-I + 4           // does not move register i. adds i + 4 into a register
+I               // moves register I to scratch register
+I + 4           // does not move register I. adds I + 4 into a register
 
 
 # conditional selects
+
+// these are quirks from arm architecture
 
 I < 4 ? "less than" : "equal or greater to" // use ?: operator
 print=>
@@ -71,4 +74,5 @@ print=>             // prints 10
 
 4 * 2 + 1
 print=>             // prints 9
+
 

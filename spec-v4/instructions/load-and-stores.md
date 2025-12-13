@@ -15,9 +15,3 @@ A[3]            // this is a bound checked version
 [A(+= 3 i32)]   // adds 3 * 4 bytes to a and loads
 \[A](+= 3 i32)  // loads and add 3 * 4 bytes to a
 
-# copying structs
-
-[Large_Struct]  // error! structs larger than 16 bytes cannot be loaded
-Large_Struct @copyto Dest   // now copies the struct
-Large_Struct @mem_copyto Dest   // type unchecked version
-

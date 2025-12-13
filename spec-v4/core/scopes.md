@@ -8,6 +8,7 @@ point:
 
     add: (#Self, self Other => self)    // functions created
         { Self.X + Other.X, Self.Y + Other.Y }
+
     equals: (addr #Self, addr self Other => bool)
         Self.X is Other.X
         and Self.Y is Other.Y
