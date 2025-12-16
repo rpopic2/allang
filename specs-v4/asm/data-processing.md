@@ -1,4 +1,9 @@
-# moving data
+# moving numeric literals to scratch register
+
+```
+mov_literal_to_scratch ::= literal_numeric
+literal_numeric ::= [typename ][-]0-9+
+```
 
 0   // moves 0 to a register.
     // moves to a return register if this is the last line

@@ -55,3 +55,5 @@ allang is statically, strongly typed language. it checks types at the compile ti
 though allang is not a garbage collected language, it provides various memory safety features,
 such as tying lifetime of a resource to scope, reference-counted smart pointers.
 
+###
+
