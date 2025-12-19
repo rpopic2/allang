@@ -30,3 +30,24 @@ foo:
         I(2)
         I print=>
 
+# conditional functions
+
+foo: (addr i32 Ptr=>) (Ptr is pointing) // function gets called only if Ptr is pointing to a valid address
+    ...
+
+// the conditional check part will be inlined to the function call.
+
+# partial inlining
+
+```
+@inline SetVisible: (#Self, #comptime bool Visible)
+    #is Visible->
+        true =[Self.visibility]
+        Self set_dirty=>
+    #isnt Visible->
+        false =[Self.visibility]
+```
+
+Component. @SetVisible true@    // inlined only true path
+Component. @SetVisible false@   // inlined only false path
+

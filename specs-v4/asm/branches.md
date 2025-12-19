@@ -1,13 +1,38 @@
-# branches
+## function call
+```
+fn/call ::= id/fn=>
 
-print=>         // function call (branch to to function and return)
-ret             // returns from function
-<=              // considering
+id/fn ::= [_]a-z[a-zA-Z0-9_]
+```
 
-continue->      // branches to a label called continue
-<-              // breaks from current block
+### assmebles to
 
-# branches and named registers
+`call`, `bl`
+
+
+## function definition
+```
+fn/def ::= id/fn: ([fn/params ]=>[fn/returns])\n\tblock
+```
+
+### assembles to
+
+this information is only meaningful to the programmer.
+
+
+## return
+
+```
+return ::= "ret"
+```
+
+### assembles to
+
+it jumps to return block, not actually compiling to `ret` instructions.
+
+
+
+## branches and named registers
 
 Sum ::
     1, 2        // moved to parameter registers. parameter comes before functions.
@@ -17,7 +42,20 @@ i :: 0
 i print=>
 i ret           // named registers survive after a function call
 
-# conditional branches
+
+
+## conditional branches
+
+```
+branch/cond ::= expr/bool ->\n\tblock
+
+expr/bool ::=
+    | regable op/bool regable
+    | regable ("is" | "isnt") "pointing"
+    | op/bool
+
+op/cmp ::= "is" | "isnt" | ">" | "<" | "<=" | ">="
+```
 
 // >, >=, <, <=, is, isnt | are available.
 
@@ -34,11 +72,13 @@ U adds 1 is overflow ->
 U subs 1 isnt negative ->
 // note only flag-setting instructions are available
 
-# system calls
 
-1 syscall>          // calls system call 1
+## conditional branches with boolean operations
 
-# conditional bracnehs with boolean
+```
+op/bool ::=
+    | expr/bool[\n | <sp>]("and" | "or") expr/bool
+```
 
 I is 0 or I is 3 ->
     ...
