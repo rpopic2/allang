@@ -46,5 +46,5 @@ inline bool is_digit(char c) {
     return c >= '0' && c <= '9';
 }
 
-#define STR_FROM_CSTR(s) (str) { .data = (s), .end = (s) + strlen(s) }
+#define STR_FROM(s) (str) { .data = (s), .end = (s) + strlen(s) }
 

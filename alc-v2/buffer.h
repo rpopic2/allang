@@ -30,16 +30,22 @@ inline void buf_init(buf *buffer, size_t size) {
     buffer->end = buffer->start + size;
 }
 
-inline void buf_puts(buf *buffer, str s) {
-    size_t len = str_len(&s);
+inline void buf_puts(buf *buffer, const str *s) {
+    size_t len = str_len(s);
     buf_grow(buffer, len);
 
-    memcpy(buffer->cur, s.data, len);
+    memcpy(buffer->cur, s->data, len);
     buffer->cur += len;
 }
 
+inline void buf_putc(buf *buffer, char c) {
+    buf_grow(buffer, 1);
+
+    *buffer->cur++ = c;
+}
+
 #define SPRINTF_BUFSIZ 0x400
-static char sprintf_buf[SPRINTF_BUFSIZ];
+_Thread_local static char sprintf_buf[SPRINTF_BUFSIZ];
 
 static void buf_snprintf(buf *buffer, const char *format, ...) {
     va_list args;
@@ -58,4 +64,6 @@ static void buf_snprintf(buf *buffer, const char *format, ...) {
     buffer->cur += num_printed;
 }
 
-
+void buf_fwrite(const buf *buffer, FILE *out) {
+    fwrite(buffer->start, sizeof (char), buffer->cur - buffer->start, out);
+}
