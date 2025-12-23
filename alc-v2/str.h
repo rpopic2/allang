@@ -25,7 +25,11 @@ inline bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
 }
 
 inline void str_printnl(const str *s) {
-    fwrite(s->data, sizeof (char), str_len(s), stdout);
+    if (s->data == s->end) {
+        fputs("(empty)", stdout);
+    } else {
+        fwrite(s->data, sizeof (char), str_len(s), stdout);
+    }
 }
 
 inline void str_print(const str *s) {

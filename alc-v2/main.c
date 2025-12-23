@@ -8,7 +8,30 @@
 
 int lineno = 1;
 
+void lex(str *token, iter *src) {
+    while (true) {
+        char c = *src->cur;
+        if (c == '"') {
+            do {
+                c = *(++src->cur);
+            } while (c != '"' && c != '\n');
+            token->end = ++src->cur;
+            ++src->cur;
+            break;
+        }
+        if (c == '\n')
+            ++lineno;
+        if (c == ',' || c == '\n' || c == ' ' || c == '\0') {
+            token->end = src->cur++;
+            if (c == ',')
+                src->cur++;
+            break;
+        }
+        ++src->cur;
+    }
+}
 void compile_err(const char *format, ...) {
+    return;
     fprintf(stderr, "line %d: ", lineno);
 
     va_list args;
@@ -17,14 +40,14 @@ void compile_err(const char *format, ...) {
     va_end(args);
 }
 
-typedef struct _compiler_context {
+typedef struct {
     enum {
         RET, PARAM, SCRATCH
     } reg_dst;
     int reg_off;
-} compiler_context;
+} parser_context;
 
-void literal_numeric(const compiler_context *state, long number) {
+void literal_numeric(const parser_context *state, long number) {
     if (state->reg_dst == RET)
         emit_mov_retreg(state->reg_off, number);
     else if (state->reg_dst == SCRATCH)
@@ -34,6 +57,34 @@ void literal_numeric(const compiler_context *state, long number) {
     else
         fputs("unknown destinination register state\n", stderr);
 }
+
+void parse(const str *token, parser_context *state) {
+    if (is_digit(token->data[0])) {
+        long number = strtol(token->data, NULL, 0);
+        literal_numeric(state, number);
+    } else if (token->data[0] == '\'') {
+        char c = token->data[1];
+        literal_numeric(state, c);
+        if (token->end[-1] != '\'') {
+            compile_err("expected closing \'\n");
+        }
+    } else if (token->data[0] == '"') {
+        // literal_string(token);
+        if (token->end[-1] != '"') {
+            compile_err("expected closing \"\n");
+        }
+    } else if (str_eq_lit(token, "ret")) {
+        state->reg_dst = RET;
+    }
+
+    char end = token->end[-1];
+    if (end == ',') {
+        ++state->reg_off;
+    } else if (token->end[0] == '\n') {
+        state->reg_off = 0;
+    }
+}
+
 
 int main(int argc, const char *argv[]) {
     const char *source_name = argv[1];
@@ -57,53 +108,26 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    iter src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
+    iter _src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
+    iter *src = &_src;
 
     emit_init();
 
     emit_mainfn();
 
-    compiler_context _state;
-    compiler_context *state = &_state;
+    parser_context _state;
+    parser_context *state = &_state;
     state->reg_dst = SCRATCH;
     state->reg_off = 0;
 
-    while (src.cur < src.end) {
-        str _token = {.data = src.cur};
+    while (src->cur < src->end) {
+        str _token = {.data = src->cur};
         str *token = &_token;
-        while (true) {
-            char c = *src.cur;
-            if (c == '\n')
-                ++lineno;
-            if (c == '\n' || c == ' ' || c == '\0') {
-                token->end = src.cur;
-                ++src.cur;
-                break;
-            }
-            ++src.cur;
-        }
+        lex(token, src);
         str_print(token);
-
-        if (is_digit(token->data[0])) {
-            long number = strtol(token->data, NULL, 0);
-            literal_numeric(state, number);
-        } else if (token->data[0] == '\'') {
-            char c = token->data[1];
-            literal_numeric(state, c);
-            if (token->data[2] != '\'') {
-                compile_err("expected closing \'\n");
-            }
-        } else if (str_eq_lit(token, "ret")) {
-            state->reg_dst = RET;
-        }
-
-        char end = token->end[-1];
-        if (end == ',') {
-            ++state->reg_off;
-        } else if (token->end[0] == '\n') {
-            state->reg_off = 0;
-        }
+        parse(token, state);
     }
+
     emit_ret();
 
     size_t source_name_len = strlen(source_name);
