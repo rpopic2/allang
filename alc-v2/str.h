@@ -46,5 +46,9 @@ inline bool is_digit(char c) {
     return c >= '0' && c <= '9';
 }
 
+inline iter iter_init(char *start, size_t end) {
+    return (iter){.start = start, .cur = start, .end = start + end};
+}
+
 #define STR_FROM(s) (str) { .data = (s), .end = (s) + strlen(s) }
 

@@ -58,6 +58,49 @@ void literal_numeric(const parser_context *state, long number) {
         fputs("unknown destinination register state\n", stderr);
 }
 
+void literal_string(const parser_context *state, const str *token) {
+    size_t len = str_len(token);
+    iter unescaped = iter_init(malloc(len), len);
+
+    for (int i = 0; i < len; ++i) {
+        char c = token->data[i];
+        if (c != '\\')
+            *unescaped.cur++ = c;
+        else {
+            c = token->data[++i];
+            char result = ' ';
+            switch (c) {
+            case 'n':
+                result = '\n';
+                break;
+            case 't':
+                result = '\t';
+                break;
+            case '0':
+                result = '\0';
+                break;
+            case '\\':
+                result = '\\';
+                break;
+            default:;
+                long number = strtol(token->data, NULL, 0);
+                if (number > sizeof (char)) {
+                    compile_err("%d is too large for a string literal", number);
+                } else {
+                    result = (char)number;
+                }
+                break;
+            }
+            *unescaped.cur++ = result;
+        }
+    }
+
+    emit_string_lit(state->reg_off, token);
+    if (token->end[-1] != '"') {
+        compile_err("expected closing \"\n");
+    }
+}
+
 void parse(const str *token, parser_context *state) {
     if (is_digit(token->data[0])) {
         long number = strtol(token->data, NULL, 0);
@@ -69,14 +112,10 @@ void parse(const str *token, parser_context *state) {
             compile_err("expected closing \'\n");
         }
     } else if (token->data[0] == '"') {
-        emit_string_lit(state->reg_off, token);
-        if (token->end[-1] != '"') {
-            compile_err("expected closing \"\n");
-        }
+        literal_string(state, token);
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
     } else if (memcmp(token->end - 2, "=>", 2) == 0) {
-        printf("fn call");
         emit_fn_call(&(str){token->data, token->end - 2});
     } else {
         compile_err("unknown token "), str_fprint(token, stderr);
