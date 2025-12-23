@@ -135,8 +135,8 @@ void parse(const str *token, parser_context *state) {
     } else if (str_ends_with(token, "=>")) {
         str *fn_name = &(str){token->data, token->end - 2};
         if (!str_is_empty(&state->deferred_fn_call) && str_is_empty(fn_name)) {
-            emit_fn_call(&state->deferred_fn_call);
-            state->deferred_fn_call = str_null;
+            str s = str_move(&state->deferred_fn_call);
+            emit_fn_call(&s);
         } else if (!str_is_empty(fn_name)) {
             emit_fn_call(fn_name);
         } else {

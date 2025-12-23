@@ -30,12 +30,18 @@ inline bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
     return memcmp(s->data, cstr, str_len(s)) == 0;
 }
 
+static inline const str str_move(str *s) {
+    str ret = *s;
+    *s = str_null;
+    return ret;
+}
+
 inline bool str_ends_with(const str *restrict token, const char *restrict cstr) {
     size_t len = strlen(cstr);
     return str_len(token) >= len && memcmp(token->end - len, cstr, len) == 0;
 }
 
-inline void str_fprintnl(const str *s, FILE *file) {
+static inline void str_fprintnl(const str *s, FILE *file) {
     if (s->data == s->end) {
         fputs("(empty)", file);
     } else {
@@ -43,12 +49,12 @@ inline void str_fprintnl(const str *s, FILE *file) {
     }
 }
 
-static void str_fprint(const str *s, FILE *file) {
+static inline void str_fprint(const str *s, FILE *file) {
     str_fprintnl(s, file);
     fputc('\n', file);
 }
 
-static void str_print(const str *s) {
+static inline void str_print(const str *s) {
     str_fprintnl(s, stdout);
     fputc('\n', stdout);
 }
