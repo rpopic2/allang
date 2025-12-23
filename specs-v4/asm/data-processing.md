@@ -50,7 +50,7 @@ arithetic operations. division and multiplication with literals will be optimise
 unless 'mul' and 'div' operators are used.
 
 
-# named register declaration
+## named register declaration
 
 ```
 decl/nreg ::=
@@ -61,7 +61,14 @@ id/nreg ::=
     | A-Z[a-zA-Z0-9._/<sp>]*
 ```
 
-zero is special type of register.
+0 is special type of register.
+
+### compiles to
+
+named register has semantic equal to callee-saved registers.
+named registers can be converted to stack variables if run out of callee-saved registers specified in the abi, however the semantic should be conserved.
+
+the size of a type that named register is holding should be less or equal to the size taht register can hold.
 
 ### examples
 
@@ -79,7 +86,7 @@ expressions on the right hand side will be assmebled.
 
 
 
-# data processing on named registers
+## data processing on named registers
 
 ```
 arithmetic/nreg ::=
@@ -108,7 +115,7 @@ correspoinding arithmetics.
 
 
 
-# moving named to scratch registers
+## moving named to scratch registers
 
 ```
 mov/named_to_scratch ::=
@@ -123,7 +130,7 @@ I + 4           // does not move register I. adds I + 4 into a register
 
 
 
-# ternary conditional selects
+## ternary conditional selects
 
 ```
 op/ternary ::= expr/bool ? nreg : nreg
@@ -136,7 +143,7 @@ print=>         // and print!
 I < 4 ? J : P + 4   // error! no operators can be involved!
                     // nested ?: operator is also not allowed
 
-# operator precedence
+## operator precedence
 
 // there is no operator precedence.
 

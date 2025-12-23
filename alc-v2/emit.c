@@ -59,7 +59,6 @@ void emit_string_lit(int regidx, const str *s) {
     buf_snprintf(text_buf, INSTR("adrp x%d, %s@PAGE"), regidx, buffer);
     buf_snprintf(text_buf, INSTR("add x%d, x%d, %s@PAGEOFF"), regidx, regidx, buffer);
 
-    printf("regoff|%d|", regidx);
     buf_snprintf(cstr_buf, "%s:\n", buffer);
     buf_puts(cstr_buf, &STR_FROM("\t.asciz "));
     buf_puts(cstr_buf, s);
@@ -69,11 +68,11 @@ void emit_string_lit(int regidx, const str *s) {
 }
 
 void emit_fn_prologue(void) {
-    buf_puts(text_buf, &STR_FROM("stp x29, x30, [sp, #-16]!\nmov x29, sp\n"));
+    buf_puts(text_buf, &STR_FROM("\tstp x29, x30, [sp, #-16]!\n\tmov x29, sp\n"));
 }
 
 void emit_fn_epilogue(void) {
-    buf_puts(text_buf, &STR_FROM("ldp	x29, x30, [sp], #16\n"));
+    buf_puts(text_buf, &STR_FROM("\tldp x29, x30, [sp], #16\n"));
 }
 
 void emit_fn_call(const str *s) {

@@ -17,7 +17,6 @@ void lex(str *token, iter *src) {
                 c = *(++src->cur);
             } while (c != '"' && c != '\n');
             token->end = ++src->cur;
-            ++src->cur;
             break;
         }
         if (c == '/' && src->cur[1] == '/') {
@@ -55,6 +54,7 @@ typedef struct {
         RET, PARAM, SCRATCH
     } reg_dst;
     int reg_off;
+    str deferred_fn_call;
 } parser_context;
 
 void literal_numeric(const parser_context *state, long number) {
@@ -132,9 +132,20 @@ void parse(const str *token, parser_context *state) {
         literal_string(state, token);
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
-    } else if (memcmp(token->end - 2, "=>", 2) == 0) {
-        emit_fn_call(&(str){token->data, token->end - 2});
+    } else if (str_ends_with(token, "=>")) {
+        str *fn_name = &(str){token->data, token->end - 2};
+        if (!str_is_empty(&state->deferred_fn_call) && str_is_empty(fn_name)) {
+            emit_fn_call(&state->deferred_fn_call);
+            state->deferred_fn_call = str_null;
+        } else if (!str_is_empty(fn_name)) {
+            emit_fn_call(fn_name);
+        } else {
+            compile_err("empty function name");
+        }
         state->reg_off = 0;
+    } else if (is_lowercase(token->data[0]) || token->data[0] == '_') {
+        state->reg_dst = PARAM;
+        state->deferred_fn_call = *token;
     } else {
         compile_err("unknown token "), str_fprint(token, stderr);
     }
@@ -187,9 +198,9 @@ int main(int argc, const char *argv[]) {
         str _token = {.data = src->cur};
         str *token = &_token;
         lex(token, src);
-        str_print(token);
         if (str_len(token) == 0)
             continue;
+        str_print(token);
         parse(token, state);
     }
 

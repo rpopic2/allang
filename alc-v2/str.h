@@ -16,12 +16,23 @@ typedef struct {
     char *end;
 } iter;
 
+static const str str_null = {.data = 0, .end = 0};
+
 inline ptrdiff_t str_len(const str *s) {
     return s->end - s->data;
 }
 
+inline bool str_is_empty(const str *s) {
+    return s->end == s->data;
+}
+
 inline bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
     return memcmp(s->data, cstr, str_len(s)) == 0;
+}
+
+inline bool str_ends_with(const str *restrict token, const char *restrict cstr) {
+    size_t len = strlen(cstr);
+    return str_len(token) >= len && memcmp(token->end - len, cstr, len) == 0;
 }
 
 inline void str_fprintnl(const str *s, FILE *file) {
@@ -32,12 +43,12 @@ inline void str_fprintnl(const str *s, FILE *file) {
     }
 }
 
-inline void str_fprint(const str *s, FILE *file) {
+static void str_fprint(const str *s, FILE *file) {
     str_fprintnl(s, file);
     fputc('\n', file);
 }
 
-inline void str_print(const str *s) {
+static void str_print(const str *s) {
     str_fprintnl(s, stdout);
     fputc('\n', stdout);
 }
@@ -48,6 +59,10 @@ inline str str_from_iter(const iter *it) {
 
 inline bool is_digit(char c) {
     return c >= '0' && c <= '9';
+}
+
+inline bool is_lowercase(char c) {
+    return c >= 'a' && c <= 'z';
 }
 
 inline iter iter_init(char *start, size_t end) {
