@@ -9,7 +9,7 @@
 long file_len(FILE *f) {
     fseek(f, 0L, SEEK_END);
     long filelen = ftell(f);
-    fseek(f, 0L, SEEK_SET);
+    fseek(f, 1L, SEEK_SET);
     return filelen;
 }
 

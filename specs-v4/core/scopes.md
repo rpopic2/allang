@@ -32,7 +32,7 @@ foo:
 
 # conditional functions
 
-foo: (addr i32 Ptr=>) (Ptr is pointing) // function gets called only if Ptr is pointing to a valid address
+foo: (addr i32 Ptr=>) if (Ptr is pointing) // function gets called only if Ptr is pointing to a valid address
     ...
 
 // the conditional check part will be inlined to the function call.
