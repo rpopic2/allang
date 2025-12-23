@@ -25,7 +25,7 @@ void lex(str *token, iter *src) {
             } while (c != '\n');
             token->data = src->cur;
         }
-        if (c == '\n')
+        if (src->cur[0] == '\n')
             ++lineno;
         if (c == ',' || c == '\n' || c == ' ' || c == '\0') {
             token->end = src->cur++;
@@ -50,23 +50,10 @@ void compile_err(const char *format, ...) {
 }
 
 typedef struct {
-    enum {
-        RET, PARAM, SCRATCH
-    } reg_dst;
+    register_dst reg_dst;
     int reg_off;
     str deferred_fn_call;
 } parser_context;
-
-void literal_numeric(const parser_context *state, long number) {
-    if (state->reg_dst == RET)
-        emit_mov_retreg(state->reg_off, number);
-    else if (state->reg_dst == SCRATCH)
-        emit_mov_scratch(state->reg_off, number);
-    else if (state->reg_dst == PARAM)
-        emit_mov_param(state->reg_off, number);
-    else
-        fputs("unknown destinination register state\n", stderr);
-}
 
 void literal_string(const parser_context *state, const str *token) {
     bool escape = emit_need_escaping();
@@ -74,7 +61,7 @@ void literal_string(const parser_context *state, const str *token) {
         compile_err("expected closing \"\n");
     }
     if (!escape) {
-        emit_string_lit(state->reg_off, token);
+        emit_string_lit(state->reg_dst, state->reg_off, token);
         return;
     }
     size_t len = str_len(token);
@@ -114,22 +101,38 @@ void literal_string(const parser_context *state, const str *token) {
     }
 
     str unescaped_s = str_from_iter(&unescaped);
-    emit_string_lit(state->reg_off, &unescaped_s);
+    emit_string_lit(state->reg_dst, state->reg_off, &unescaped_s);
     free(unescaped.start);
+}
+
+void check_line_expr(const str *token, const parser_context *state) {
+    if (state->reg_off <= 0)
+        return;
+    str *prev_comma = &(str){ .data = token->data - 2, .end = token->data };
+    if (str_eq_lit(prev_comma, ", "))
+        return;
+
+    compile_err("a comma and a space expected between expressions");
 }
 
 void parse(const str *token, parser_context *state) {
     if (is_digit(token->data[0])) {
         long number = strtol(token->data, NULL, 0);
-        literal_numeric(state, number);
+        emit_mov(state->reg_dst, state->reg_off, number);
+        check_line_expr(token, state);
+        state->reg_off++;
     } else if (token->data[0] == '\'') {
         char c = token->data[1];
-        literal_numeric(state, c);
+        emit_mov(state->reg_dst, state->reg_off, c);
         if (token->end[-1] != '\'') {
             compile_err("expected closing \'\n");
         }
+        check_line_expr(token, state);
+        state->reg_off++;
     } else if (token->data[0] == '"') {
         literal_string(state, token);
+        check_line_expr(token, state);
+        state->reg_off++;
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
     } else if (str_ends_with(token, "=>")) {
@@ -143,6 +146,7 @@ void parse(const str *token, parser_context *state) {
             compile_err("empty function name");
         }
         state->reg_off = 0;
+        state->reg_dst = SCRATCH;
     } else if (is_lowercase(token->data[0]) || token->data[0] == '_') {
         state->reg_dst = PARAM;
         state->deferred_fn_call = *token;
@@ -152,7 +156,7 @@ void parse(const str *token, parser_context *state) {
 
     char end = token->end[0];
     if (end == ',') {
-        ++state->reg_off;
+        // ++state->reg_off;
     } else if (token->end[0] == '\n') {
         state->reg_off = 0;
     }

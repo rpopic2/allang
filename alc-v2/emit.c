@@ -37,19 +37,16 @@ bool emit_need_escaping(void) {
     return false;
 }
 
-void emit_mov_retreg(int regidx, int value) {
+void emit_mov(register_dst reg_dst, int regidx, int value) {
+    if (reg_dst == SCRATCH)
+        regidx += 8;
     buf_snprintf(text_buf, INSTR("mov w%d, #%d"), regidx, value);
 }
 
-void emit_mov_scratch(int regidx, int value) {
-    buf_snprintf(text_buf, INSTR("mov w%d, #%d"), regidx + 8, value);
-}
+void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
+    if (reg_dst == SCRATCH)
+        regidx += 8;
 
-void emit_mov_param(int regidx, int value) {
-    buf_snprintf(text_buf, INSTR("mov w%d, #%d"), regidx, value);
-}
-
-void emit_string_lit(int regidx, const str *s) {
     char *buffer = malloc(SPRINTF_BUFSIZ);
     int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, "l_.str.%d", string_lit_counts++);
     if (num_printed >= SPRINTF_BUFSIZ) {

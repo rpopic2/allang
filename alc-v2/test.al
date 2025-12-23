@@ -1,5 +1,8 @@
-_printf "Hello World\n"=>
-"Bye World\n" _printf=>
+_printf
+"Hello World\n"
+"golo world"
+=>
 
-0x1, 0x2, 'a', 3
+"hi", "ok", 4
+0, 3, 4
 ret 0x0
