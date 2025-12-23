@@ -7,6 +7,7 @@
 #include "emit.h"
 
 int lineno = 1;
+bool has_compile_err = false;
 
 void lex(str *token, iter *src) {
     while (true) {
@@ -32,12 +33,15 @@ void lex(str *token, iter *src) {
 }
 
 void compile_err(const char *format, ...) {
+    has_compile_err = true;
+    fputs("\x1b[31m", stderr);
     fprintf(stderr, "line %d: ", lineno);
 
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
+    fputs("\x1b[0m", stderr);
 }
 
 typedef struct {
@@ -194,5 +198,7 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
     emit(object_file);
+
+    return has_compile_err;
 }
 
