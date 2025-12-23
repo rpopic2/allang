@@ -69,7 +69,7 @@ void parse(const str *token, parser_context *state) {
             compile_err("expected closing \'\n");
         }
     } else if (token->data[0] == '"') {
-        // literal_string(token);
+        emit_string_lit(state->reg_off, token);
         if (token->end[-1] != '"') {
             compile_err("expected closing \"\n");
         }
