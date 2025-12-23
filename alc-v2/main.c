@@ -20,6 +20,12 @@ void lex(str *token, iter *src) {
             ++src->cur;
             break;
         }
+        if (c == '/' && src->cur[1] == '/') {
+            do {
+                c = *(++src->cur);
+            } while (c != '\n');
+            token->data = src->cur;
+        }
         if (c == '\n')
             ++lineno;
         if (c == ',' || c == '\n' || c == ' ' || c == '\0') {
@@ -181,6 +187,8 @@ int main(int argc, const char *argv[]) {
         str *token = &_token;
         lex(token, src);
         str_print(token);
+        if (str_len(token) == 0)
+            continue;
         parse(token, state);
     }
 

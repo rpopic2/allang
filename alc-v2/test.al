@@ -1,4 +1,3 @@
 "hello\n\tworld\n" _printf=>
-boo
 0x1, 0x2, 'a', 3
 ret 0x0
