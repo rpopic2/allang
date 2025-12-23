@@ -105,14 +105,15 @@ void literal_string(const parser_context *state, const str *token) {
     free(unescaped.start);
 }
 
-void check_line_expr(const str *token, const parser_context *state) {
+void check_line_expr(const str *token, parser_context *state) {
+    state->reg_off++;
+    return;
+    // TODO need to come up with better comma detection...
     if (state->reg_off <= 0)
         return;
     str *prev_comma = &(str){ .data = token->data - 2, .end = token->data };
     if (str_eq_lit(prev_comma, ", "))
         return;
-
-    compile_err("a comma and a space expected between expressions");
 }
 
 void parse(const str *token, parser_context *state) {
@@ -120,7 +121,6 @@ void parse(const str *token, parser_context *state) {
         long number = strtol(token->data, NULL, 0);
         emit_mov(state->reg_dst, state->reg_off, number);
         check_line_expr(token, state);
-        state->reg_off++;
     } else if (token->data[0] == '\'') {
         char c = token->data[1];
         emit_mov(state->reg_dst, state->reg_off, c);
@@ -128,11 +128,13 @@ void parse(const str *token, parser_context *state) {
             compile_err("expected closing \'\n");
         }
         check_line_expr(token, state);
-        state->reg_off++;
     } else if (token->data[0] == '"') {
         literal_string(state, token);
         check_line_expr(token, state);
-        state->reg_off++;
+    } else if (str_eq_lit(token, "true")) {
+        emit_mov(state->reg_dst, state->reg_off, 1);
+    } else if (str_eq_lit(token, "false")) {
+        emit_mov(state->reg_dst, state->reg_off, 0);
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
     } else if (str_ends_with(token, "=>")) {
@@ -154,10 +156,7 @@ void parse(const str *token, parser_context *state) {
         compile_err("unknown token "), str_fprint(token, stderr);
     }
 
-    char end = token->end[0];
-    if (end == ',') {
-        // ++state->reg_off;
-    } else if (token->end[0] == '\n') {
+    if (token->end[0] == '\n') {
         state->reg_off = 0;
     }
 }
