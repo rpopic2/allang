@@ -1,4 +1,4 @@
-FILENAME=$(echo "${1%.*}")
-./build.sh \
-    && time ./alc $1 \
+FILENAME=$(echo "${2%.*}")
+./build.sh $1 \
+    && time ./alc $2 \
     && clang $FILENAME.s -o $FILENAME

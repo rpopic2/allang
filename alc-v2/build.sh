@@ -1,1 +1,1 @@
-clang -O main.c emit.c -o alc
+clang -O main.c $1 -o alc
