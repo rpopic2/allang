@@ -59,6 +59,7 @@ void emit_string_lit(int regidx, const str *s) {
     buf_snprintf(text_buf, INSTR("adrp x%d, %s@PAGE"), regidx, buffer);
     buf_snprintf(text_buf, INSTR("add x%d, x%d, %s@PAGEOFF"), regidx, regidx, buffer);
 
+    printf("regoff|%d|", regidx);
     buf_snprintf(cstr_buf, "%s:\n", buffer);
     buf_puts(cstr_buf, &STR_FROM("\t.asciz "));
     buf_puts(cstr_buf, s);

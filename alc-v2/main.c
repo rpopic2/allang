@@ -134,11 +134,12 @@ void parse(const str *token, parser_context *state) {
         state->reg_dst = RET;
     } else if (memcmp(token->end - 2, "=>", 2) == 0) {
         emit_fn_call(&(str){token->data, token->end - 2});
+        state->reg_off = 0;
     } else {
         compile_err("unknown token "), str_fprint(token, stderr);
     }
 
-    char end = token->end[-1];
+    char end = token->end[0];
     if (end == ',') {
         ++state->reg_off;
     } else if (token->end[0] == '\n') {
