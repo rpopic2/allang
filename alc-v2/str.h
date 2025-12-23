@@ -24,16 +24,21 @@ inline bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
     return memcmp(s->data, cstr, str_len(s)) == 0;
 }
 
-inline void str_printnl(const str *s) {
+inline void str_fprintnl(const str *s, FILE *file) {
     if (s->data == s->end) {
-        fputs("(empty)", stdout);
+        fputs("(empty)", file);
     } else {
-        fwrite(s->data, sizeof (char), str_len(s), stdout);
+        fwrite(s->data, sizeof (char), str_len(s), file);
     }
 }
 
+inline void str_fprint(const str *s, FILE *file) {
+    str_fprintnl(s, file);
+    fputc('\n', file);
+}
+
 inline void str_print(const str *s) {
-    str_printnl(s);
+    str_fprintnl(s, stdout);
     fputc('\n', stdout);
 }
 

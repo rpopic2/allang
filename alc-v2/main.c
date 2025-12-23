@@ -30,8 +30,8 @@ void lex(str *token, iter *src) {
         ++src->cur;
     }
 }
+
 void compile_err(const char *format, ...) {
-    return;
     fprintf(stderr, "line %d: ", lineno);
 
     va_list args;
@@ -75,6 +75,8 @@ void parse(const str *token, parser_context *state) {
         }
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
+    } else {
+        compile_err("unknown token "), str_fprint(token, stderr);
     }
 
     char end = token->end[-1];
