@@ -5,6 +5,9 @@
 #include "str.h"
 #include "emit.h"
 
+void expr(const str *token) {
+}
+
 int main(int argc, const char *argv[]) {
     const char *source_name = argv[1];
     FILE *source_file = fopen(argv[1], "r");
@@ -33,24 +36,34 @@ int main(int argc, const char *argv[]) {
 
     emit_mainfn();
 
-    str token = {.data = src.cur};
-    while (true) {
-        char c = *src.cur;
-        if (c == '\n' || c == '\0') {
-            token.end = src.cur;
-            *src.cur = '\0';
-            break;
+    while (src.cur < src.end) {
+        str _token = {.data = src.cur};
+        str *token = &_token;
+        while (true) {
+            char c = *src.cur;
+            if (c == '\n' || c == '\0') {
+                token->end = src.cur;
+                ++src.cur;
+                break;
+            }
+            ++src.cur;
         }
-        ++src.cur;
-    }
 
-    if (is_digit(token.data[0])) {
-        long number = strtol(token.data, NULL, 0);
-        emit_mov_retreg(0, number);
+        // 1. make it nested if statements
+        // 2. make it state machine
+        if (str_eq_lit(token, "ret")) {
+            expr(token);
+
+            if (is_digit(token->data[0])) {
+                long number = strtol(token->data, NULL, 0);
+                emit_mov_retreg(0, number);
+            }
+        }
+
     }
     emit_ret();
 
-    size_t source_name_len = strlen(source_name); 
+    size_t source_name_len = strlen(source_name);
     char *out_name = malloc(source_name_len + 1);
     strncpy(out_name, source_name, source_name_len - 1);
     out_name[source_name_len - 2] = 's';

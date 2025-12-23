@@ -163,7 +163,7 @@ literal/aggregate
 
 ## moving to return registers
 
-expressions at the last line will be moved to return register instead of scratch registers.
+expressions at the last line of a block will be moved to return register instead of scratch registers.
 
 ### examples
 

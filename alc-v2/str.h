@@ -20,7 +20,7 @@ inline ptrdiff_t str_len(const str *s) {
 }
 
 inline bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
-    return strcmp(s->data, cstr) == 0;
+    return memcmp(s->data, cstr, str_len(s)) == 0;
 }
 
 inline bool is_digit(char c) {
