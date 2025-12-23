@@ -174,13 +174,14 @@ int main(int argc, const char *argv[]) {
     rewind(source_file);
 
     char *source_start = malloc(source_len);
+	memset(source_start, 0, source_len);
     if (source_start == NULL) {
         fputs("error: malloc failed\n", stderr);
         exit(EXIT_FAILURE);
     }
     unsigned long bytes_read = fread(source_start, sizeof (char), source_len, source_file);
-    if (bytes_read != source_len) {
-        fputs("error: failed to read file\n", stderr);
+    if (bytes_read > source_len) {
+		fprintf(stderr, "error: buffer overflow. expected %ld bytes but read %lu bytes\n", source_len, bytes_read);
         exit(EXIT_FAILURE);
     }
 
@@ -212,6 +213,7 @@ int main(int argc, const char *argv[]) {
 
     size_t source_name_len = strlen(source_name);
     char *out_name = malloc(source_name_len + 1);
+	memset(out_name, 0, source_name_len + 1);
     strncpy(out_name, source_name, source_name_len - 1);
     out_name[source_name_len - 2] = 's';
 
