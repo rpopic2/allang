@@ -40,8 +40,10 @@ int main(int argc, const char *argv[]) {
         enum {
             RET, PARAM, SCRATCH
         } reg_dst;
+        int reg_off;
     } state;
     state.reg_dst = SCRATCH;
+    state.reg_off = 0;
 
     while (src.cur < src.end) {
         str _token = {.data = src.cur};
@@ -62,15 +64,22 @@ int main(int argc, const char *argv[]) {
         if (is_digit(token->data[0])) {
             long number = strtol(token->data, NULL, 0);
             if (state.reg_dst == RET)
-                emit_mov_retreg(0, number);
+                emit_mov_retreg(state.reg_off, number);
             else if (state.reg_dst == SCRATCH)
-                emit_mov_scratch(0, number);
+                emit_mov_scratch(state.reg_off, number);
             else if (state.reg_dst == PARAM)
-                emit_mov_param(0, number);
+                emit_mov_param(state.reg_off, number);
             else
                 fputs("unknown destinination register state\n", stderr);
         } else if (str_eq_lit(token, "ret")) {
             state.reg_dst = RET;
+        }
+
+        char end = token->end[-1];
+        if (end == ',') {
+            ++state.reg_off;
+        } else if (token->end[0] == '\n') {
+            state.reg_off = 0;
         }
     }
     emit_ret();
