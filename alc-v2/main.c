@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -117,7 +118,7 @@ void check_line_expr(const str *token, parser_context *state) {
 }
 
 void parse(const str *token, parser_context *state) {
-    if (is_digit(token->data[0])) {
+    if (isdigit(token->data[0])) {
         long number = strtol(token->data, NULL, 0);
         emit_mov(state->reg_dst, state->reg_off, number);
         check_line_expr(token, state);
@@ -128,13 +129,13 @@ void parse(const str *token, parser_context *state) {
             compile_err("expected closing \'\n");
         }
         check_line_expr(token, state);
-    } else if (token->data[0] == '"') {
-        literal_string(state, token);
-        check_line_expr(token, state);
     } else if (str_eq_lit(token, "true")) {
         emit_mov(state->reg_dst, state->reg_off, 1);
     } else if (str_eq_lit(token, "false")) {
         emit_mov(state->reg_dst, state->reg_off, 0);
+    } else if (token->data[0] == '"') {
+        literal_string(state, token);
+        check_line_expr(token, state);
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
     } else if (str_ends_with(token, "=>")) {
@@ -149,7 +150,7 @@ void parse(const str *token, parser_context *state) {
         }
         state->reg_off = 0;
         state->reg_dst = SCRATCH;
-    } else if (is_lowercase(token->data[0]) || token->data[0] == '_') {
+    } else if (islower(token->data[0]) || token->data[0] == '_') {
         state->reg_dst = PARAM;
         state->deferred_fn_call = *token;
     } else {

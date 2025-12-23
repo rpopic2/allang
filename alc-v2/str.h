@@ -36,7 +36,7 @@ static inline const str str_move(str *s) {
     return ret;
 }
 
-inline bool str_ends_with(const str *restrict token, const char *restrict cstr) {
+inline static bool str_ends_with(const str *restrict token, const char *restrict cstr) {
     size_t len = strlen(cstr);
     return str_len(token) >= len && memcmp(token->end - len, cstr, len) == 0;
 }
@@ -61,14 +61,6 @@ static inline void str_print(const str *s) {
 
 inline str str_from_iter(const iter *it) {
     return (str){.data = it->start, it->end};
-}
-
-inline bool is_digit(char c) {
-    return c >= '0' && c <= '9';
-}
-
-inline bool is_lowercase(char c) {
-    return c >= 'a' && c <= 'z';
 }
 
 inline iter iter_init(char *start, size_t end) {
