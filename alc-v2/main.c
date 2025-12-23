@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,7 +6,33 @@
 #include "str.h"
 #include "emit.h"
 
-void expr(const str *token) {
+int lineno = 1;
+
+void compile_err(const char *format, ...) {
+    fprintf(stderr, "line %d: ", lineno);
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
+
+typedef struct _compiler_context {
+    enum {
+        RET, PARAM, SCRATCH
+    } reg_dst;
+    int reg_off;
+} compiler_context;
+
+void literal_numeric(const compiler_context *state, long number) {
+    if (state->reg_dst == RET)
+        emit_mov_retreg(state->reg_off, number);
+    else if (state->reg_dst == SCRATCH)
+        emit_mov_scratch(state->reg_off, number);
+    else if (state->reg_dst == PARAM)
+        emit_mov_param(state->reg_off, number);
+    else
+        fputs("unknown destinination register state\n", stderr);
 }
 
 int main(int argc, const char *argv[]) {
@@ -36,20 +63,18 @@ int main(int argc, const char *argv[]) {
 
     emit_mainfn();
 
-    struct {
-        enum {
-            RET, PARAM, SCRATCH
-        } reg_dst;
-        int reg_off;
-    } state;
-    state.reg_dst = SCRATCH;
-    state.reg_off = 0;
+    compiler_context _state;
+    compiler_context *state = &_state;
+    state->reg_dst = SCRATCH;
+    state->reg_off = 0;
 
     while (src.cur < src.end) {
         str _token = {.data = src.cur};
         str *token = &_token;
         while (true) {
             char c = *src.cur;
+            if (c == '\n')
+                ++lineno;
             if (c == '\n' || c == ' ' || c == '\0') {
                 token->end = src.cur;
                 ++src.cur;
@@ -59,27 +84,24 @@ int main(int argc, const char *argv[]) {
         }
         str_print(token);
 
-        // 1. make it nested if statements
-        // 2. make it state machine
         if (is_digit(token->data[0])) {
             long number = strtol(token->data, NULL, 0);
-            if (state.reg_dst == RET)
-                emit_mov_retreg(state.reg_off, number);
-            else if (state.reg_dst == SCRATCH)
-                emit_mov_scratch(state.reg_off, number);
-            else if (state.reg_dst == PARAM)
-                emit_mov_param(state.reg_off, number);
-            else
-                fputs("unknown destinination register state\n", stderr);
+            literal_numeric(state, number);
+        } else if (token->data[0] == '\'') {
+            char c = token->data[1];
+            literal_numeric(state, c);
+            if (token->data[2] != '\'') {
+                compile_err("expected closing \'\n");
+            }
         } else if (str_eq_lit(token, "ret")) {
-            state.reg_dst = RET;
+            state->reg_dst = RET;
         }
 
         char end = token->end[-1];
         if (end == ',') {
-            ++state.reg_off;
+            ++state->reg_off;
         } else if (token->end[0] == '\n') {
-            state.reg_off = 0;
+            state->reg_off = 0;
         }
     }
     emit_ret();
