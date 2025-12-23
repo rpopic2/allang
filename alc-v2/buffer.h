@@ -1,3 +1,5 @@
+#pragma once
+
 #include "str.h"
 #include <stdarg.h>
 #include <stddef.h>

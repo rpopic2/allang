@@ -55,6 +55,12 @@ void emit_string_lit(int regidx, const str *s) {
     buf_putc(cstr_buf, '\n');
 }
 
+void emit_fn_call(const str *s) {
+    buf_puts(text_buf, &STR_FROM("\tbl "));
+    buf_puts(text_buf, s);
+    buf_putc(text_buf, '\n');
+}
+
 void emit_mainfn(void) {
     buf_puts(text_buf, &STR_FROM(".globl _main\n.p2align 2\n_main:\n"));
 }

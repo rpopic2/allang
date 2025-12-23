@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef struct {
+typedef struct str {
     const char *data;
     const char *end;
 } str;

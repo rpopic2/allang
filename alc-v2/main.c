@@ -75,6 +75,9 @@ void parse(const str *token, parser_context *state) {
         }
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
+    } else if (memcmp(token->end - 2, "=>", 2) == 0) {
+        printf("fn call");
+        emit_fn_call(&(str){token->data, token->end - 2});
     } else {
         compile_err("unknown token "), str_fprint(token, stderr);
     }
