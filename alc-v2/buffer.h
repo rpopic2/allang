@@ -11,6 +11,12 @@ typedef struct {
     char *cur;
 } buf;
 
+typedef struct {
+    void *start;
+    void *end;
+    void *cur;
+} fixed_arena;
+
 inline ptrdiff_t buf_len(const buf *buffer) {
     return buffer->end - buffer->start;
 }

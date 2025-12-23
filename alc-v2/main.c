@@ -105,6 +105,7 @@ void literal_string(const parser_context *state, const str *token) {
 
     str unescaped_s = str_from_iter(&unescaped);
     emit_string_lit(state->reg_off, &unescaped_s);
+    free(unescaped.start);
 }
 
 void parse(const str *token, parser_context *state) {

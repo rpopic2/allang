@@ -13,7 +13,8 @@
 
 DECL_PTR(static buf, text_buf);
 DECL_PTR(static buf, cstr_buf);
-char *cstr_begin;
+char *cstr_begin = NULL;
+unsigned string_lit_counts = 0;
 
 
 void emit_init(void) {
@@ -49,14 +50,21 @@ void emit_mov_param(int regidx, int value) {
 }
 
 void emit_string_lit(int regidx, const str *s) {
-    const char *id = "l_.str";
-    buf_snprintf(text_buf, INSTR("adrp x%d, %s@PAGE"), regidx, id);
-    buf_snprintf(text_buf, INSTR("add x%d, x%d, %s@PAGEOFF"), regidx, regidx, id);
+    char *buffer = malloc(SPRINTF_BUFSIZ);
+    int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, "l_.str.%d", string_lit_counts++);
+    if (num_printed >= SPRINTF_BUFSIZ) {
+        fputs("buffer overflow in snprintf\n", stderr);
+        exit(EXIT_FAILURE);
+    }
+    buf_snprintf(text_buf, INSTR("adrp x%d, %s@PAGE"), regidx, buffer);
+    buf_snprintf(text_buf, INSTR("add x%d, x%d, %s@PAGEOFF"), regidx, regidx, buffer);
 
-    buf_snprintf(cstr_buf, "%s:\n", id);
+    buf_snprintf(cstr_buf, "%s:\n", buffer);
     buf_puts(cstr_buf, &STR_FROM("\t.asciz "));
     buf_puts(cstr_buf, s);
     buf_putc(cstr_buf, '\n');
+
+    free(buffer);
 }
 
 void emit_fn_prologue(void) {
