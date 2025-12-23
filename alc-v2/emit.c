@@ -32,6 +32,10 @@ void emit(FILE *out) {
     }
 }
 
+bool emit_need_escaping(void) {
+    return false;
+}
+
 void emit_mov_retreg(int regidx, int value) {
     buf_snprintf(text_buf, INSTR("mov w%d, #%d"), regidx, value);
 }

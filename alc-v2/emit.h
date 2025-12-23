@@ -8,6 +8,8 @@ typedef struct str str;
 void emit_init(void);
 void emit(FILE *out);
 
+bool emit_need_escaping(void);
+
 void emit_mov_retreg(int regidx, int value);
 void emit_mov_scratch(int regidx, int value);
 void emit_mov_param(int regidx, int value);

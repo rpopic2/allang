@@ -59,6 +59,14 @@ void literal_numeric(const parser_context *state, long number) {
 }
 
 void literal_string(const parser_context *state, const str *token) {
+    bool escape = emit_need_escaping();
+    if (token->end[-1] != '"') {
+        compile_err("expected closing \"\n");
+    }
+    if (!escape) {
+        emit_string_lit(state->reg_off, token);
+        return;
+    }
     size_t len = str_len(token);
     iter unescaped = iter_init(malloc(len), len);
 
@@ -95,10 +103,8 @@ void literal_string(const parser_context *state, const str *token) {
         }
     }
 
-    emit_string_lit(state->reg_off, token);
-    if (token->end[-1] != '"') {
-        compile_err("expected closing \"\n");
-    }
+    str unescaped_s = str_from_iter(&unescaped);
+    emit_string_lit(state->reg_off, &unescaped_s);
 }
 
 void parse(const str *token, parser_context *state) {

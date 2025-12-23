@@ -42,6 +42,10 @@ inline void str_print(const str *s) {
     fputc('\n', stdout);
 }
 
+inline str str_from_iter(const iter *it) {
+    return (str){.data = it->start, it->end};
+}
+
 inline bool is_digit(char c) {
     return c >= '0' && c <= '9';
 }
