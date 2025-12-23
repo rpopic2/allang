@@ -119,6 +119,7 @@ int main(int argc, const char *argv[]) {
     emit_init();
 
     emit_mainfn();
+    emit_fn_prologue();
 
     parser_context _state;
     parser_context *state = &_state;
@@ -133,6 +134,7 @@ int main(int argc, const char *argv[]) {
         parse(token, state);
     }
 
+    emit_fn_epilogue();
     emit_ret();
 
     size_t source_name_len = strlen(source_name);

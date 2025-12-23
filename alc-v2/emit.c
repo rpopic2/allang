@@ -55,6 +55,14 @@ void emit_string_lit(int regidx, const str *s) {
     buf_putc(cstr_buf, '\n');
 }
 
+void emit_fn_prologue(void) {
+    buf_puts(text_buf, &STR_FROM("stp x29, x30, [sp, #-16]!\nmov x29, sp\n"));
+}
+
+void emit_fn_epilogue(void) {
+    buf_puts(text_buf, &STR_FROM("ldp	x29, x30, [sp], #16\n"));
+}
+
 void emit_fn_call(const str *s) {
     buf_puts(text_buf, &STR_FROM("\tbl "));
     buf_puts(text_buf, s);

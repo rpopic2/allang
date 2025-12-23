@@ -13,6 +13,8 @@ void emit_mov_scratch(int regidx, int value);
 void emit_mov_param(int regidx, int value);
 void emit_string_lit(int regidx, const str *s);
 
+void emit_fn_prologue(void);
+void emit_fn_epilogue(void);
 void emit_fn_call(const str *s);
 void emit_mainfn(void);
 void emit_ret(void);
