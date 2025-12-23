@@ -36,30 +36,42 @@ int main(int argc, const char *argv[]) {
 
     emit_mainfn();
 
+    struct {
+        enum {
+            RET, PARAM, SCRATCH
+        } reg_dst;
+    } state;
+    state.reg_dst = SCRATCH;
+
     while (src.cur < src.end) {
         str _token = {.data = src.cur};
         str *token = &_token;
         while (true) {
             char c = *src.cur;
-            if (c == '\n' || c == '\0') {
+            if (c == '\n' || c == ' ' || c == '\0') {
                 token->end = src.cur;
                 ++src.cur;
                 break;
             }
             ++src.cur;
         }
+        str_print(token);
 
         // 1. make it nested if statements
         // 2. make it state machine
-        if (str_eq_lit(token, "ret")) {
-            expr(token);
-
-            if (is_digit(token->data[0])) {
-                long number = strtol(token->data, NULL, 0);
+        if (is_digit(token->data[0])) {
+            long number = strtol(token->data, NULL, 0);
+            if (state.reg_dst == RET)
                 emit_mov_retreg(0, number);
-            }
+            else if (state.reg_dst == SCRATCH)
+                emit_mov_scratch(0, number);
+            else if (state.reg_dst == PARAM)
+                emit_mov_param(0, number);
+            else
+                fputs("unknown destinination register state\n", stderr);
+        } else if (str_eq_lit(token, "ret")) {
+            state.reg_dst = RET;
         }
-
     }
     emit_ret();
 

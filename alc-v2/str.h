@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 typedef struct {
@@ -21,6 +22,11 @@ inline ptrdiff_t str_len(const str *s) {
 
 inline bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
     return memcmp(s->data, cstr, str_len(s)) == 0;
+}
+
+inline void str_print(const str *s) {
+    fwrite(s->data, sizeof (char), str_len(s), stdout);
+    fputc('\n', stdout);
 }
 
 inline bool is_digit(char c) {

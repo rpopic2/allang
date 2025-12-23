@@ -76,6 +76,14 @@ void emit_mov_retreg(int regidx, int value) {
     buf_snprintf(INSTR("mov w%d, #%d"), regidx, value);
 }
 
+void emit_mov_scratch(int regidx, int value) {
+    buf_snprintf(INSTR("mov w%d, #%d"), regidx + 8, value);
+}
+
+void emit_mov_param(int regidx, int value) {
+    buf_snprintf(INSTR("mov w%d, #%d"), regidx, value);
+}
+
 void emit_mainfn(void) {
     buf_puts(STR_FROM_CSTR(".globl _main\n_main:\n"));
 }
