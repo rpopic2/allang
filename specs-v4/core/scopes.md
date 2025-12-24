@@ -55,6 +55,11 @@ line:blank ::= \n
 ```
 a line consists of one or multiple expressions, seperated by comma, followed by a newline character.
 
+expr:
+    start of a block
+    last was => or ->
+    after newline
+
 ## expression
 
 ```

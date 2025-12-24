@@ -11,6 +11,8 @@ int lineno = 1;
 bool has_compile_err = false;
 
 void lex(str *token, iter *src) {
+retry:
+    *token = (str){.data = src->cur};
     while (true) {
         char c = *src->cur;
         if (c == '"') {
@@ -36,12 +38,24 @@ void lex(str *token, iter *src) {
         }
         ++src->cur;
     }
+    if (str_len(token) == 0)
+        goto retry;
 }
 
 void compile_err(const char *format, ...) {
     has_compile_err = true;
     fputs("\x1b[31m", stderr);
-    fprintf(stderr, "line %d: ", lineno);
+    fprintf(stderr, "error in line %d: ", lineno);
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputs("\x1b[0m", stderr);
+}
+void compile_warning(const char *format, ...) {
+    fputs("\x1b[33m", stderr);
+    fprintf(stderr, "warning in line %d: ", lineno);
 
     va_list args;
     va_start(args, format);
@@ -54,6 +68,7 @@ typedef struct {
     register_dst reg_dst;
     int reg_off;
     str deferred_fn_call;
+    iter src;
 } parser_context;
 
 void literal_string(const parser_context *state, const str *token) {
@@ -106,36 +121,51 @@ void literal_string(const parser_context *state, const str *token) {
     free(unescaped.start);
 }
 
-void check_line_expr(const str *token, parser_context *state) {
-    state->reg_off++;
-    return;
-    // TODO need to come up with better comma detection...
-    if (state->reg_off <= 0)
-        return;
-    str *prev_comma = &(str){ .data = token->data - 2, .end = token->data };
-    if (str_eq_lit(prev_comma, ", "))
-        return;
-}
-
-void parse(const str *token, parser_context *state) {
+bool expr_in(const str *token, parser_context *state) {
     if (isdigit(token->data[0])) {
         long number = strtol(token->data, NULL, 0);
         emit_mov(state->reg_dst, state->reg_off, number);
-        check_line_expr(token, state);
     } else if (token->data[0] == '\'') {
         char c = token->data[1];
         emit_mov(state->reg_dst, state->reg_off, c);
         if (token->end[-1] != '\'') {
             compile_err("expected closing \'\n");
         }
-        check_line_expr(token, state);
     } else if (str_eq_lit(token, "true")) {
         emit_mov(state->reg_dst, state->reg_off, 1);
     } else if (str_eq_lit(token, "false")) {
         emit_mov(state->reg_dst, state->reg_off, 0);
     } else if (token->data[0] == '"') {
         literal_string(state, token);
-        check_line_expr(token, state);
+    } else {
+        return false;
+    }
+    return true;
+}
+
+bool expr(str in_token, parser_context *state) {
+    str *token = &in_token;
+    bool ok = expr_in(token, state);
+    if (!ok)
+        return false;
+
+    while (token->end[0] == ',' && isspace(token->end[1])) {
+        state->reg_off++;
+        lex(token, &state->src);
+        str_print(token);
+        ok = expr_in(token, state);
+        if (!ok)
+            break;
+    }
+    if (token->end[0] == '\n') {
+        state->reg_off = 0;
+    }
+    return true;
+}
+
+void parse(const str *token, parser_context *state) {
+    if (expr(*token, state)) {
+
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
     } else if (str_ends_with(token, "=>")) {
@@ -157,9 +187,6 @@ void parse(const str *token, parser_context *state) {
         compile_err("unknown token "), str_fprint(token, stderr);
     }
 
-    if (token->end[0] == '\n') {
-        state->reg_off = 0;
-    }
 }
 
 
@@ -187,7 +214,6 @@ int main(int argc, const char *argv[]) {
     }
 
     iter _src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
-    iter *src = &_src;
 
     emit_init();
 
@@ -198,10 +224,11 @@ int main(int argc, const char *argv[]) {
     parser_context *state = &_state;
     state->reg_dst = SCRATCH;
     state->reg_off = 0;
+    state->src = _src;
+    iter *src = &state->src;
 
+    str *token = &(str){.data = 0, .end = 0};
     while (src->cur < src->end) {
-        str _token = {.data = src->cur};
-        str *token = &_token;
         lex(token, src);
         if (str_len(token) == 0)
             continue;
