@@ -126,24 +126,27 @@ void literal_string(const parser_context *state, const str *token) {
 }
 
 bool expr_in(const str *token, parser_context *state) {
-    if (isdigit(token->data[0])) {
-        long number = strtol(token->data, NULL, 0);
-        emit_mov(state->reg_dst, state->reg_off, number);
-    } else if (token->data[0] == '\'') {
-        char c = token->data[1];
-        emit_mov(state->reg_dst, state->reg_off, c);
-        if (token->end[-1] != '\'') {
-            compile_err("expected closing \'\n");
-        }
-    } else if (str_eq_lit(token, "true")) {
-        emit_mov(state->reg_dst, state->reg_off, 1);
-    } else if (str_eq_lit(token, "false")) {
-        emit_mov(state->reg_dst, state->reg_off, 0);
-    } else if (token->data[0] == '"') {
+    if (token->data[0] == '"') {
         literal_string(state, token);
-    } else {
-        return false;
+	return true;
     }
+    long value = 0;
+    if (isdigit(token->data[0])) {
+	value = strtol(token->data, NULL, 0);
+    } else if (token->data[0] == '\'') {
+	char c = token->data[1];
+	if (token->end[-1] != '\'') {
+	    compile_err("expected closing \'\n");
+	}
+	value = c;
+    } else if (str_eq_lit(token, "true")) {
+	value = 1;
+    } else if (str_eq_lit(token, "false")) {
+	value = 0;
+    } else {
+	return false;
+    }
+    emit_mov(state->reg_dst, state->reg_off, value);
     return true;
 }
 
