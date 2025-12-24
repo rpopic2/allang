@@ -75,7 +75,7 @@ typedef struct {
     iter src;
 } parser_context;
 
-void literal_string(const parser_context *state, const str *token) {
+void literal_string(const parser_context *restrict state, const str *restrict token) {
     bool escape = emit_need_escaping();
     if (token->end[-1] != '"') {
         compile_err("expected closing \"\n");
@@ -125,7 +125,7 @@ void literal_string(const parser_context *state, const str *token) {
     free(unescaped.start);
 }
 
-bool expr_in(const str *token, parser_context *state) {
+bool expr_in(const str *restrict token, const parser_context *restrict state) {
     if (token->data[0] == '"') {
         literal_string(state, token);
 	return true;
@@ -170,7 +170,7 @@ bool expr(str in_token, parser_context *state) {
     return true;
 }
 
-void parse(const str *token, parser_context *state) {
+void parse(const str *restrict token, parser_context *restrict state) {
     if (expr(*token, state)) {
 
     } else if (str_eq_lit(token, "ret")) {
