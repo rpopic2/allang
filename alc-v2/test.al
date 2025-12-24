@@ -3,6 +3,7 @@ _printf
 =>
 
 "hi", "ok"
-0, 3, 4
+0 3
+4
 true
 ret false

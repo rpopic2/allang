@@ -38,6 +38,10 @@ retry:
         }
         ++src->cur;
     }
+    if (token->end > src->end) {
+        *token = str_null;
+        return;
+    }
     if (str_len(token) == 0)
         goto retry;
 }
