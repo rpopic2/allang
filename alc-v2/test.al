@@ -1,4 +1,4 @@
-_printf
+printf
 "Hello World\n"
 =>
 

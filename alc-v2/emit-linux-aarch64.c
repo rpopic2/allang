@@ -1,0 +1,88 @@
+#include <stdio.h>
+
+#include "buffer.h"
+#include "emit.h"
+#include "str.h"
+
+#define INIT_BUFSIZ 0x400
+
+#define DECL_PTR(T, X) T _##X; T *X = &_##X
+
+#define INSTR(s) "\t"s"\n"
+#define STR_FROM_INSTR(s) &STR_FROM(INSTR(s))
+
+DECL_PTR(static buf, text_buf);
+DECL_PTR(static buf, cstr_buf);
+char *cstr_begin = NULL;
+unsigned string_lit_counts = 0;
+
+
+void emit_init(void) {
+    buf_init(text_buf, INIT_BUFSIZ);
+    buf_puts(text_buf, STR_FROM_INSTR(".text"));
+
+    buf_init(cstr_buf, INIT_BUFSIZ);
+    buf_puts(cstr_buf, STR_FROM_INSTR("\n\n\t.section	.rodata.str1.1,\"aMS\",@progbits,1"));
+    cstr_begin = cstr_buf->cur;
+}
+
+void emit(FILE *out) {
+    buf_fwrite(text_buf, out);
+    if (cstr_begin < cstr_buf->cur) {
+        buf_fwrite(cstr_buf, out);
+    }
+}
+
+bool emit_need_escaping(void) {
+    return false;
+}
+
+void emit_mov(register_dst reg_dst, int regidx, int value) {
+    if (reg_dst == SCRATCH)
+        regidx += 8;
+    buf_snprintf(text_buf, INSTR("mov w%d, #%d"), regidx, value);
+}
+
+void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
+    if (reg_dst == SCRATCH)
+        regidx += 8;
+
+    char *buffer = malloc(SPRINTF_BUFSIZ);
+    int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, ".L.str.%d", string_lit_counts++);
+    if (num_printed >= SPRINTF_BUFSIZ) {
+        fputs("buffer overflow in snprintf\n", stderr);
+        exit(EXIT_FAILURE);
+    }
+    buf_snprintf(text_buf, INSTR("adrp x%d, %s"), regidx, buffer);
+    buf_snprintf(text_buf, INSTR("add x%d, x%d, :lo12:%s"), regidx, regidx, buffer);
+
+    buf_snprintf(cstr_buf, "%s:\n", buffer);
+    buf_puts(cstr_buf, &STR_FROM("\t.asciz "));
+    buf_puts(cstr_buf, s);
+    buf_putc(cstr_buf, '\n');
+
+    free(buffer);
+}
+
+void emit_fn_prologue(void) {
+    buf_puts(text_buf, &STR_FROM("\tstp x29, x30, [sp, #-16]!\n\tmov x29, sp\n"));
+}
+
+void emit_fn_epilogue(void) {
+    buf_puts(text_buf, &STR_FROM("\tldp x29, x30, [sp], #16\n"));
+}
+
+void emit_fn_call(const str *s) {
+    buf_puts(text_buf, &STR_FROM("\tbl "));
+    buf_puts(text_buf, s);
+    buf_putc(text_buf, '\n');
+}
+
+void emit_mainfn(void) {
+    buf_puts(text_buf, &STR_FROM(".globl main\n.p2align 2\n.type main,@function\nmain:\n"));
+}
+
+void emit_ret(void) {
+    buf_puts(text_buf, STR_FROM_INSTR("ret"));
+}
+
