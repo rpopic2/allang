@@ -3,7 +3,6 @@ printf
 =>
 
 "hi", "ok"
-0 3
-4
-true
+4 +
+"true"
 ret false

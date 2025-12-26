@@ -15,6 +15,7 @@ void emit(FILE *out);
 bool emit_need_escaping(void);
 
 void emit_mov(register_dst reg_dst, int regidx, int value);
+void emit_add(register_dst reg_dst, int regidx, int value);
 void emit_string_lit(register_dst reg_dst, int regidx, const str *s);
 
 void emit_fn_prologue(void);

@@ -6,6 +6,7 @@
 
 #include "str.h"
 #include "emit.h"
+#include "optional.h"
 
 int lineno = 1;
 bool has_compile_err = false;
@@ -125,11 +126,7 @@ void literal_string(const parser_context *restrict state, const str *restrict to
     free(unescaped.start);
 }
 
-bool expr_in(const str *restrict token, const parser_context *restrict state) {
-    if (token->data[0] == '"') {
-        literal_string(state, token);
-	return true;
-    }
+opt_long lit_numeric(const str *token) {
     long value = 0;
     if (isdigit(token->data[0])) {
 	value = strtol(token->data, NULL, 0);
@@ -144,13 +141,42 @@ bool expr_in(const str *restrict token, const parser_context *restrict state) {
     } else if (str_eq_lit(token, "false")) {
 	value = 0;
     } else {
-	return false;
+	return opt_long_none;
     }
-    emit_mov(state->reg_dst, state->reg_off, value);
+    return opt_long_some(value);
+}
+
+bool expr_in(const str *restrict token, parser_context *restrict state) {
+    if (token->data[0] == '"') {
+        literal_string(state, token);
+	return true;
+    }
+    try_opt_long(value, lit_numeric(token), false);
+
+    char next = token->end[1];
+    if (next >= '#' && next <= '/') {
+	// read operator and 
+	str op_token;
+	lex(&op_token, &state->src);
+
+	str operand_token;
+	lex(&operand_token, &state->src);
+	ifnone_opt_long(operand, lit_numeric(&operand_token)) {
+	    compile_err("expected operand\n");
+	}
+	if (op_token.data[0] == '+') {
+	    printf("plus");
+	    emit_mov(state->reg_dst, state->reg_off, value + operand);
+	}
+
+	// emit operation
+    } else {
+	emit_mov(state->reg_dst, state->reg_off, value);
+    }
     return true;
 }
 
-bool expr(str in_token, parser_context *state) {
+bool expr_line(str in_token, parser_context *state) {
     str *token = &in_token;
     bool ok = expr_in(token, state);
     if (!ok)
@@ -164,14 +190,14 @@ bool expr(str in_token, parser_context *state) {
         if (!ok)
             break;
     }
-    if (token->end[0] == '\n') {
+    // if (token->end[0] == '\n') {
         state->reg_off = 0;
-    }
+    // }
     return true;
 }
 
 void parse(const str *restrict token, parser_context *restrict state) {
-    if (expr(*token, state)) {
+    if (expr_line(*token, state)) {
 
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
