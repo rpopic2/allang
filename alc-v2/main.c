@@ -6,7 +6,9 @@
 
 #include "str.h"
 #include "emit.h"
-#include "optional.h"
+#include "opt.h"
+
+OPT_GENERIC(i64)
 
 int lineno = 1;
 bool has_compile_err = false;
@@ -103,7 +105,7 @@ void literal_string(const parser_context *restrict state, const str *restrict to
                 result = '\\';
                 break;
             default:;
-                long number = strtol(token->data, NULL, 0);
+                i64 number = strtoll(token->data, NULL, 0);
                 if (number > (signed)sizeof (char)) {
                     compile_err("%d is too large for a string literal", number);
                 } else {
@@ -120,10 +122,10 @@ void literal_string(const parser_context *restrict state, const str *restrict to
     free(unescaped.start);
 }
 
-opt_long lit_numeric(const str *token) {
-    long value = 0;
+opt_i64 lit_numeric(const str *token) {
+    i64 value = 0;
     if (isdigit(token->data[0])) {
-	value = strtol(token->data, NULL, 0);
+	value = strtoll(token->data, NULL, 0);
     } else if (token->data[0] == '\'') {
 	char c = token->data[1];
 	if (token->end[-1] != '\'') {
@@ -137,7 +139,7 @@ opt_long lit_numeric(const str *token) {
     } else {
 	return opt_long_none;
     }
-    return opt_long_some(value);
+    return opt_i64_some(value);
 }
 
 bool expr(const str *restrict token, parser_context *restrict state) {
@@ -145,7 +147,7 @@ bool expr(const str *restrict token, parser_context *restrict state) {
         literal_string(state, token);
 	return true;
     }
-    try_opt_long(value, lit_numeric(token), false);
+    try_opt(i64, value, lit_numeric(token), false);
 
     char next = token->end[1];
     if (next >= '#' && next <= '/') {
@@ -155,7 +157,7 @@ bool expr(const str *restrict token, parser_context *restrict state) {
 
 	str operand_token;
 	lex(&operand_token, &state->src);
-	ifnone_opt_long(operand, lit_numeric(&operand_token)) {
+	ifnone_opt(i64, operand, lit_numeric(&operand_token)) {
 	    compile_err("expected operand\n");
 	}
 	if (op_token.data[0] == '+') {

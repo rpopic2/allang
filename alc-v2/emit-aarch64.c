@@ -54,12 +54,12 @@ bool emit_need_escaping(void) {
     return false;
 }
 
-void emit_mov(register_dst reg_dst, int regidx, long value) {
+void emit_mov(register_dst reg_dst, int regidx, i64 value) {
     if (reg_dst == SCRATCH)
         regidx += 8;
     else if (reg_dst == NREG)
         regidx += 19;
-    buf_snprintf(fn_buf, INSTR("mov w%d, #%d"), regidx, value);
+    buf_snprintf(fn_buf, INSTR("mov w%d, #%lld"), regidx, value);
 }
 
 void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
