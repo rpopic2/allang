@@ -23,7 +23,7 @@ void emit(FILE *out);
 
 bool emit_need_escaping(void);
 
-void emit_mov(register_dst reg_dst, int regidx, int value);
+void emit_mov(register_dst reg_dst, int regidx, long value);
 void emit_add(register_dst reg_dst, int regidx, int value);
 void emit_string_lit(register_dst reg_dst, int regidx, const str *s);
 
@@ -32,3 +32,5 @@ void emit_fn_call(const str *s);
 void emit_mainfn(void);
 void emit_ret(void);
 
+extern const char *text_section_header;
+extern const char *string_section_header;

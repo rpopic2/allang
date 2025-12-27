@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 
+ void abort(void);
+
 typedef struct str {
     const char *data;
     const char *end;
@@ -18,8 +20,10 @@ typedef struct {
 
 static const str str_null = {.data = 0, .end = 0};
 
-inline ptrdiff_t str_len(const str *s) {
-    return s->end - s->data;
+inline size_t str_len(const str *s) {
+    if (s->end - s->data < 0)
+        abort();
+    return (size_t)(s->end - s->data);
 }
 
 inline bool str_is_empty(const str *s) {
@@ -30,7 +34,7 @@ inline bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
     return memcmp(s->data, cstr, str_len(s)) == 0;
 }
 
-static inline const str str_move(str *s) {
+static inline str str_move(str *s) {
     str ret = *s;
     *s = str_null;
     return ret;
@@ -45,7 +49,8 @@ static inline void str_fprintnl(const str *s, FILE *file) {
     if (s->data == s->end) {
         fputs("(empty)", file);
     } else {
-        fwrite(s->data, sizeof (char), str_len(s), file);
+        if (str_len(s) > 0)
+            fwrite(s->data, sizeof (char), (size_t)str_len(s), file);
     }
 }
 

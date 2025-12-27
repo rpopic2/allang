@@ -22,13 +22,19 @@ DECL_PTR(static buf, fn_buf);
 char *cstr_begin = NULL;
 unsigned string_lit_counts = 0;
 
+extern const char *addrgen_adrp;
+extern const char *addrgen_add;
+extern const char *fn_prefix;
+extern const char *mainfn_annotation;
+extern const char *local_string_prefix;
+
 
 void emit_init(void) {
     buf_init(text_buf, INIT_BUFSIZ);
-    buf_puts(text_buf, STR_FROM_INSTR(".section	__TEXT,__text,regular,pure_instructions"));
+    buf_puts(text_buf, &STR_FROM(text_section_header));
 
     buf_init(cstr_buf, INIT_BUFSIZ);
-    buf_puts(cstr_buf, STR_FROM_INSTR("\n\n\t.section	__TEXT,__cstring,cstring_literals"));
+    buf_puts(cstr_buf, &STR_FROM(string_section_header));
     cstr_begin = cstr_buf->cur;
 
     buf_init(prologue_buf, INIT_BUFSIZ);
@@ -48,7 +54,7 @@ bool emit_need_escaping(void) {
     return false;
 }
 
-void emit_mov(register_dst reg_dst, int regidx, int value) {
+void emit_mov(register_dst reg_dst, int regidx, long value) {
     if (reg_dst == SCRATCH)
         regidx += 8;
     else if (reg_dst == NREG)
@@ -61,13 +67,13 @@ void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
         regidx += 8;
 
     char *buffer = malloc(SPRINTF_BUFSIZ);
-    int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, "l_.str.%d", string_lit_counts++);
+    int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, local_string_prefix, string_lit_counts++);
     if (num_printed >= SPRINTF_BUFSIZ) {
         fputs("buffer overflow in snprintf\n", stderr);
         exit(EXIT_FAILURE);
     }
-    buf_snprintf(fn_buf, INSTR("adrp x%d, %s@PAGE"), regidx, buffer);
-    buf_snprintf(fn_buf, INSTR("add x%d, x%d, %s@PAGEOFF"), regidx, regidx, buffer);
+    buf_snprintf(fn_buf, addrgen_adrp, regidx, buffer);
+    buf_snprintf(fn_buf, addrgen_add, regidx, regidx, buffer);
 
     buf_snprintf(cstr_buf, "%s:\n", buffer);
     buf_puts(cstr_buf, &STR_FROM("\t.asciz "));
@@ -89,7 +95,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
         return;
     }
 
-    int stack_size = regs_to_save * sizeof (uint64_t); // plus context stack size
+    int stack_size = regs_to_save * (signed)sizeof (uint64_t); // plus context stack size
     if (context->calls_fn) {
         stack_size += 16;
     }
@@ -139,13 +145,18 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
 }
 
 void emit_fn_call(const str *s) {
-    buf_puts(fn_buf, &STR_FROM("\tbl _"));
+    buf_puts(fn_buf, &STR_FROM("\tbl "));
+    buf_puts(fn_buf, &STR_FROM(fn_prefix));
     buf_puts(fn_buf, s);
     buf_putc(fn_buf, '\n');
 }
 
 void emit_mainfn(void) {
-    buf_puts(text_buf, &STR_FROM("\t.globl _main\n\t.p2align 2\n_main:\n"));
+    buf_puts(text_buf, STR_FROM_INSTR(".globl _main"));
+    buf_puts(text_buf, STR_FROM_INSTR(".p2align 2"));
+    buf_puts(text_buf, &STR_FROM(mainfn_annotation));
+    buf_puts(text_buf, &STR_FROM(fn_prefix));
+    buf_puts(text_buf, &STR_FROM("main:"));
 }
 
 void emit_ret(void) {

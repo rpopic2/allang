@@ -82,7 +82,7 @@ void literal_string(const parser_context *restrict state, const str *restrict to
     size_t len = str_len(token);
     iter unescaped = iter_init(malloc(len), len);
 
-    for (int i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i) {
         char c = token->data[i];
         if (c != '\\')
             *unescaped.cur++ = c;
@@ -104,7 +104,7 @@ void literal_string(const parser_context *restrict state, const str *restrict to
                 break;
             default:;
                 long number = strtol(token->data, NULL, 0);
-                if (number > sizeof (char)) {
+                if (number > (signed)sizeof (char)) {
                     compile_err("%d is too large for a string literal", number);
                 } else {
                     result = (char)number;
@@ -225,6 +225,10 @@ void parse(const str *restrict token, parser_context *restrict state) {
 
 
 int main(int argc, const char *argv[]) {
+    if (argc == 1) {
+        fprintf(stderr, "usage: alc [filename]\n");
+        exit(EXIT_FAILURE);
+    }
     const char *source_name = argv[1];
     FILE *source_file = fopen(argv[1], "r");
     if (source_file == NULL) {
@@ -232,7 +236,7 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
     fseek(source_file, 0, SEEK_END);
-    long source_len = ftell(source_file);
+    size_t source_len = (size_t)ftell(source_file);
     rewind(source_file);
 
     char *source_start = malloc(source_len);

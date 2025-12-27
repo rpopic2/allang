@@ -17,14 +17,22 @@ typedef struct {
     void *cur;
 } fixed_arena;
 
-inline ptrdiff_t buf_len(const buf *buffer) {
-    return buffer->end - buffer->start;
+inline size_t buf_cap(const buf *buffer) {
+    if (buffer->end - buffer->start < 0)
+        abort();
+    return (size_t)(buffer->end - buffer->start);
+}
+
+inline size_t buf_len(const buf *buffer) {
+    if (buffer->cur - buffer->start < 0)
+        abort();
+    return (size_t)(buffer->cur - buffer->start);
 }
 
 inline void buf_grow(buf *buffer, size_t adding_size) {
     while (buffer->cur + adding_size >= buffer->end) {
-        size_t len = buf_len(buffer);
-        size_t pos = buffer->cur - buffer->start;
+        size_t len = buf_cap(buffer);
+        ptrdiff_t pos = buffer->cur - buffer->start;
         size_t new_len = len * 2;
         buffer->start = realloc(buffer->start, new_len);
         buffer->cur = buffer->start + pos;
@@ -66,12 +74,12 @@ static void buf_snprintf(buf *buffer, const char *format, ...) {
         exit(EXIT_FAILURE);
     }
 
-    buf_grow(buffer, num_printed);
+    buf_grow(buffer, (size_t)num_printed);
 
     strcpy(buffer->cur, sprintf_buf);
     buffer->cur += num_printed;
 }
 
 void buf_fwrite(const buf *buffer, FILE *out) {
-    fwrite(buffer->start, sizeof (char), buffer->cur - buffer->start, out);
+    fwrite(buffer->start, sizeof (char), buf_len(buffer), out);
 }
