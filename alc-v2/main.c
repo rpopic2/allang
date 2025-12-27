@@ -69,12 +69,6 @@ void compile_warning(const char *format, ...) {
     fputs("\x1b[0m", stderr);
 }
 
-typedef struct {
-    register_dst reg_dst;
-    int reg_off;
-    str deferred_fn_call;
-    iter src;
-} parser_context;
 
 void literal_string(const parser_context *restrict state, const str *restrict token) {
     bool escape = emit_need_escaping();
@@ -170,7 +164,7 @@ bool expr(const str *restrict token, parser_context *restrict state) {
 
 	// emit operation
     } else {
-	emit_mov(state->reg_dst, state->reg_off, value);
+        emit_mov(state->reg_dst, state->reg_off, value);
     }
     return true;
 }
@@ -190,6 +184,7 @@ bool expr_line(str in_token, parser_context *state) {
             break;
     }
     state->reg_off = 0;
+    state->reg_dst = SCRATCH;
     return true;
 }
 
@@ -210,9 +205,18 @@ void parse(const str *restrict token, parser_context *restrict state) {
         }
         state->reg_off = 0;
         state->reg_dst = SCRATCH;
+        state->calls_fn = true;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         state->reg_dst = PARAM;
         state->deferred_fn_call = *token;
+    } else if (isupper(token->data[0])) {
+        str colons;
+        lex(&colons, &state->src);
+        if (str_eq_lit(&colons, "::")) {
+            state->reg_dst = NREG;
+            state->reg_off = state->nreg_count++;
+        }
+        // expr required afterwards
     } else {
         compile_err("unknown token "), str_fprint(token, stderr);
     }
@@ -248,13 +252,14 @@ int main(int argc, const char *argv[]) {
     emit_init();
 
     emit_mainfn();
-    emit_fn_prologue();
 
-    parser_context _state;
-    parser_context *state = &_state;
-    state->reg_dst = SCRATCH;
-    state->reg_off = 0;
-    state->src = _src;
+    parser_context *state = &(parser_context){
+        .reg_dst = SCRATCH,
+        .reg_off = 0,
+        .nreg_count = 0,
+        .src = _src,
+        .calls_fn = false,
+    };
     iter *src = &state->src;
 
     str *token = &(str){.data = 0, .end = 0};
@@ -266,7 +271,7 @@ int main(int argc, const char *argv[]) {
         parse(token, state);
     }
 
-    emit_fn_epilogue();
+    emit_fn_prologue_epilogue(state);
     emit_ret();
 
     size_t source_name_len = strlen(source_name);
