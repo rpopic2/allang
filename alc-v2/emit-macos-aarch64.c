@@ -73,13 +73,13 @@ void emit_fn_epilogue(void) {
 }
 
 void emit_fn_call(const str *s) {
-    buf_puts(text_buf, &STR_FROM("\tbl "));
+    buf_puts(text_buf, &STR_FROM("\tbl _"));
     buf_puts(text_buf, s);
     buf_putc(text_buf, '\n');
 }
 
 void emit_mainfn(void) {
-    buf_puts(text_buf, &STR_FROM(".globl _main\n.p2align 2\n_main:\n"));
+    buf_puts(text_buf, &STR_FROM("\t.globl _main\n\t.p2align 2\n_main:\n"));
 }
 
 void emit_ret(void) {

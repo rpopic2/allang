@@ -189,9 +189,7 @@ bool expr_line(str in_token, parser_context *state) {
         if (!ok)
             break;
     }
-    // if (token->end[0] == '\n') {
-        state->reg_off = 0;
-    // }
+    state->reg_off = 0;
     return true;
 }
 
