@@ -146,7 +146,7 @@ opt_long lit_numeric(const str *token) {
     return opt_long_some(value);
 }
 
-bool expr_in(const str *restrict token, parser_context *restrict state) {
+bool expr(const str *restrict token, parser_context *restrict state) {
     if (token->data[0] == '"') {
         literal_string(state, token);
 	return true;
@@ -165,7 +165,6 @@ bool expr_in(const str *restrict token, parser_context *restrict state) {
 	    compile_err("expected operand\n");
 	}
 	if (op_token.data[0] == '+') {
-	    printf("plus");
 	    emit_mov(state->reg_dst, state->reg_off, value + operand);
 	}
 
@@ -178,7 +177,7 @@ bool expr_in(const str *restrict token, parser_context *restrict state) {
 
 bool expr_line(str in_token, parser_context *state) {
     str *token = &in_token;
-    bool ok = expr_in(token, state);
+    bool ok = expr(token, state);
     if (!ok)
         return false;
 
@@ -186,7 +185,7 @@ bool expr_line(str in_token, parser_context *state) {
         state->reg_off++;
         lex(token, &state->src);
         str_print(token);
-        ok = expr_in(token, state);
+        ok = expr(token, state);
         if (!ok)
             break;
     }
