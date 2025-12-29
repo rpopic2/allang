@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "err.h"
 #include "str.h"
 #include "emit.h"
 #include "opt.h"
@@ -175,6 +176,47 @@ regable read_regable(const str *token) {
     return result;
 }
 
+void binary_op(const regable *restrict lhs, parser_context *restrict state) {
+    str op_token;
+    lex(&op_token, &state->src);
+
+    str operand_token;
+    lex(&operand_token, &state->src);
+    regable rhs = read_regable(&operand_token);
+
+    if (rhs.tag == NONE) {
+        compile_err("expected operand\n");
+    }
+    if (op_token.data[0] == '+') {
+        if (lhs->tag == VALUE && rhs.tag == VALUE) {
+            emit_mov(state->reg_dst, state->reg_off, lhs->value + rhs.value);
+        } else if (lhs->tag == VALUE && rhs.tag == REG) {
+            emit_add((entry){state->reg_dst, state->reg_off}, rhs.reg, lhs->value);
+        } else if(lhs->tag == REG && rhs.tag == VALUE) {
+            emit_add((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.value);
+        } else if (lhs->tag == REG && rhs.tag == REG) {
+            emit_add_reg((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.reg);
+        }
+    } else if (op_token.data[0] == '-') {
+        if (lhs->tag == VALUE && rhs.tag == VALUE) {
+            emit_mov(state->reg_dst, state->reg_off, lhs->value - rhs.value);
+        } else if (lhs->tag == VALUE && rhs.tag == REG) {
+            int tmp_reg_off = state->reg_off;
+            if (state->reg_dst == SCRATCH) {
+                tmp_reg_off += 1;
+            }
+            emit_mov(SCRATCH, tmp_reg_off, lhs->value);
+            emit_sub_reg((entry){state->reg_dst, state->reg_off}, (entry){SCRATCH, tmp_reg_off}, rhs.reg);
+        } else if(lhs->tag == REG && rhs.tag == VALUE) {
+            emit_sub((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.value);
+        } else if (lhs->tag == REG && rhs.tag == REG) {
+            emit_sub_reg((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.reg);
+        }
+    } else {
+        compile_err("unknown operator\n");
+    }
+}
+
 bool expr(const str *restrict token, parser_context *restrict state) {
     if (token->data[0] == '"') {
         literal_string(state, token);
@@ -188,36 +230,7 @@ bool expr(const str *restrict token, parser_context *restrict state) {
 
     char next = token->end[1];
     if (next == '#' || next == '+') {
-        str op_token;
-        lex(&op_token, &state->src);
-
-        str operand_token;
-        lex(&operand_token, &state->src);
-        regable rhs = read_regable(&operand_token);
-
-        if (rhs.tag == NONE) {
-            compile_err("expected operand\n");
-        }
-        if (op_token.data[0] == '+') {
-            if (lhs.tag == VALUE && rhs.tag == VALUE) {
-                emit_mov(state->reg_dst, state->reg_off, lhs.value + rhs.value);
-            } else if (lhs.tag == VALUE && rhs.tag == REG) {
-                int tmp_reg_off = state->reg_off;
-                if (state->reg_dst == SCRATCH) {
-                    tmp_reg_off += 1;
-                }
-                emit_mov(SCRATCH, tmp_reg_off, lhs.value);
-                emit_add_reg((entry){state->reg_dst, state->reg_off}, (entry){SCRATCH, tmp_reg_off}, rhs.reg);
-            } else if(lhs.tag == REG && rhs.tag == VALUE) {
-                emit_add((entry){state->reg_dst, state->reg_off}, lhs.reg, rhs.value);
-            } else if (lhs.tag == REG && rhs.tag == REG) {
-                emit_add_reg((entry){state->reg_dst, state->reg_off}, lhs.reg, rhs.reg);
-            }
-        } else {
-            compile_err("unknown operator\n");
-        }
-
-        // emit operation
+        binary_op(&lhs, state);
     } else {
         if (lhs.tag == VALUE) {
             emit_mov(state->reg_dst, state->reg_off, lhs.value);
@@ -235,12 +248,11 @@ bool expr_line(str in_token, parser_context *state) {
     if (!ok)
         return false;
 
-    // printf("|%c%c|", token->end[0], state->src.cur[-2]);
     while (last_token.end[0] == ',' && isspace(last_token.end[1])) {
-        printf(", ");
+        printd(", ");
         state->reg_off++;
         lex(token, &state->src);
-        str_print(token);
+        str_printd(token);
         ok = expr(token, state);
         if (!ok)
             break;
@@ -342,7 +354,7 @@ int main(int argc, const char *argv[]) {
         lex(token, src);
         if (str_len(token) == 0)
             continue;
-        str_print(token);
+        str_printd(token);
         parse(token, state);
     }
 

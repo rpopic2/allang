@@ -84,6 +84,15 @@ void emit_add_reg(entry dst, entry lhs, entry rhs) {
             get_regoff(dst), get_regoff(lhs), get_regoff(rhs));
 }
 
+void emit_sub(entry dst, entry lhs, i64 rhs) {
+    buf_snprintf(fn_buf, INSTR("sub w%d, w%d, #%lld"),
+            get_regoff(dst), get_regoff(lhs), rhs);
+}
+void emit_sub_reg(entry dst, entry lhs, entry rhs) {
+    buf_snprintf(fn_buf, INSTR("sub w%d, w%d, w%d"),
+            get_regoff(dst), get_regoff(lhs), get_regoff(rhs));
+}
+
 void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
     if (reg_dst == SCRATCH)
         regidx += 8;
