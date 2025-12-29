@@ -1,5 +1,3 @@
-#include <stdbool.h>
-
 #define OPT_GENERIC(T) \
 \
 typedef struct { \

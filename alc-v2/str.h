@@ -1,11 +1,10 @@
 #pragma once
 
-#include <stdbool.h>
-#include <stddef.h>
+#define bool _Bool
 #include <stdio.h>
 #include <string.h>
 
- void abort(void);
+void abort(void);
 
 typedef struct str {
     const char *data;
@@ -20,21 +19,21 @@ typedef struct {
 
 static const str str_null = {.data = 0, .end = 0};
 
-inline size_t str_len(const str *s) {
+inline static size_t str_len(const str *s) {
     if (s->end - s->data < 0)
         abort();
     return (size_t)(s->end - s->data);
 }
 
-inline bool str_is_empty(const str *s) {
+inline static bool str_is_empty(const str *s) {
     return s->end == s->data;
 }
 
-inline bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
+inline static bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
     return memcmp(s->data, cstr, str_len(s)) == 0;
 }
 
-static inline str str_move(str *s) {
+inline static str str_move(str *s) {
     str ret = *s;
     *s = str_null;
     return ret;
@@ -56,21 +55,21 @@ static inline void str_fprintnl(const str *s, FILE *file) {
     }
 }
 
-static inline void str_fprint(const str *s, FILE *file) {
+inline static void str_fprint(const str *s, FILE *file) {
     str_fprintnl(s, file);
     fputc('\n', file);
 }
 
-static inline void str_print(const str *s) {
+inline static void str_print(const str *s) {
     str_fprintnl(s, stdout);
     fputc('\n', stdout);
 }
 
-inline str str_from_iter(const iter *it) {
+inline static str str_from_iter(const iter *it) {
     return (str){.data = it->start, it->end};
 }
 
-inline iter iter_init(char *start, size_t end) {
+inline static iter iter_init(char *start, size_t end) {
     return (iter){.start = start, .cur = start, .end = start + end};
 }
 

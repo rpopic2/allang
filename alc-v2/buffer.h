@@ -1,9 +1,10 @@
 #pragma once
 
-#include "str.h"
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdlib.h>
+
+#include "str.h"
 
 typedef struct {
     char *start;
@@ -40,13 +41,13 @@ inline void buf_grow(buf *buffer, size_t adding_size) {
     }
 }
 
-inline void buf_init(buf *buffer, size_t size) {
+inline static void buf_init(buf *buffer, size_t size) {
     buffer->start = malloc(size);
     buffer->cur = buffer->start;
     buffer->end = buffer->start + size;
 }
 
-inline void buf_puts(buf *buffer, const str *s) {
+inline static void buf_puts(buf *buffer, const str *s) {
     size_t len = str_len(s);
     buf_grow(buffer, len);
 
@@ -54,7 +55,7 @@ inline void buf_puts(buf *buffer, const str *s) {
     buffer->cur += len;
 }
 
-inline void buf_putc(buf *buffer, char c) {
+inline static void buf_putc(buf *buffer, char c) {
     buf_grow(buffer, 1);
 
     *buffer->cur++ = c;
@@ -66,7 +67,7 @@ _Thread_local static char sprintf_buf[SPRINTF_BUFSIZ];
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((format(printf, 2, 3)))
 #endif
-static void buf_snprintf(buf *buffer, const char *format, ...) {
+inline static void buf_snprintf(buf *buffer, const char *format, ...) {
     va_list args;
     va_start(args, format);
     int num_printed = vsnprintf(sprintf_buf, SPRINTF_BUFSIZ, format, args);
@@ -83,6 +84,6 @@ static void buf_snprintf(buf *buffer, const char *format, ...) {
     buffer->cur += num_printed;
 }
 
-void buf_fwrite(const buf *buffer, FILE *out) {
+inline static void buf_fwrite(const buf *buffer, FILE *out) {
     fwrite(buffer->start, sizeof (char), buf_len(buffer), out);
 }
