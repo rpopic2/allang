@@ -15,7 +15,7 @@ OPT_GENERIC(i64)
 int lineno = 1;
 bool has_compile_err = false;
 
-str last_token = str_null;
+str last_token = (str){.data = 0, .end = 0};
 void lex(str *token, iter *src) {
 retry:
     *token = (str){.data = src->cur};
