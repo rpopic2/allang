@@ -54,12 +54,34 @@ bool emit_need_escaping(void) {
     return false;
 }
 
+int get_regoff(entry e) {
+    if (e.type == SCRATCH)
+        e.offset += 8;
+    else if (e.type == NREG)
+        e.offset += 19;
+    return e.offset;
+}
+
 void emit_mov(register_dst reg_dst, int regidx, i64 value) {
-    if (reg_dst == SCRATCH)
-        regidx += 8;
-    else if (reg_dst == NREG)
-        regidx += 19;
+    regidx = get_regoff((entry){reg_dst, regidx});
     buf_snprintf(fn_buf, INSTR("mov w%d, #%lld"), regidx, value);
+}
+
+void emit_mov_reg(register_dst reg_dst, int regidx, register_dst reg_src, int regidx_src) {
+    int dst = get_regoff((entry){reg_dst, regidx});
+    int src = get_regoff((entry){reg_src, regidx_src});
+
+    buf_snprintf(fn_buf, INSTR("mov w%d, w%d"), dst, src);
+}
+
+void emit_add(entry dst, entry lhs, i64 rhs) {
+    buf_snprintf(fn_buf, INSTR("add w%d, w%d, #%lld"),
+            get_regoff(dst), get_regoff(lhs), rhs);
+}
+
+void emit_add_reg(entry dst, entry lhs, entry rhs) {
+    buf_snprintf(fn_buf, INSTR("add w%d, w%d, w%d"),
+            get_regoff(dst), get_regoff(lhs), get_regoff(rhs));
 }
 
 void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {

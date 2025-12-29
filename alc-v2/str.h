@@ -45,6 +45,8 @@ inline static bool str_ends_with(const str *restrict token, const char *restrict
     return str_len(token) >= len && memcmp(token->end - len, cstr, len) == 0;
 }
 
+#define streq(s, t) (memcmp((s), (t), strlen(t)) == 0)
+
 static inline void str_fprintnl(const str *s, FILE *file) {
     if (s->data == s->end) {
         fputs("(empty)", file);

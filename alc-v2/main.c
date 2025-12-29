@@ -7,12 +7,14 @@
 #include "str.h"
 #include "emit.h"
 #include "opt.h"
+#include "hashset.h"
 
 OPT_GENERIC(i64)
 
 int lineno = 1;
 bool has_compile_err = false;
 
+str last_token = str_null;
 void lex(str *token, iter *src) {
 retry:
     *token = (str){.data = src->cur};
@@ -43,10 +45,12 @@ retry:
     }
     if (token->end > src->end) {
         *token = str_null;
+        last_token = str_null;
         return;
     }
     if (str_len(token) == 0)
         goto retry;
+    last_token = *token;
 }
 
 void compile_err(const char *format, ...) {
@@ -125,48 +129,102 @@ void literal_string(const parser_context *restrict state, const str *restrict to
 opt_i64 lit_numeric(const str *token) {
     i64 value = 0;
     if (isdigit(token->data[0])) {
-	value = strtoll(token->data, NULL, 0);
+        value = strtoll(token->data, NULL, 0);
     } else if (token->data[0] == '\'') {
-	char c = token->data[1];
+        char c = token->data[1];
 	if (token->end[-1] != '\'') {
 	    compile_err("expected closing \'\n");
 	}
 	value = c;
     } else if (str_eq_lit(token, "true")) {
-	value = 1;
+        value = 1;
     } else if (str_eq_lit(token, "false")) {
-	value = 0;
+        value = 0;
     } else {
-	return opt_long_none;
+        return opt_long_none;
     }
     return opt_i64_some(value);
+}
+
+typedef struct {
+    enum {
+        NONE, VALUE, REG
+    } tag;
+    union {
+        i64 value;
+        entry reg;
+    };
+} regable;
+
+regable read_regable(const str *token) {
+    regable result = (regable){ .value = 0, .tag = 0};
+    if (isupper(token->data[0])) {
+        entry *e = find_id(token);
+        if (e->type == 0) {
+            compile_err("unknown id "), str_fprint(token, stderr);
+        } else {
+            result.tag = REG;
+            result.reg = *e;
+        }
+    } else {
+        if_opt(i64, value, = lit_numeric(token)) {
+            result.tag = VALUE;
+            result.value = value;
+        }
+    }
+    return result;
 }
 
 bool expr(const str *restrict token, parser_context *restrict state) {
     if (token->data[0] == '"') {
         literal_string(state, token);
-	return true;
+        return true;
     }
-    try_opt(i64, value, lit_numeric(token), false);
+
+    regable lhs = read_regable(token);
+    if (lhs.tag == NONE) {
+        return false;
+    }
 
     char next = token->end[1];
-    if (next >= '#' && next <= '/') {
-	// read operator and 
-	str op_token;
-	lex(&op_token, &state->src);
+    if (next == '#' || next == '+') {
+        str op_token;
+        lex(&op_token, &state->src);
 
-	str operand_token;
-	lex(&operand_token, &state->src);
-	ifnone_opt(i64, operand, lit_numeric(&operand_token)) {
-	    compile_err("expected operand\n");
-	}
-	if (op_token.data[0] == '+') {
-	    emit_mov(state->reg_dst, state->reg_off, value + operand);
-	}
+        str operand_token;
+        lex(&operand_token, &state->src);
+        regable rhs = read_regable(&operand_token);
 
-	// emit operation
+        if (rhs.tag == NONE) {
+            compile_err("expected operand\n");
+        }
+        if (op_token.data[0] == '+') {
+            if (lhs.tag == VALUE && rhs.tag == VALUE) {
+                emit_mov(state->reg_dst, state->reg_off, lhs.value + rhs.value);
+            } else if (lhs.tag == VALUE && rhs.tag == REG) {
+                int tmp_reg_off = state->reg_off;
+                if (state->reg_dst == SCRATCH) {
+                    tmp_reg_off += 1;
+                }
+                emit_mov(SCRATCH, tmp_reg_off, lhs.value);
+                emit_add_reg((entry){state->reg_dst, state->reg_off}, (entry){SCRATCH, tmp_reg_off}, rhs.reg);
+            } else if(lhs.tag == REG && rhs.tag == VALUE) {
+                emit_add((entry){state->reg_dst, state->reg_off}, lhs.reg, rhs.value);
+            } else if (lhs.tag == REG && rhs.tag == REG) {
+                emit_add_reg((entry){state->reg_dst, state->reg_off}, lhs.reg, rhs.reg);
+            }
+        } else {
+            compile_err("unknown operator\n");
+        }
+
+        // emit operation
     } else {
-        emit_mov(state->reg_dst, state->reg_off, value);
+        if (lhs.tag == VALUE) {
+            emit_mov(state->reg_dst, state->reg_off, lhs.value);
+        } else if (lhs.tag == REG) {
+            const entry *nreg = &lhs.reg;
+            emit_mov_reg(state->reg_dst, state->reg_off, nreg->type, nreg->offset);
+        }
     }
     return true;
 }
@@ -177,7 +235,9 @@ bool expr_line(str in_token, parser_context *state) {
     if (!ok)
         return false;
 
-    while (token->end[0] == ',' && isspace(token->end[1])) {
+    // printf("|%c%c|", token->end[0], state->src.cur[-2]);
+    while (last_token.end[0] == ',' && isspace(last_token.end[1])) {
+        printf(", ");
         state->reg_off++;
         lex(token, &state->src);
         str_print(token);
@@ -190,8 +250,26 @@ bool expr_line(str in_token, parser_context *state) {
     return true;
 }
 
+bool stmt(const str *restrict token, parser_context *restrict state) {
+    if (isupper(token->data[0])) {
+        if (streq(token->end, " ::")) {
+            str colons;
+            lex(&colons, &state->src);
+
+            state->reg_dst = NREG;
+            state->reg_off = state->nreg_count++;
+            add_id(*token, NREG, state->reg_off);
+            return true;
+        }
+        // expr required afterwards
+    }
+    return false;
+}
+
 void parse(const str *restrict token, parser_context *restrict state) {
-    if (expr_line(*token, state)) {
+    if (stmt(token, state)) {
+
+    } else if (expr_line(*token, state)) {
 
     } else if (str_eq_lit(token, "ret")) {
         state->reg_dst = RET;
@@ -211,18 +289,9 @@ void parse(const str *restrict token, parser_context *restrict state) {
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         state->reg_dst = PARAM;
         state->deferred_fn_call = *token;
-    } else if (isupper(token->data[0])) {
-        str colons;
-        lex(&colons, &state->src);
-        if (str_eq_lit(&colons, "::")) {
-            state->reg_dst = NREG;
-            state->reg_off = state->nreg_count++;
-        }
-        // expr required afterwards
     } else {
         compile_err("unknown token "), str_fprint(token, stderr);
     }
-
 }
 
 

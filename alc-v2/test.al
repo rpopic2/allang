@@ -5,6 +5,8 @@ printf
 I :: 3
 J :: 5
 
+I, 3
+4 + 3, I + 3, 4 + J, I + J
+
 "hi", "ok"
-4 + 3
 ret false

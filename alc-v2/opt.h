@@ -14,7 +14,7 @@ inline static opt_##T opt_##T##_some(T value) { \
 static const opt_##T opt_long_none = { .some = false, .value = 0 }; \
 
 #define if_opt(T, varname, expr) \
-	opt_##T _##varname = (expr); \
+	opt_##T _##varname expr; \
 	T varname = _##varname.value; \
 	if (_##varname.some)
 
