@@ -65,7 +65,7 @@ int get_regoff(entry e) {
 
 void emit_mov(register_dst reg_dst, int regidx, i64 value) {
     regidx = get_regoff((entry){reg_dst, regidx});
-    buf_snprintf(fn_buf, INSTR("mov w%d, #"PRId64), regidx, value);
+    buf_snprintf(fn_buf, INSTR("mov w%d, #%"PRId64), regidx, value);
 }
 
 void emit_mov_reg(register_dst reg_dst, int regidx, register_dst reg_src, int regidx_src) {
@@ -76,7 +76,7 @@ void emit_mov_reg(register_dst reg_dst, int regidx, register_dst reg_src, int re
 }
 
 void emit_add(entry dst, entry lhs, i64 rhs) {
-    buf_snprintf(fn_buf, INSTR("add w%d, w%d, #"PRId64),
+    buf_snprintf(fn_buf, INSTR("add w%d, w%d, #%"PRId64),
             get_regoff(dst), get_regoff(lhs), rhs);
 }
 
@@ -86,7 +86,7 @@ void emit_add_reg(entry dst, entry lhs, entry rhs) {
 }
 
 void emit_sub(entry dst, entry lhs, i64 rhs) {
-    buf_snprintf(fn_buf, INSTR("sub w%d, w%d, #"PRId64),
+    buf_snprintf(fn_buf, INSTR("sub w%d, w%d, #%"PRId64),
             get_regoff(dst), get_regoff(lhs), rhs);
 }
 void emit_sub_reg(entry dst, entry lhs, entry rhs) {
@@ -184,11 +184,15 @@ void emit_fn_call(const str *s) {
 }
 
 void emit_mainfn(void) {
-    buf_puts(text_buf, STR_FROM_INSTR(".globl _main"));
-    buf_puts(text_buf, STR_FROM_INSTR(".p2align 2"));
+	const char *fn_name = "main";
+    buf_puts(text_buf, &STR_FROM("\t.globl "));
+    buf_puts(text_buf, &STR_FROM(fn_prefix));
+	buf_puts(text_buf, &STR_FROM(fn_name));
+    buf_puts(text_buf, &STR_FROM("\n\t.p2align 2\n"));
     buf_puts(text_buf, &STR_FROM(mainfn_annotation));
     buf_puts(text_buf, &STR_FROM(fn_prefix));
-    buf_puts(text_buf, &STR_FROM("main:"));
+	buf_puts(text_buf, &STR_FROM(fn_name));
+    buf_puts(text_buf, &STR_FROM(":\n"));
 }
 
 void emit_ret(void) {
