@@ -54,6 +54,11 @@ retry:
     last_token = *token;
 }
 
+void consume(iter *src) {
+    str _;
+    lex(&_, src);
+}
+
 void compile_err(const char *format, ...) {
     has_compile_err = true;
     fputs("\x1b[31m", stderr);
@@ -196,7 +201,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict state) {
             emit_add((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
             emit_add_reg((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.reg);
-        }
+        } else unreachable;
     } else if (op_token.data[0] == '-') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
             emit_mov(state->reg_dst, state->reg_off, lhs->value - rhs.value);
@@ -211,7 +216,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict state) {
             emit_sub((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
             emit_sub_reg((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.reg);
-        }
+        } else unreachable;
     } else {
         compile_err("unknown operator\n");
     }
@@ -265,15 +270,30 @@ bool expr_line(str in_token, parser_context *state) {
 bool stmt(const str *restrict token, parser_context *restrict state) {
     if (isupper(token->data[0])) {
         if (streq(token->end, " ::")) {
-            str colons;
-            lex(&colons, &state->src);
+            consume(&state->src);
 
             state->reg_dst = NREG;
             state->reg_off = state->nreg_count++;
             add_id(*token, NREG, state->reg_off);
             return true;
+        } else if (streq(last_token.end, " =[]")) {
+            consume(&state->src);
+
+            state->reg_dst = SCRATCH;
+            int offset = state->stack_size;
+            add_id(*token, STACK, offset);
+            state->stack_size += sizeof (i32);
+
+            lex(&last_token, &state->src);
+            expr(&last_token, state);
+
+            if (streq(last_token.end, " =[]")) {
+                consume(&state->src);
+                entry src = (entry){.type = state->reg_dst, .offset = state->reg_off};
+                emit_str_fp(src, state->stack_size);
+            }
+            return true;
         }
-        // expr required afterwards
     }
     return false;
 }
@@ -346,6 +366,7 @@ int main(int argc, const char *argv[]) {
         .nreg_count = 0,
         .src = _src,
         .calls_fn = false,
+        .stack_size = 0,
     };
     iter *src = &state->src;
 

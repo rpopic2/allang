@@ -13,6 +13,7 @@ typedef struct {
     str deferred_fn_call;
     iter src;
     bool calls_fn;
+    int stack_size;
 } parser_context;
 
 void emit_init(void);
@@ -27,6 +28,8 @@ void emit_add_reg(entry dst, entry lhs, entry rhs);
 void emit_sub(entry dst, entry lhs, i64 rhs);
 void emit_sub_reg(entry dst, entry lhs, entry rhs);
 void emit_string_lit(register_dst reg_dst, int regidx, const str *s);
+
+void emit_str_fp(entry src, int offset);
 
 void emit_fn_prologue_epilogue(const parser_context *context);
 void emit_fn_call(const str *s);

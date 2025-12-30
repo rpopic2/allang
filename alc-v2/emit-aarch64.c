@@ -115,6 +115,13 @@ void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
     free(buffer);
 }
 
+
+void emit_str_fp(entry src, int offset) {
+    int src_off = get_regoff(src);
+    buf_snprintf(fn_buf, INSTR("stur w%d, [x29, #-%d]"), src_off, offset);
+}
+
+
 void emit_fn_prologue_epilogue(const parser_context *context) {
     prologue_buf->cur = prologue_buf->start;
     if (!context->calls_fn && context->nreg_count == 0) {
@@ -127,22 +134,23 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
         return;
     }
 
-    int stack_size = regs_to_save * (signed)sizeof (uint64_t); // plus context stack size
+    int stack_size = regs_to_save * (signed)sizeof (uint64_t) + context->stack_size;
     if (context->calls_fn) {
         stack_size += 16;
     }
     stack_size = (stack_size + 15) & ~15; // align up to 16 bytes boundary
 
     int cur_stackoff = 0;
-    int frame_stackoff = 0;// + stack variable size;
+    int frame_stackoff = context->stack_size;// + stack variable size;
+    const int pair_size = 2 * (signed)sizeof (u64);
     if (context->calls_fn) {
         if (frame_stackoff == 0) {
             buf_snprintf(prologue_buf, INSTR("stp x29, x30, [sp, #-%d]!"), stack_size);
         } else {
             buf_snprintf(prologue_buf, INSTR("sub sp, sp, #%d"), stack_size);
-            buf_snprintf(prologue_buf, INSTR("stp x29, x30, [sp, #%d]"), frame_stackoff);
+            buf_snprintf(prologue_buf, INSTR("stp x29, x30, [sp, #%d]"), stack_size - pair_size);
         }
-        cur_stackoff += 16;
+        cur_stackoff += pair_size;
 
     }
     int tmp = regs_to_save;
@@ -169,8 +177,8 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
             buf_puts(prologue_buf, STR_FROM_INSTR("mov x29, sp"));
             buf_snprintf(fn_buf, INSTR("stp x29, x30, [sp], #%d"), stack_size);
         } else {
-            buf_snprintf(prologue_buf, INSTR("add x29, sp, #%d"), frame_stackoff);
-            buf_snprintf(fn_buf, INSTR("ldp x29, x30, [sp, #%d]"), frame_stackoff);
+            buf_snprintf(prologue_buf, INSTR("add x29, sp, #%d"), stack_size - pair_size);
+            buf_snprintf(fn_buf, INSTR("ldp x29, x30, [sp, #%d]"), stack_size - pair_size);
             buf_snprintf(fn_buf, INSTR("add sp, sp, #%d"), stack_size);
         }
     }

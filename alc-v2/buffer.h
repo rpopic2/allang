@@ -64,9 +64,9 @@ inline static void buf_putc(buf *buffer, char c) {
 #define SPRINTF_BUFSIZ 0x400
 _Thread_local static char sprintf_buf[SPRINTF_BUFSIZ];
 
-//#if defined(__GNUC__) || defined(__clang__)
-//__attribute__((format(printf, 2, 3)))
-//#endif
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 2, 3)))
+#endif
 inline static void buf_snprintf(buf *buffer, const char *format, ...) {
     va_list args;
     va_start(args, format);
