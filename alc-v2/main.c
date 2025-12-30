@@ -158,16 +158,16 @@ typedef struct {
     } tag;
     union {
         i64 value;
-        entry reg;
+        reg_t reg;
     };
 } regable;
 // static const entry SP = (entry){ .type = STACK };
-static const entry FP = (entry){ .type = FRAME };
+static const reg_t FP = (reg_t){ .type = FRAME };
 
 regable read_regable(const str *token) {
     regable result = (regable){ .value = 0, .tag = 0};
     if (isupper(token->data[0])) {
-        entry *e = find_id(token);
+        reg_t *e = find_id(token);
         if (e->type == 0) {
             compile_err("unknown id "), str_fprint(token, stderr);
         } else {
@@ -213,7 +213,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict state) {
                 tmp_reg_off += 1;
             }
             emit_mov(SCRATCH, tmp_reg_off, lhs->value);
-            emit_sub_reg(state->reg, (entry){SCRATCH, tmp_reg_off}, rhs.reg);
+            emit_sub_reg(state->reg, (reg_t){SCRATCH, tmp_reg_off}, rhs.reg);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
             emit_sub(state->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
@@ -232,7 +232,7 @@ bool expr(const str *restrict token, parser_context *restrict state) {
     if (token->data[0] == '[') {
         printf("load");
         str id = {.data = token->data + 1, .end = token->end - 1};
-        entry *e = find_id(&id);
+        reg_t *e = find_id(&id);
         if (token->end[-1] != ']') {
             compile_err("closing ']' expected\n");
         }
@@ -253,7 +253,7 @@ bool expr(const str *restrict token, parser_context *restrict state) {
         if (lhs.tag == VALUE) {
             emit_mov(state->reg.type, state->reg.offset, lhs.value);
         } else if (lhs.tag == REG) {
-            const entry *nreg = &lhs.reg;
+            const reg_t *nreg = &lhs.reg;
             if (nreg->type == NREG) {
                 emit_mov_reg(state->reg.type, state->reg.offset, nreg->type, nreg->offset);
             } else if (nreg->type == STACK) {
@@ -308,7 +308,7 @@ bool stmt(const str *restrict token, parser_context *restrict state) {
 
             if (streq(last_token.end, " =[]")) {
                 consume(&state->src);
-                entry src = (entry){.type = state->reg.type, .offset = state->reg.offset};
+                reg_t src = (reg_t){.type = state->reg.type, .offset = state->reg.offset};
                 emit_str_fp(src, state->stack_size);
             }
             return true;
@@ -380,7 +380,7 @@ int main(int argc, const char *argv[]) {
     emit_mainfn();
 
     parser_context *state = &(parser_context){
-        .reg = (entry) {.type = SCRATCH, .offset = 0 },
+        .reg = (reg_t) {.type = SCRATCH, .offset = 0 },
         .nreg_count = 0,
         .src = _src,
         .calls_fn = false,

@@ -55,7 +55,7 @@ bool emit_need_escaping(void) {
     return false;
 }
 
-int get_regoff(entry e) {
+int get_regoff(reg_t e) {
     if (e.type == SCRATCH)
         e.offset += 8;
     else if (e.type == NREG)
@@ -66,18 +66,18 @@ int get_regoff(entry e) {
 }
 
 void emit_mov(register_dst reg_dst, int regidx, i64 value) {
-    regidx = get_regoff((entry){reg_dst, regidx});
+    regidx = get_regoff((reg_t){reg_dst, regidx});
     buf_snprintf(fn_buf, INSTR("mov w%d, #%"PRId64), regidx, value);
 }
 
 void emit_mov_reg(register_dst reg_dst, int regidx, register_dst reg_src, int regidx_src) {
-    int dst = get_regoff((entry){reg_dst, regidx});
-    int src = get_regoff((entry){reg_src, regidx_src});
+    int dst = get_regoff((reg_t){reg_dst, regidx});
+    int src = get_regoff((reg_t){reg_src, regidx_src});
 
     buf_snprintf(fn_buf, INSTR("mov w%d, w%d"), dst, src);
 }
 
-void put_reg(buf *buffer, entry reg) {
+void put_reg(buf *buffer, reg_t reg) {
     if (reg.type == STACK) {
         buf_puts(buffer, &STR_FROM("sp"));
     } else {
@@ -85,7 +85,7 @@ void put_reg(buf *buffer, entry reg) {
     }
 }
 
-void emit_add(entry dst, entry lhs, i64 rhs) {
+void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
     buf_puts(fn_buf, &STR_FROM("\tadd "));
     put_reg(fn_buf, dst);
     buf_puts(fn_buf, &STR_FROM(", "));
@@ -94,16 +94,16 @@ void emit_add(entry dst, entry lhs, i64 rhs) {
     buf_snprintf(fn_buf, "#%"PRId64"\n", rhs);
 }
 
-void emit_add_reg(entry dst, entry lhs, entry rhs) {
+void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
     buf_snprintf(fn_buf, INSTR("add w%d, w%d, w%d"),
             get_regoff(dst), get_regoff(lhs), get_regoff(rhs));
 }
 
-void emit_sub(entry dst, entry lhs, i64 rhs) {
+void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
     buf_snprintf(fn_buf, INSTR("sub w%d, w%d, #%"PRId64),
             get_regoff(dst), get_regoff(lhs), rhs);
 }
-void emit_sub_reg(entry dst, entry lhs, entry rhs) {
+void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
     buf_snprintf(fn_buf, INSTR("sub w%d, w%d, w%d"),
             get_regoff(dst), get_regoff(lhs), get_regoff(rhs));
 }
@@ -130,12 +130,12 @@ void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
 }
 
 
-void emit_str_fp(entry src, int offset) {
+void emit_str_fp(reg_t src, int offset) {
     int src_off = get_regoff(src);
     buf_snprintf(fn_buf, INSTR("stur w%d, [x29, #-%d]"), src_off, offset);
 }
 
-void emit_ldr_fp(entry dst, int offset) {
+void emit_ldr_fp(reg_t dst, int offset) {
     int dst_off = get_regoff(dst);
     buf_snprintf(fn_buf, INSTR("ldur w%d, [x29, #-%d]"), dst_off, offset);
 }

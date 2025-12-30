@@ -9,7 +9,7 @@ typedef enum {
 typedef struct {
     register_dst type;
     int offset;
-} entry;
+} reg_t;
 
 typedef int32_t i32;
 typedef int64_t i64;
