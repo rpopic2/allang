@@ -88,7 +88,7 @@ void literal_string(const parser_context *restrict state, const str *restrict to
         compile_err("expected closing \"\n");
     }
     if (!escape) {
-        emit_string_lit(state->reg_dst, state->reg_off, token);
+        emit_string_lit(state->reg.type, state->reg.offset, token);
         return;
     }
     size_t len = str_len(token);
@@ -128,7 +128,7 @@ void literal_string(const parser_context *restrict state, const str *restrict to
     }
 
     str unescaped_s = str_from_iter(&unescaped);
-    emit_string_lit(state->reg_dst, state->reg_off, &unescaped_s);
+    emit_string_lit(state->reg.type, state->reg.offset, &unescaped_s);
     free(unescaped.start);
 }
 
@@ -161,6 +161,8 @@ typedef struct {
         entry reg;
     };
 } regable;
+// static const entry SP = (entry){ .type = STACK };
+static const entry FP = (entry){ .type = FRAME };
 
 regable read_regable(const str *token) {
     regable result = (regable){ .value = 0, .tag = 0};
@@ -194,28 +196,28 @@ void binary_op(const regable *restrict lhs, parser_context *restrict state) {
     }
     if (op_token.data[0] == '+') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
-            emit_mov(state->reg_dst, state->reg_off, lhs->value + rhs.value);
+            emit_mov(state->reg.type, state->reg.offset, lhs->value + rhs.value);
         } else if (lhs->tag == VALUE && rhs.tag == REG) {
-            emit_add((entry){state->reg_dst, state->reg_off}, rhs.reg, lhs->value);
+            emit_add(state->reg, rhs.reg, lhs->value);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
-            emit_add((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.value);
+            emit_add(state->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
-            emit_add_reg((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.reg);
+            emit_add_reg(state->reg, lhs->reg, rhs.reg);
         } else unreachable;
     } else if (op_token.data[0] == '-') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
-            emit_mov(state->reg_dst, state->reg_off, lhs->value - rhs.value);
+            emit_mov(state->reg.type, state->reg.offset, lhs->value - rhs.value);
         } else if (lhs->tag == VALUE && rhs.tag == REG) {
-            int tmp_reg_off = state->reg_off;
-            if (state->reg_dst == SCRATCH) {
+            int tmp_reg_off = state->reg.offset;
+            if (state->reg.type == SCRATCH) {
                 tmp_reg_off += 1;
             }
             emit_mov(SCRATCH, tmp_reg_off, lhs->value);
-            emit_sub_reg((entry){state->reg_dst, state->reg_off}, (entry){SCRATCH, tmp_reg_off}, rhs.reg);
+            emit_sub_reg(state->reg, (entry){SCRATCH, tmp_reg_off}, rhs.reg);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
-            emit_sub((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.value);
+            emit_sub(state->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
-            emit_sub_reg((entry){state->reg_dst, state->reg_off}, lhs->reg, rhs.reg);
+            emit_sub_reg(state->reg, lhs->reg, rhs.reg);
         } else unreachable;
     } else {
         compile_err("unknown operator\n");
@@ -225,6 +227,17 @@ void binary_op(const regable *restrict lhs, parser_context *restrict state) {
 bool expr(const str *restrict token, parser_context *restrict state) {
     if (token->data[0] == '"') {
         literal_string(state, token);
+        return true;
+    }
+    if (token->data[0] == '[') {
+        printf("load");
+        str id = {.data = token->data + 1, .end = token->end - 1};
+        entry *e = find_id(&id);
+        if (token->end[-1] != ']') {
+            compile_err("closing ']' expected\n");
+        }
+        if (e->type != NONE)
+            emit_ldr_fp(state->reg, e->offset);
         return true;
     }
 
@@ -238,10 +251,16 @@ bool expr(const str *restrict token, parser_context *restrict state) {
         binary_op(&lhs, state);
     } else {
         if (lhs.tag == VALUE) {
-            emit_mov(state->reg_dst, state->reg_off, lhs.value);
+            emit_mov(state->reg.type, state->reg.offset, lhs.value);
         } else if (lhs.tag == REG) {
             const entry *nreg = &lhs.reg;
-            emit_mov_reg(state->reg_dst, state->reg_off, nreg->type, nreg->offset);
+            if (nreg->type == NREG) {
+                emit_mov_reg(state->reg.type, state->reg.offset, nreg->type, nreg->offset);
+            } else if (nreg->type == STACK) {
+                emit_sub(state->reg, FP, nreg->offset);
+            } else {
+                unreachable;
+            }
         }
     }
     return true;
@@ -255,15 +274,15 @@ bool expr_line(str in_token, parser_context *state) {
 
     while (last_token.end[0] == ',' && isspace(last_token.end[1])) {
         printd(", ");
-        state->reg_off++;
+        state->reg.offset++;
         lex(token, &state->src);
         str_printd(token);
         ok = expr(token, state);
         if (!ok)
             break;
     }
-    state->reg_off = 0;
-    state->reg_dst = SCRATCH;
+    state->reg.offset = 0;
+    state->reg.type = SCRATCH;
     return true;
 }
 
@@ -272,24 +291,24 @@ bool stmt(const str *restrict token, parser_context *restrict state) {
         if (streq(token->end, " ::")) {
             consume(&state->src);
 
-            state->reg_dst = NREG;
-            state->reg_off = state->nreg_count++;
-            add_id(*token, NREG, state->reg_off);
+            state->reg.type = NREG;
+            state->reg.offset = state->nreg_count++;
+            add_id(*token, NREG, state->reg.offset);
             return true;
-        } else if (streq(last_token.end, " =[]")) {
+        } else if (streq(last_token.end, " :=")) {
             consume(&state->src);
 
-            state->reg_dst = SCRATCH;
+            state->reg.type = SCRATCH;
+            state->stack_size += sizeof (i32);
             int offset = state->stack_size;
             add_id(*token, STACK, offset);
-            state->stack_size += sizeof (i32);
 
             lex(&last_token, &state->src);
             expr(&last_token, state);
 
             if (streq(last_token.end, " =[]")) {
                 consume(&state->src);
-                entry src = (entry){.type = state->reg_dst, .offset = state->reg_off};
+                entry src = (entry){.type = state->reg.type, .offset = state->reg.offset};
                 emit_str_fp(src, state->stack_size);
             }
             return true;
@@ -304,7 +323,7 @@ void parse(const str *restrict token, parser_context *restrict state) {
     } else if (expr_line(*token, state)) {
 
     } else if (str_eq_lit(token, "ret")) {
-        state->reg_dst = RET;
+        state->reg.type = RET;
     } else if (str_ends_with(token, "=>")) {
         str *fn_name = &(str){token->data, token->end - 2};
         if (!str_is_empty(&state->deferred_fn_call) && str_is_empty(fn_name)) {
@@ -315,11 +334,11 @@ void parse(const str *restrict token, parser_context *restrict state) {
         } else {
             compile_err("empty function name");
         }
-        state->reg_off = 0;
-        state->reg_dst = SCRATCH;
+        state->reg.offset = 0;
+        state->reg.type = SCRATCH;
         state->calls_fn = true;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
-        state->reg_dst = PARAM;
+        state->reg.type = PARAM;
         state->deferred_fn_call = *token;
     } else {
         compile_err("unknown token "), str_fprint(token, stderr);
@@ -361,8 +380,7 @@ int main(int argc, const char *argv[]) {
     emit_mainfn();
 
     parser_context *state = &(parser_context){
-        .reg_dst = SCRATCH,
-        .reg_off = 0,
+        .reg = (entry) {.type = SCRATCH, .offset = 0 },
         .nreg_count = 0,
         .src = _src,
         .calls_fn = false,

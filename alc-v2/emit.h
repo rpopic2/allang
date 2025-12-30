@@ -7,8 +7,7 @@
 #include "types.h"
 
 typedef struct {
-    register_dst reg_dst;
-    int reg_off;
+    entry reg;
     int nreg_count;
     str deferred_fn_call;
     iter src;
@@ -30,6 +29,7 @@ void emit_sub_reg(entry dst, entry lhs, entry rhs);
 void emit_string_lit(register_dst reg_dst, int regidx, const str *s);
 
 void emit_str_fp(entry src, int offset);
+void emit_ldr_fp(entry dst, int offset);
 
 void emit_fn_prologue_epilogue(const parser_context *context);
 void emit_fn_call(const str *s);

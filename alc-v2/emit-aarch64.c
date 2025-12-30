@@ -60,6 +60,8 @@ int get_regoff(entry e) {
         e.offset += 8;
     else if (e.type == NREG)
         e.offset += 19;
+    else if (e.type == FRAME)
+        e.offset = 29;
     return e.offset;
 }
 
@@ -75,9 +77,21 @@ void emit_mov_reg(register_dst reg_dst, int regidx, register_dst reg_src, int re
     buf_snprintf(fn_buf, INSTR("mov w%d, w%d"), dst, src);
 }
 
+void put_reg(buf *buffer, entry reg) {
+    if (reg.type == STACK) {
+        buf_puts(buffer, &STR_FROM("sp"));
+    } else {
+        buf_snprintf(buffer, "x%d", get_regoff(reg));
+    }
+}
+
 void emit_add(entry dst, entry lhs, i64 rhs) {
-    buf_snprintf(fn_buf, INSTR("add w%d, w%d, #%"PRId64),
-            get_regoff(dst), get_regoff(lhs), rhs);
+    buf_puts(fn_buf, &STR_FROM("\tadd "));
+    put_reg(fn_buf, dst);
+    buf_puts(fn_buf, &STR_FROM(", "));
+    put_reg(fn_buf, lhs);
+    buf_puts(fn_buf, &STR_FROM(", "));
+    buf_snprintf(fn_buf, "#%"PRId64"\n", rhs);
 }
 
 void emit_add_reg(entry dst, entry lhs, entry rhs) {
@@ -119,6 +133,11 @@ void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
 void emit_str_fp(entry src, int offset) {
     int src_off = get_regoff(src);
     buf_snprintf(fn_buf, INSTR("stur w%d, [x29, #-%d]"), src_off, offset);
+}
+
+void emit_ldr_fp(entry dst, int offset) {
+    int dst_off = get_regoff(dst);
+    buf_snprintf(fn_buf, INSTR("ldur w%d, [x29, #-%d]"), dst_off, offset);
 }
 
 

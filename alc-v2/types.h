@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 typedef enum {
-    RET, PARAM, SCRATCH, NREG, STACK, SP
+    RET, PARAM, SCRATCH, NREG, STACK, FRAME
 } register_dst;
 
 typedef struct {
