@@ -132,12 +132,12 @@ void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
 
 void emit_str_fp(reg_t src, int offset) {
     int src_off = get_regoff(src);
-    buf_snprintf(fn_buf, INSTR("stur w%d, [x29, #-%d]"), src_off, offset);
+    buf_snprintf(fn_buf, INSTR("str w%d, [x29, #-%d]"), src_off, offset);
 }
 
 void emit_ldr_fp(reg_t dst, int offset) {
     int dst_off = get_regoff(dst);
-    buf_snprintf(fn_buf, INSTR("ldur w%d, [x29, #-%d]"), dst_off, offset);
+    buf_snprintf(fn_buf, INSTR("ldr w%d, [x29, #-%d]"), dst_off, offset);
 }
 
 
