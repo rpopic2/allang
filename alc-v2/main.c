@@ -168,7 +168,7 @@ regable read_regable(const str *token) {
     regable result = (regable){ .value = 0, .tag = 0};
     if (isupper(token->data[0])) {
         reg_t *e = find_id(token);
-        if (e->type == 0) {
+        if (e->type == RD_NONE) {
             compile_err("unknown id "), str_fprint(token, stderr);
         } else {
             result.tag = REG;
@@ -230,7 +230,6 @@ bool expr(const str *restrict token, parser_context *restrict state) {
         return true;
     }
     if (token->data[0] == '[') {
-        printf("load");
         str id = {.data = token->data + 1, .end = token->end - 1};
         reg_t *e = find_id(&id);
         if (token->end[-1] != ']') {
@@ -291,28 +290,29 @@ bool stmt(const str *restrict token, parser_context *restrict state) {
         if (streq(token->end, " ::")) {
             consume(&state->src);
 
-            state->reg.type = NREG;
-            state->reg.offset = state->nreg_count++;
-            add_id(*token, NREG, state->reg.offset);
-            return true;
-        } else if (streq(last_token.end, " :=")) {
-            consume(&state->src);
-
-            state->reg.type = SCRATCH;
-            state->stack_size += sizeof (i32);
-            int offset = state->stack_size;
-            add_id(*token, STACK, offset);
-
-            lex(&last_token, &state->src);
-            expr(&last_token, state);
-
-            if (streq(last_token.end, " =[]")) {
-                consume(&state->src);
-                reg_t src = (reg_t){.type = state->reg.type, .offset = state->reg.offset};
-                emit_str_fp(src, state->stack_size);
+            if (last_token.end[0] != '\n') {
+                state->reg.type = NREG;
             }
+            state->reg.offset = state->nreg_count++;
+            state->target = add_id(*token, NREG, state->reg.offset);
             return true;
         }
+    } else if (token->data[0] == '[') {
+        str id = {.data = token->data + 1, .end = token->end - 1};
+        reg_t *e = find_id(&id);
+        if (token->end[-1] != ']') {
+            compile_err("closing ']' expected\n");
+        }
+        if (e->type != NONE)
+            return false;
+        state->reg.type = SCRATCH;
+        state->stack_size += sizeof (i32);
+        int offset = state->stack_size;
+        state->target = add_id(id, STACK, offset);
+        printf("stackalloc");
+
+        consume(&state->src);
+        return true;
     }
     return false;
 }
@@ -322,6 +322,11 @@ void parse(const str *restrict token, parser_context *restrict state) {
 
     } else if (expr_line(*token, state)) {
 
+    } else if (str_eq_lit(token, "=[]")) {
+        reg_t src = (reg_t){.type = state->reg.type, .offset = state->reg.offset};
+        emit_str_fp(src, state->target->offset);
+    } else if (str_eq_lit(token, "=")) {
+        state->reg = *state->target;
     } else if (str_eq_lit(token, "ret")) {
         state->reg.type = RET;
     } else if (str_ends_with(token, "=>")) {
@@ -385,6 +390,7 @@ int main(int argc, const char *argv[]) {
         .src = _src,
         .calls_fn = false,
         .stack_size = 0,
+        .target = NULL,
     };
     iter *src = &state->src;
 

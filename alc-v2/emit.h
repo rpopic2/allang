@@ -13,6 +13,7 @@ typedef struct {
     iter src;
     bool calls_fn;
     int stack_size;
+    reg_t *target;
 } parser_context;
 
 void emit_init(void);

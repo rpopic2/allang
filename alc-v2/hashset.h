@@ -3,8 +3,10 @@
 
 reg_t entries['z' - 'a' + 1];
 
-void add_id(str id, register_dst type, int offset) {
-    entries[(int)id.data[0]] = (reg_t) {type, offset};
+reg_t *add_id(str id, register_dst type, int offset) {
+    int index = id.data[0];
+    entries[index] = (reg_t) {type, offset};
+    return &entries[index];
 }
 
 reg_t *find_id(const str *id) {
