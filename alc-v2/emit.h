@@ -7,6 +7,13 @@
 #include "types.h"
 
 typedef struct {
+    const char *data;
+    const char *end;
+    int lineno;
+    int indent;
+} token_t;
+
+typedef struct {
     reg_t reg;
     int nreg_count;
     str deferred_fn_call;
@@ -14,6 +21,7 @@ typedef struct {
     bool calls_fn;
     int stack_size;
     reg_t *target;
+    token_t cur_token;
 } parser_context;
 
 void emit_init(void);

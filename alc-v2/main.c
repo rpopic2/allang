@@ -15,40 +15,45 @@ OPT_GENERIC(i64)
 int lineno = 1;
 bool has_compile_err = false;
 
-str cur_token = (str){.data = 0, .end = 0};
-void lex(iter *src) {
-retry:
-    cur_token = (str){.data = src->cur};
+void lex(parser_context *context) {
+retry:;
+    iter *src = &context->src;
+    token_t *cur_token = &context->cur_token;
+    *cur_token = (token_t){.data = src->cur, .end = src->cur};
     while (true) {
+        if (src->cur > src->end) {
+            *cur_token = (token_t){0};
+            return;
+        }
         char c = *src->cur;
         if (c == '"') {
             do {
                 c = *(++src->cur);
             } while (c != '"' && c != '\n');
-            cur_token.end = ++src->cur;
+            cur_token->end = ++src->cur;
             break;
         }
         if (c == '/' && src->cur[1] == '/') {
             do {
                 c = *(++src->cur);
             } while (c != '\n');
-            cur_token.data = src->cur;
+            cur_token->data = src->cur;
         }
         if (src->cur[0] == '\n')
             ++lineno;
         if (c == ',' || c == '\n' || c == ' ' || c == '\0') {
-            cur_token.end = src->cur++;
+            cur_token->end = src->cur++;
             if (c == ',')
                 src->cur++;
             break;
         }
         ++src->cur;
     }
-    if (cur_token.end > src->end) {
-        cur_token = str_null;
+    if (cur_token->end > src->end) {
+        *cur_token = (token_t){0};
         return;
     }
-    if (str_len(&cur_token) == 0)
+    if (str_len((str *)cur_token) == 0)
         goto retry;
 }
 
@@ -75,16 +80,16 @@ void compile_warning(const char *format, ...) {
 }
 
 
-void literal_string(const parser_context *restrict state, const str *restrict token) {
+void literal_string(const parser_context *restrict state, const token_t *restrict token) {
     bool escape = emit_need_escaping();
     if (token->end[-1] != '"') {
         compile_err("expected closing \"\n");
     }
     if (!escape) {
-        emit_string_lit(state->reg.type, state->reg.offset, token);
+        emit_string_lit(state->reg.type, state->reg.offset, (str *)token);
         return;
     }
-    size_t len = str_len(token);
+    size_t len = str_len((str *)token);
     iter unescaped = iter_init(malloc(len), len);
 
     for (size_t i = 0; i < len; ++i) {
@@ -125,7 +130,7 @@ void literal_string(const parser_context *restrict state, const str *restrict to
     free(unescaped.start);
 }
 
-opt_i64 lit_numeric(const str *token) {
+opt_i64 lit_numeric(const token_t *token) {
     i64 value = 0;
     if (isdigit(token->data[0])) {
         value = strtoll(token->data, NULL, 0);
@@ -135,9 +140,9 @@ opt_i64 lit_numeric(const str *token) {
 	    compile_err("expected closing \'\n");
 	}
 	value = c;
-    } else if (str_eq_lit(token, "true")) {
+    } else if (str_eq_lit((str *)token, "true")) {
         value = 1;
-    } else if (str_eq_lit(token, "false")) {
+    } else if (str_eq_lit((str *)token, "false")) {
         value = 0;
     } else {
         return opt_long_none;
@@ -157,12 +162,12 @@ typedef struct {
 // static const entry SP = (entry){ .type = STACK };
 static const reg_t FP = (reg_t){ .type = FRAME };
 
-regable read_regable(const str *token) {
+regable read_regable(const token_t *token) {
     regable result = (regable){ .value = 0, .tag = 0};
     if (isupper(token->data[0])) {
-        reg_t *e = find_id(token);
+        reg_t *e = find_id((str *)token);
         if (e->type == RD_NONE) {
-            compile_err("unknown id "), str_fprint(token, stderr);
+            compile_err("unknown id "), str_fprint((str *)token, stderr);
         } else {
             result.tag = REG;
             result.reg = *e;
@@ -177,11 +182,11 @@ regable read_regable(const str *token) {
 }
 
 void binary_op(const regable *restrict lhs, parser_context *restrict state) {
-    lex(&state->src);
-    str op_token = cur_token;
+    lex(state);
+    token_t op_token = state->cur_token;
 
-    lex(&state->src);
-    str operand_token = cur_token;
+    lex(state);
+    token_t operand_token = state->cur_token;
     regable rhs = read_regable(&operand_token);
 
     if (rhs.tag == NONE) {
@@ -217,7 +222,8 @@ void binary_op(const regable *restrict lhs, parser_context *restrict state) {
     }
 }
 
-bool expr(const str *restrict token, parser_context *restrict state) {
+bool expr(parser_context *state) {
+    const token_t *token = &state->cur_token;
     if (token->data[0] == '"') {
         literal_string(state, token);
         return true;
@@ -258,19 +264,19 @@ bool expr(const str *restrict token, parser_context *restrict state) {
     return true;
 }
 
-bool expr_line(str in_token, parser_context *state) {
-    str *token = &in_token;
-    bool ok = expr(token, state);
+bool expr_line(parser_context *state) {
+    token_t *token = &state->cur_token;
+    bool ok = expr(state);
     if (!ok)
         return false;
 
-    while (cur_token.end[0] == ',' && isspace(cur_token.end[1])) {
+    while (token->end[0] == ',' && isspace(token->end[1])) {
         printd(", ");
         state->reg.offset++;
-        lex(&state->src);
-        *token = cur_token;
-        str_printd(token);
-        ok = expr(token, state);
+        lex(state);
+        *token = state->cur_token;
+        str_printd((str *)token);
+        ok = expr(state);
         if (!ok)
             break;
     }
@@ -279,16 +285,17 @@ bool expr_line(str in_token, parser_context *state) {
     return true;
 }
 
-bool stmt(const str *restrict token, parser_context *restrict state) {
+bool stmt(parser_context *restrict state) {
+    token_t *token = &state->cur_token;
     if (isupper(token->data[0])) {
         if (streq(token->end, " ::")) {
-            lex(&state->src);
+            lex(state);
 
-            if (cur_token.end[0] != '\n') {
+            if (state->cur_token.end[0] != '\n') {
                 state->reg.type = NREG;
             }
             state->reg.offset = state->nreg_count++;
-            state->target = add_id(*token, NREG, state->reg.offset);
+            state->target = add_id(*(str *)token, NREG, state->reg.offset);
             return true;
         }
     } else if (token->data[0] == '[') {
@@ -304,25 +311,27 @@ bool stmt(const str *restrict token, parser_context *restrict state) {
         int offset = state->stack_size;
         state->target = add_id(id, STACK, offset);
 
-        lex(&state->src);
+        lex(state);
         return true;
     }
     return false;
 }
 
-void parse(const str *restrict token, parser_context *restrict state) {
-    if (stmt(token, state)) {
+void parse(parser_context *restrict state) {
+    token_t *token = &state->cur_token;
+    str *token_str = (str *)token;
+    if (stmt(state)) {
 
-    } else if (expr_line(*token, state)) {
+    } else if (expr_line(state)) {
 
-    } else if (str_eq_lit(token, "=[]")) {
+    } else if (str_eq_lit(token_str, "=[]")) {
         reg_t src = (reg_t){.type = state->reg.type, .offset = state->reg.offset};
         emit_str_fp(src, state->target->offset);
-    } else if (str_eq_lit(token, "=")) {
+    } else if (str_eq_lit(token_str, "=")) {
         state->reg = *state->target;
-    } else if (str_eq_lit(token, "ret")) {
+    } else if (str_eq_lit(token_str, "ret")) {
         state->reg.type = RET;
-    } else if (str_ends_with(token, "=>")) {
+    } else if (str_ends_with(token_str, "=>")) {
         str *fn_name = &(str){token->data, token->end - 2};
         if (!str_is_empty(&state->deferred_fn_call) && str_is_empty(fn_name)) {
             str s = str_move(&state->deferred_fn_call);
@@ -337,9 +346,9 @@ void parse(const str *restrict token, parser_context *restrict state) {
         state->calls_fn = true;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         state->reg.type = PARAM;
-        state->deferred_fn_call = *token;
+        state->deferred_fn_call = *(str *)token;
     } else {
-        compile_err("unknown token "), str_fprint(token, stderr);
+        compile_err("unknown token "), str_fprint((str *)token, stderr);
     }
 }
 
@@ -388,11 +397,11 @@ int main(int argc, const char *argv[]) {
     iter *src = &state->src;
 
     while (src->cur < src->end) {
-        lex(src);
-        if (str_len(&cur_token) == 0)
+        lex(state);
+        if (str_len((str *)&state->cur_token) == 0)
             continue;
-        str_printd(&cur_token);
-        parse(&cur_token, state);
+        str_printd((str *)&state->cur_token);
+        parse(state);
     }
 
     emit_fn_prologue_epilogue(state);
