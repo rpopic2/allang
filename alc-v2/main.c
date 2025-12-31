@@ -15,48 +15,41 @@ OPT_GENERIC(i64)
 int lineno = 1;
 bool has_compile_err = false;
 
-str last_token = (str){.data = 0, .end = 0};
-void lex(str *token, iter *src) {
+str cur_token = (str){.data = 0, .end = 0};
+void lex(iter *src) {
 retry:
-    *token = (str){.data = src->cur};
+    cur_token = (str){.data = src->cur};
     while (true) {
         char c = *src->cur;
         if (c == '"') {
             do {
                 c = *(++src->cur);
             } while (c != '"' && c != '\n');
-            token->end = ++src->cur;
+            cur_token.end = ++src->cur;
             break;
         }
         if (c == '/' && src->cur[1] == '/') {
             do {
                 c = *(++src->cur);
             } while (c != '\n');
-            token->data = src->cur;
+            cur_token.data = src->cur;
         }
         if (src->cur[0] == '\n')
             ++lineno;
         if (c == ',' || c == '\n' || c == ' ' || c == '\0') {
-            token->end = src->cur++;
+            cur_token.end = src->cur++;
             if (c == ',')
                 src->cur++;
             break;
         }
         ++src->cur;
     }
-    if (token->end > src->end) {
-        *token = str_null;
-        last_token = str_null;
+    if (cur_token.end > src->end) {
+        cur_token = str_null;
         return;
     }
-    if (str_len(token) == 0)
+    if (str_len(&cur_token) == 0)
         goto retry;
-    last_token = *token;
-}
-
-void consume(iter *src) {
-    str _;
-    lex(&_, src);
 }
 
 void compile_err(const char *format, ...) {
@@ -184,11 +177,11 @@ regable read_regable(const str *token) {
 }
 
 void binary_op(const regable *restrict lhs, parser_context *restrict state) {
-    str op_token;
-    lex(&op_token, &state->src);
+    lex(&state->src);
+    str op_token = cur_token;
 
-    str operand_token;
-    lex(&operand_token, &state->src);
+    lex(&state->src);
+    str operand_token = cur_token;
     regable rhs = read_regable(&operand_token);
 
     if (rhs.tag == NONE) {
@@ -271,10 +264,11 @@ bool expr_line(str in_token, parser_context *state) {
     if (!ok)
         return false;
 
-    while (last_token.end[0] == ',' && isspace(last_token.end[1])) {
+    while (cur_token.end[0] == ',' && isspace(cur_token.end[1])) {
         printd(", ");
         state->reg.offset++;
-        lex(token, &state->src);
+        lex(&state->src);
+        *token = cur_token;
         str_printd(token);
         ok = expr(token, state);
         if (!ok)
@@ -288,9 +282,9 @@ bool expr_line(str in_token, parser_context *state) {
 bool stmt(const str *restrict token, parser_context *restrict state) {
     if (isupper(token->data[0])) {
         if (streq(token->end, " ::")) {
-            consume(&state->src);
+            lex(&state->src);
 
-            if (last_token.end[0] != '\n') {
+            if (cur_token.end[0] != '\n') {
                 state->reg.type = NREG;
             }
             state->reg.offset = state->nreg_count++;
@@ -309,9 +303,8 @@ bool stmt(const str *restrict token, parser_context *restrict state) {
         state->stack_size += sizeof (i32);
         int offset = state->stack_size;
         state->target = add_id(id, STACK, offset);
-        printf("stackalloc");
 
-        consume(&state->src);
+        lex(&state->src);
         return true;
     }
     return false;
@@ -394,13 +387,12 @@ int main(int argc, const char *argv[]) {
     };
     iter *src = &state->src;
 
-    str *token = &(str){.data = 0, .end = 0};
     while (src->cur < src->end) {
-        lex(token, src);
-        if (str_len(token) == 0)
+        lex(src);
+        if (str_len(&cur_token) == 0)
             continue;
-        str_printd(token);
-        parse(token, state);
+        str_printd(&cur_token);
+        parse(&cur_token, state);
     }
 
     emit_fn_prologue_epilogue(state);
