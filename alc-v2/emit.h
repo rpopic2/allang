@@ -11,6 +11,7 @@ typedef struct {
     const char *end;
     int lineno;
     int indent;
+    bool eob;   // end of block
 } token_t;
 
 typedef struct {
@@ -20,7 +21,10 @@ typedef struct {
     iter src;
     bool calls_fn;
     int stack_size;
-    reg_t *target;
+    struct {
+        reg_t *target;
+        bool target_assigned;
+    };
     token_t cur_token;
 } parser_context;
 

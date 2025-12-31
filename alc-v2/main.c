@@ -59,24 +59,30 @@ retry:;
         *cur_token = (token_t){0};
         return;
     }
-    if (str_len((str *)cur_token) == 0) {
-        printf("retry");
+    if (str_len((str *)cur_token) == 0)
         goto retry;
-    }
+
     printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
     str_fprintnl((str *)cur_token, stdout);
     printd("|\n");
 
     if (src->cur[-1] == '\n') {
-        indent = 0;
-        // cur_token->end = src->cur;
+        int new_indent = 0;
         while (src->cur[0] == ' ') {
             src->cur++;
-            ++indent;
+            ++new_indent;
         }
         if (indent % 4 != 0) {
             compile_err("indentation should be in mutliple of 4\n");
         }
+        if (new_indent > indent) {
+            printf("\nstart of a block\n");
+        }
+
+        if (new_indent < indent) {
+            context->cur_token.eob = true;
+        }
+        indent = new_indent;
     }
 }
 
@@ -103,13 +109,13 @@ void compile_warning(const char *format, ...) {
 }
 
 
-void literal_string(const parser_context *restrict state, const token_t *restrict token) {
+void literal_string(const parser_context *restrict context, const token_t *restrict token) {
     bool escape = emit_need_escaping();
     if (token->end[-1] != '"') {
         compile_err("expected closing \"\n");
     }
     if (!escape) {
-        emit_string_lit(state->reg.type, state->reg.offset, (str *)token);
+        emit_string_lit(context->reg.type, context->reg.offset, (str *)token);
         return;
     }
     size_t len = str_len((str *)token);
@@ -149,7 +155,7 @@ void literal_string(const parser_context *restrict state, const token_t *restric
     }
 
     str unescaped_s = str_from_iter(&unescaped);
-    emit_string_lit(state->reg.type, state->reg.offset, &unescaped_s);
+    emit_string_lit(context->reg.type, context->reg.offset, &unescaped_s);
     free(unescaped.start);
 }
 
@@ -204,12 +210,12 @@ regable read_regable(const token_t *token) {
     return result;
 }
 
-void binary_op(const regable *restrict lhs, parser_context *restrict state) {
-    lex(state);
-    token_t op_token = state->cur_token;
+void binary_op(const regable *restrict lhs, parser_context *restrict context) {
+    lex(context);
+    token_t op_token = context->cur_token;
 
-    lex(state);
-    token_t operand_token = state->cur_token;
+    lex(context);
+    token_t operand_token = context->cur_token;
     regable rhs = read_regable(&operand_token);
 
     if (rhs.tag == NONE) {
@@ -217,38 +223,38 @@ void binary_op(const regable *restrict lhs, parser_context *restrict state) {
     }
     if (op_token.data[0] == '+') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
-            emit_mov(state->reg.type, state->reg.offset, lhs->value + rhs.value);
+            emit_mov(context->reg.type, context->reg.offset, lhs->value + rhs.value);
         } else if (lhs->tag == VALUE && rhs.tag == REG) {
-            emit_add(state->reg, rhs.reg, lhs->value);
+            emit_add(context->reg, rhs.reg, lhs->value);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
-            emit_add(state->reg, lhs->reg, rhs.value);
+            emit_add(context->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
-            emit_add_reg(state->reg, lhs->reg, rhs.reg);
+            emit_add_reg(context->reg, lhs->reg, rhs.reg);
         } else unreachable;
     } else if (op_token.data[0] == '-') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
-            emit_mov(state->reg.type, state->reg.offset, lhs->value - rhs.value);
+            emit_mov(context->reg.type, context->reg.offset, lhs->value - rhs.value);
         } else if (lhs->tag == VALUE && rhs.tag == REG) {
-            int tmp_reg_off = state->reg.offset;
-            if (state->reg.type == SCRATCH) {
+            int tmp_reg_off = context->reg.offset;
+            if (context->reg.type == SCRATCH) {
                 tmp_reg_off += 1;
             }
             emit_mov(SCRATCH, tmp_reg_off, lhs->value);
-            emit_sub_reg(state->reg, (reg_t){SCRATCH, tmp_reg_off}, rhs.reg);
+            emit_sub_reg(context->reg, (reg_t){SCRATCH, tmp_reg_off}, rhs.reg);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
-            emit_sub(state->reg, lhs->reg, rhs.value);
+            emit_sub(context->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
-            emit_sub_reg(state->reg, lhs->reg, rhs.reg);
+            emit_sub_reg(context->reg, lhs->reg, rhs.reg);
         } else unreachable;
     } else {
         compile_err("unknown operator\n");
     }
 }
 
-bool expr(parser_context *state) {
-    const token_t *token = &state->cur_token;
+bool expr(parser_context *context) {
+    const token_t *token = &context->cur_token;
     if (token->data[0] == '"') {
-        literal_string(state, token);
+        literal_string(context, token);
         return true;
     }
     if (token->data[0] == '[') {
@@ -258,7 +264,7 @@ bool expr(parser_context *state) {
             compile_err("closing ']' expected\n");
         }
         if (e->type != NONE)
-            emit_ldr_fp(state->reg, e->offset);
+            emit_ldr_fp(context->reg, e->offset);
         return true;
     }
 
@@ -269,16 +275,16 @@ bool expr(parser_context *state) {
 
     char next = token->end[1];
     if (next == '#' || next == '+') {
-        binary_op(&lhs, state);
+        binary_op(&lhs, context);
     } else {
         if (lhs.tag == VALUE) {
-            emit_mov(state->reg.type, state->reg.offset, lhs.value);
+            emit_mov(context->reg.type, context->reg.offset, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
             if (nreg->type == NREG) {
-                emit_mov_reg(state->reg.type, state->reg.offset, nreg->type, nreg->offset);
+                emit_mov_reg(context->reg.type, context->reg.offset, nreg->type, nreg->offset);
             } else if (nreg->type == STACK) {
-                emit_sub(state->reg, FP, nreg->offset);
+                emit_sub(context->reg, FP, nreg->offset);
             } else {
                 unreachable;
             }
@@ -287,38 +293,38 @@ bool expr(parser_context *state) {
     return true;
 }
 
-bool expr_line(parser_context *state) {
-    token_t *token = &state->cur_token;
-    bool ok = expr(state);
+bool expr_line(parser_context *context) {
+    token_t *token = &context->cur_token;
+    bool ok = expr(context);
     if (!ok)
         return false;
 
     while (token->end[0] == ',' && isspace(token->end[1])) {
         printd(", ");
-        state->reg.offset++;
-        lex(state);
-        *token = state->cur_token;
+        context->reg.offset++;
+        lex(context);
+        *token = context->cur_token;
         str_printd((str *)token);
-        ok = expr(state);
+        ok = expr(context);
         if (!ok)
             break;
     }
-    state->reg.offset = 0;
-    state->reg.type = SCRATCH;
+    context->reg.offset = 0;
+    context->reg.type = SCRATCH;
     return true;
 }
 
-bool stmt(parser_context *restrict state) {
-    token_t *token = &state->cur_token;
+bool stmt(parser_context *restrict context) {
+    token_t *token = &context->cur_token;
     if (isupper(token->data[0])) {
         if (streq(token->end, " ::")) {
-            lex(state);
+            lex(context);
 
-            if (state->cur_token.end[0] != '\n') {
-                state->reg.type = NREG;
+            if (context->cur_token.end[0] != '\n') {
+                context->reg.type = NREG;
             }
-            state->reg.offset = state->nreg_count++;
-            state->target = add_id(*(str *)token, NREG, state->reg.offset);
+            context->reg.offset = context->nreg_count++;
+            context->target = add_id(*(str *)token, NREG, context->reg.offset);
             return true;
         }
     } else if (token->data[0] == '[') {
@@ -329,47 +335,58 @@ bool stmt(parser_context *restrict state) {
         }
         if (e->type != NONE)
             return false;
-        state->reg.type = SCRATCH;
-        state->stack_size += sizeof (i32);
-        int offset = state->stack_size;
-        state->target = add_id(id, STACK, offset);
+        context->reg.type = SCRATCH;
+        context->stack_size += sizeof (i32);
+        int offset = context->stack_size;
+        context->target = add_id(id, STACK, offset);
 
-        lex(state);
+        lex(context);
         return true;
     }
     return false;
 }
 
-void parse(parser_context *restrict state) {
-    token_t *token = &state->cur_token;
-    str *token_str = (str *)token;
-    if (stmt(state)) {
+void parse(parser_context *restrict context) {
+    token_t *token = &context->cur_token;
+    str *token_str = &(str){.data = token->data, .end = token->end};
+    if (stmt(context)) {
 
-    } else if (expr_line(state)) {
+    } else if (expr_line(context)) {
 
     } else if (str_eq_lit(token_str, "=[]")) {
-        reg_t src = (reg_t){.type = state->reg.type, .offset = state->reg.offset};
-        emit_str_fp(src, state->target->offset);
+        if (context->target == NULL || context->target->type != STACK) {
+            compile_err("nothing to store to\n");
+            return;
+        }
+        reg_t src = (reg_t){.type = context->reg.type, .offset = context->reg.offset};
+        emit_str_fp(src, context->target->offset);
+        context->target_assigned = true;
     } else if (str_eq_lit(token_str, "=")) {
-        state->reg = *state->target;
+        printf("type(%p)", (void *)context->target);
+        if (context->target == NULL || context->target->type != NREG) {
+            compile_err("nothing to assign\n");
+            return;
+        }
+        context->reg = *context->target;
+        context->target_assigned = true;
     } else if (str_eq_lit(token_str, "ret")) {
-        state->reg.type = RET;
+        context->reg.type = RET;
     } else if (str_ends_with(token_str, "=>")) {
         str *fn_name = &(str){token->data, token->end - 2};
-        if (!str_is_empty(&state->deferred_fn_call) && str_is_empty(fn_name)) {
-            str s = str_move(&state->deferred_fn_call);
+        if (!str_is_empty(&context->deferred_fn_call) && str_is_empty(fn_name)) {
+            str s = str_move(&context->deferred_fn_call);
             emit_fn_call(&s);
         } else if (!str_is_empty(fn_name)) {
             emit_fn_call(fn_name);
         } else {
             compile_err("empty function name");
         }
-        state->reg.offset = 0;
-        state->reg.type = SCRATCH;
-        state->calls_fn = true;
+        context->reg.offset = 0;
+        context->reg.type = SCRATCH;
+        context->calls_fn = true;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
-        state->reg.type = PARAM;
-        state->deferred_fn_call = *(str *)token;
+        context->reg.type = PARAM;
+        context->deferred_fn_call = *(str *)token;
     } else {
         compile_err("unknown token "), str_fprint((str *)token, stderr);
     }
@@ -409,7 +426,7 @@ int main(int argc, const char *argv[]) {
 
     emit_mainfn();
 
-    parser_context *state = &(parser_context){
+    parser_context *context = &(parser_context){
         .reg = (reg_t) {.type = SCRATCH, .offset = 0 },
         .nreg_count = 0,
         .src = _src,
@@ -417,17 +434,30 @@ int main(int argc, const char *argv[]) {
         .stack_size = 0,
         .target = NULL,
     };
-    iter *src = &state->src;
+    iter *src = &context->src;
 
     while (src->cur < src->end) {
-        lex(state);
-        token_t *cur_token = &state->cur_token;
+        lex(context);
+        token_t *cur_token = &context->cur_token;
         if (str_len((str *)cur_token) == 0)
             continue;
-        parse(state);
+        parse(context);
+
+        if (cur_token->eob) {
+            if (context->target && !context->target_assigned) {
+                if (context->target->type == STACK)
+                    compile_err("this block must stack\n");
+                else
+                    compile_err("this block must assign\n");
+            }
+            context->target = NULL;
+            context->target_assigned = false;
+            printf("end of a block\n\n");
+
+        }
     }
 
-    emit_fn_prologue_epilogue(state);
+    emit_fn_prologue_epilogue(context);
     emit_ret();
 
     size_t source_name_len = strlen(source_name);

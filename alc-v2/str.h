@@ -30,7 +30,7 @@ inline static bool str_is_empty(const str *s) {
 }
 
 inline static bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
-    return memcmp(s->data, cstr, str_len(s)) == 0;
+    return str_len(s) == strlen(cstr) && memcmp(s->data, cstr, strlen(cstr)) == 0;
 }
 
 inline static str str_move(str *s) {
