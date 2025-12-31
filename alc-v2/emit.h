@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include "arr.h"
 #include "str.h"
 #include "types.h"
 
@@ -15,17 +16,21 @@ typedef struct {
 } token_t;
 
 typedef struct {
+    reg_t *reg;
+    bool target_assigned;
+} target;
+
+ARR_GENERIC(target, 10)
+
+typedef struct {
     reg_t reg;
     int nreg_count;
     str deferred_fn_call;
     iter src;
     bool calls_fn;
     int stack_size;
-    struct {
-        reg_t *target;
-        bool target_assigned;
-    };
     token_t cur_token;
+    arr_target targets;
 } parser_context;
 
 void emit_init(void);

@@ -324,7 +324,8 @@ bool stmt(parser_context *restrict context) {
                 context->reg.type = NREG;
             }
             context->reg.offset = context->nreg_count++;
-            context->target = add_id(*(str *)token, NREG, context->reg.offset);
+            reg_t *reg = add_id(*(str *)token, NREG, context->reg.offset);
+            arr_target_push(&context->targets, &(target){.reg = reg});
             return true;
         }
     } else if (token->data[0] == '[') {
@@ -338,7 +339,8 @@ bool stmt(parser_context *restrict context) {
         context->reg.type = SCRATCH;
         context->stack_size += sizeof (i32);
         int offset = context->stack_size;
-        context->target = add_id(id, STACK, offset);
+        reg_t *reg = add_id(id, STACK, offset);
+        arr_target_push(&context->targets, &(target){.reg = reg});
 
         lex(context);
         return true;
@@ -354,21 +356,22 @@ void parse(parser_context *restrict context) {
     } else if (expr_line(context)) {
 
     } else if (str_eq_lit(token_str, "=[]")) {
-        if (context->target == NULL || context->target->type != STACK) {
+        target *cur_target = arr_target_top(&context->targets);
+        if (cur_target == NULL || cur_target->reg->type != STACK) {
             compile_err("nothing to store to\n");
             return;
         }
         reg_t src = (reg_t){.type = context->reg.type, .offset = context->reg.offset};
-        emit_str_fp(src, context->target->offset);
-        context->target_assigned = true;
+        emit_str_fp(src, cur_target->reg->offset);
+        cur_target->target_assigned = true;
     } else if (str_eq_lit(token_str, "=")) {
-        printf("type(%p)", (void *)context->target);
-        if (context->target == NULL || context->target->type != NREG) {
+        target *cur_target = arr_target_top(&context->targets);
+        if (cur_target == NULL || cur_target->reg->type != NREG) {
             compile_err("nothing to assign\n");
             return;
         }
-        context->reg = *context->target;
-        context->target_assigned = true;
+        context->reg = *cur_target->reg;
+        cur_target->target_assigned = true;
     } else if (str_eq_lit(token_str, "ret")) {
         context->reg.type = RET;
     } else if (str_ends_with(token_str, "=>")) {
@@ -432,8 +435,8 @@ int main(int argc, const char *argv[]) {
         .src = _src,
         .calls_fn = false,
         .stack_size = 0,
-        .target = NULL,
     };
+    arr_target_new(&context->targets);
     iter *src = &context->src;
 
     while (src->cur < src->end) {
@@ -444,14 +447,15 @@ int main(int argc, const char *argv[]) {
         parse(context);
 
         if (cur_token->eob) {
-            if (context->target && !context->target_assigned) {
-                if (context->target->type == STACK)
+            target *cur_target = arr_target_top(&context->targets);
+            if (cur_target && !cur_target->target_assigned) {
+                if (cur_target->reg->type == STACK)
                     compile_err("this block must stack\n");
                 else
                     compile_err("this block must assign\n");
             }
-            context->target = NULL;
-            context->target_assigned = false;
+
+            arr_target_pop(&context->targets);
             printf("end of a block\n\n");
 
         }
