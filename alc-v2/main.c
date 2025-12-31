@@ -13,6 +13,7 @@
 OPT_GENERIC(i64)
 
 int lineno = 1;
+int indent = 0;
 bool has_compile_err = false;
 
 void lex(parser_context *context) {
@@ -21,6 +22,8 @@ retry:;
     token_t *cur_token = &context->cur_token;
     *cur_token = (token_t){.data = src->cur, .end = src->cur};
     cur_token->lineno = lineno;
+    cur_token->indent = indent;
+
     while (true) {
         if (src->cur > src->end) {
             *cur_token = (token_t){0};
@@ -40,8 +43,10 @@ retry:;
             } while (c != '\n');
             cur_token->data = src->cur;
         }
-        if (src->cur[0] == '\n')
+        c = *src->cur;
+        if (src->cur[0] == '\n') {
             ++lineno;
+        }
         if (c == ',' || c == '\n' || c == ' ' || c == '\0') {
             cur_token->end = src->cur++;
             if (c == ',')
@@ -54,8 +59,25 @@ retry:;
         *cur_token = (token_t){0};
         return;
     }
-    if (str_len((str *)cur_token) == 0)
+    if (str_len((str *)cur_token) == 0) {
+        printf("retry");
         goto retry;
+    }
+    printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
+    str_fprintnl((str *)cur_token, stdout);
+    printd("|\n");
+
+    if (src->cur[-1] == '\n') {
+        indent = 0;
+        // cur_token->end = src->cur;
+        while (src->cur[0] == ' ') {
+            src->cur++;
+            ++indent;
+        }
+        if (indent % 4 != 0) {
+            compile_err("indentation should be in mutliple of 4\n");
+        }
+    }
 }
 
 void compile_err(const char *format, ...) {
@@ -402,8 +424,6 @@ int main(int argc, const char *argv[]) {
         token_t *cur_token = &state->cur_token;
         if (str_len((str *)cur_token) == 0)
             continue;
-        printd("line %d, indent %d: ", cur_token->lineno, cur_token->indent);
-        str_printd((str *)cur_token);
         parse(state);
     }
 
