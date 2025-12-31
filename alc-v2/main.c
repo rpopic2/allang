@@ -20,6 +20,7 @@ retry:;
     iter *src = &context->src;
     token_t *cur_token = &context->cur_token;
     *cur_token = (token_t){.data = src->cur, .end = src->cur};
+    cur_token->lineno = lineno;
     while (true) {
         if (src->cur > src->end) {
             *cur_token = (token_t){0};
@@ -398,9 +399,11 @@ int main(int argc, const char *argv[]) {
 
     while (src->cur < src->end) {
         lex(state);
-        if (str_len((str *)&state->cur_token) == 0)
+        token_t *cur_token = &state->cur_token;
+        if (str_len((str *)cur_token) == 0)
             continue;
-        str_printd((str *)&state->cur_token);
+        printd("line %d, indent %d: ", cur_token->lineno, cur_token->indent);
+        str_printd((str *)cur_token);
         parse(state);
     }
 
