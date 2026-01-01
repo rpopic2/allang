@@ -18,19 +18,19 @@ typedef struct {
     void *cur;
 } fixed_arena;
 
-inline size_t buf_cap(const buf *buffer) {
+inline static size_t buf_cap(const buf *buffer) {
     if (buffer->end - buffer->start < 0)
         abort();
     return (size_t)(buffer->end - buffer->start);
 }
 
-inline size_t buf_len(const buf *buffer) {
+inline static size_t buf_len(const buf *buffer) {
     if (buffer->cur - buffer->start < 0)
         abort();
     return (size_t)(buffer->cur - buffer->start);
 }
 
-inline void buf_grow(buf *buffer, size_t adding_size) {
+inline static void buf_grow(buf *buffer, size_t adding_size) {
     while (buffer->cur + adding_size >= buffer->end) {
         size_t len = buf_cap(buffer);
         ptrdiff_t pos = buffer->cur - buffer->start;
