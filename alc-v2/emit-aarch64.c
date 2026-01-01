@@ -111,6 +111,16 @@ void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
             get_regoff(dst), get_regoff(lhs), get_regoff(rhs));
 }
 
+void emit_cmp(reg_t lhs, i64 rhs) {
+    buf_snprintf(fn_buf, INSTR("cmp w%d, #%"PRId64),
+            get_regoff(lhs), rhs);
+}
+
+void emit_cmp_reg(reg_t lhs, reg_t rhs) {
+    buf_snprintf(fn_buf, INSTR("cmp w%d, w%d"),
+            get_regoff(lhs), get_regoff(rhs));
+}
+
 void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
     if (reg_dst == SCRATCH)
         regidx += 8;
@@ -163,7 +173,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
 
     int regs_to_save = context->nreg_count;
     if (regs_to_save + CALLEE_START >= 28) {
-        compile_err("used up all callee-saved registers");
+        compile_err(&context->cur_token, "used up all callee-saved registers");
         return;
     }
 

@@ -73,7 +73,7 @@ retry:;
             ++new_indent;
         }
         if (indent % 4 != 0) {
-            compile_err("indentation should be in mutliple of 4\n");
+            compile_err(cur_token, "indentation should be in mutliple of 4\n");
         }
         if (new_indent > indent) {
             printd("\nstart of a block\n");
@@ -86,10 +86,10 @@ retry:;
     }
 }
 
-void compile_err(const char *format, ...) {
+void compile_err(const token_t *token, const char *format, ...) {
     has_compile_err = true;
     fputs("\x1b[31m", stderr);
-    fprintf(stderr, "error in line %d: ", lineno);
+    fprintf(stderr, "error in line %d: ", token->lineno);
 
     va_list args;
     va_start(args, format);
@@ -97,6 +97,7 @@ void compile_err(const char *format, ...) {
     va_end(args);
     fputs("\x1b[0m", stderr);
 }
+
 void compile_warning(const char *format, ...) {
     fputs("\x1b[33m", stderr);
     fprintf(stderr, "warning in line %d: ", lineno);
@@ -112,7 +113,7 @@ void compile_warning(const char *format, ...) {
 void literal_string(const parser_context *restrict context, const token_t *restrict token) {
     bool escape = emit_need_escaping();
     if (token->end[-1] != '"') {
-        compile_err("expected closing \"\n");
+        compile_err(token, "expected closing \"\n");
     }
     if (!escape) {
         emit_string_lit(context->reg.type, context->reg.offset, (str *)token);
@@ -144,7 +145,7 @@ void literal_string(const parser_context *restrict context, const token_t *restr
             default:;
                 i64 number = strtoll(token->data, NULL, 0);
                 if (number > (signed)sizeof (char)) {
-                    compile_err("%d is too large for a string literal", number);
+                    compile_err(token, "%d is too large for a string literal", number);
                 } else {
                     result = (char)number;
                 }
@@ -166,7 +167,7 @@ opt_i64 lit_numeric(const token_t *token) {
     } else if (token->data[0] == '\'') {
         char c = token->data[1];
 	if (token->end[-1] != '\'') {
-	    compile_err("expected closing \'\n");
+	    compile_err(token, "expected closing \'\n");
 	}
 	value = c;
     } else if (str_eq_lit((str *)token, "true")) {
@@ -196,7 +197,7 @@ regable read_regable(const token_t *token) {
     if (isupper(token->data[0])) {
         reg_t *e = find_id((str *)token);
         if (e->type == RD_NONE) {
-            compile_err("unknown id "), str_fprint((str *)token, stderr);
+            compile_err(token, "unknown id "), str_fprint((str *)token, stderr);
         } else {
             result.tag = REG;
             result.reg = *e;
@@ -211,6 +212,7 @@ regable read_regable(const token_t *token) {
 }
 
 void binary_op(const regable *restrict lhs, parser_context *restrict context) {
+    token_t lhs_token = context->cur_token;
     lex(context);
     token_t op_token = context->cur_token;
 
@@ -219,7 +221,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     regable rhs = read_regable(&rhs_token);
 
     if (rhs.tag == NONE) {
-        compile_err("expected operand, but found "), str_print((str *)&rhs_token);
+        compile_err(&rhs_token, "expected operand, but found "), str_print((str *)&rhs_token);
     }
     if (op_token.data[0] == '+') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
@@ -246,8 +248,17 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         } else if (lhs->tag == REG && rhs.tag == REG) {
             emit_sub_reg(context->reg, lhs->reg, rhs.reg);
         } else unreachable;
+    } else if (streq(op_token.data, "is")) {
+        if (lhs->tag == VALUE) {
+            compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
+        }
+        if (rhs.tag == VALUE)
+            emit_cmp(lhs->reg, rhs.value);
+        else if (rhs.tag == REG)
+            emit_cmp_reg(lhs->reg, rhs.reg);
+        else unreachable;
     } else {
-        compile_err("unknown operator "), str_print((str *)&op_token);
+        compile_err(&op_token, "unknown operator "), str_print((str *)&op_token);
     }
 }
 
@@ -261,7 +272,7 @@ bool expr(parser_context *context) {
         str id = {.data = token->data + 1, .end = token->end - 1};
         reg_t *e = find_id(&id);
         if (token->end[-1] != ']') {
-            compile_err("closing ']' expected\n");
+            compile_err(token, "closing ']' expected\n");
         }
         if (e->type != NONE)
             emit_ldr_fp(context->reg, e->offset);
@@ -334,7 +345,7 @@ bool stmt(parser_context *restrict context) {
         str id = {.data = token->data + 1, .end = token->end - 1};
         reg_t *e = find_id(&id);
         if (token->end[-1] != ']') {
-            compile_err("closing ']' expected\n");
+            compile_err(token, "closing ']' expected\n");
         }
         if (e->type != NONE)
             return false;
@@ -360,7 +371,7 @@ void parse(parser_context *restrict context) {
     } else if (str_eq_lit(token_str, "=[]")) {
         target *cur_target = arr_target_top(&context->targets);
         if (cur_target == NULL || cur_target->reg->type != STACK) {
-            compile_err("nothing to store to\n");
+            compile_err(token, "nothing to store to\n");
             return;
         }
         reg_t src = (reg_t){.type = context->reg.type, .offset = context->reg.offset};
@@ -369,7 +380,7 @@ void parse(parser_context *restrict context) {
     } else if (str_eq_lit(token_str, "=")) {
         target *cur_target = arr_target_top(&context->targets);
         if (cur_target == NULL || cur_target->reg->type != NREG) {
-            compile_err("nothing to assign\n");
+            compile_err(token, "nothing to assign\n");
             return;
         }
         context->reg = *cur_target->reg;
@@ -384,7 +395,7 @@ void parse(parser_context *restrict context) {
         } else if (!str_is_empty(fn_name)) {
             emit_fn_call(fn_name);
         } else {
-            compile_err("empty function name");
+            compile_err(token, "empty function name");
         }
         context->reg.offset = 0;
         context->reg.type = SCRATCH;
@@ -398,10 +409,10 @@ void parse(parser_context *restrict context) {
             context->reg.type = PARAM;
             context->deferred_fn_call = *(str *)token;
         } else {
-            compile_err("unknown token "), str_fprint((str *)token, stderr);
+            compile_err(token, "unknown token "), str_fprint((str *)token, stderr);
         }
     } else {
-        compile_err("unknown token "), str_fprint((str *)token, stderr);
+        compile_err(token, "unknown token "), str_fprint((str *)token, stderr);
     }
 }
 
@@ -460,9 +471,9 @@ int main(int argc, const char *argv[]) {
             target *cur_target = arr_target_top(&context->targets);
             if (cur_target && !cur_target->target_assigned) {
                 if (cur_target->reg->type == STACK)
-                    compile_err("this block must store\n");
+                    compile_err(cur_token, "this block must store\n");
                 else
-                    compile_err("this block must assign\n");
+                    compile_err(cur_token, "this block must assign\n");
             }
 
             arr_target_pop(&context->targets);
