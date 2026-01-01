@@ -215,11 +215,11 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t op_token = context->cur_token;
 
     lex(context);
-    token_t operand_token = context->cur_token;
-    regable rhs = read_regable(&operand_token);
+    token_t rhs_token = context->cur_token;
+    regable rhs = read_regable(&rhs_token);
 
     if (rhs.tag == NONE) {
-        compile_err("expected operand\n");
+        compile_err("expected operand, but found "), str_print((str *)&rhs_token);
     }
     if (op_token.data[0] == '+') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
@@ -247,7 +247,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             emit_sub_reg(context->reg, lhs->reg, rhs.reg);
         } else unreachable;
     } else {
-        compile_err("unknown operator\n");
+        compile_err("unknown operator "), str_print((str *)&op_token);
     }
 }
 
@@ -273,9 +273,10 @@ bool expr(parser_context *context) {
         return false;
     }
 
-    char next = token->end[1];
-    if (next == '#' || next == '+') {
+    const char *next = token->end + 1;
+    if (token->end[0] != ',' && token->end[0] != '\n' && !streq(token->end + 1, "=[]")) {
         binary_op(&lhs, context);
+    } else if (streq(next, "is")) {
     } else {
         if (lhs.tag == VALUE) {
             emit_mov(context->reg.type, context->reg.offset, lhs.value);
