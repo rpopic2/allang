@@ -4,7 +4,7 @@
 const size_t array_len = 'Z' - 'A' + 1;
 reg_t entries[array_len];
 
-reg_t *add_id(str id, register_dst type, int offset) {
+inline static reg_t *add_id(str id, register_dst type, int offset) {
     int index = id.data[0] - 'A';
     if (index < 0 || index >= (int)array_len) {
         fprintf(stderr, "array access out of bounds");
@@ -14,7 +14,12 @@ reg_t *add_id(str id, register_dst type, int offset) {
     return &entries[index];
 }
 
-reg_t *find_id(const str *id) {
-    return &entries[(int)id->data[0]];
+inline static reg_t *find_id(const str *id) {
+    int index = id->data[0] - 'A';
+    if (index < 0 || index >= (int)array_len) {
+        fprintf(stderr, "array access out of bounds");
+        abort();
+    }
+    return &entries[index];
 }
 

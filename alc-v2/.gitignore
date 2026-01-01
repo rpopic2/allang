@@ -1,4 +1,4 @@
 alc
-test.s
+*.s
 test
 compile_commands.json

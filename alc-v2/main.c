@@ -76,7 +76,7 @@ retry:;
             compile_err("indentation should be in mutliple of 4\n");
         }
         if (new_indent > indent) {
-            printf("\nstart of a block\n");
+            printd("\nstart of a block\n");
         }
 
         if (new_indent < indent) {
@@ -317,18 +317,15 @@ bool expr_line(parser_context *context) {
 bool stmt(parser_context *restrict context) {
     token_t *token = &context->cur_token;
     str token_str = (str){.data = token->data, .end = token->end};
-    str_print(&token_str);
 
     if (isupper(token->data[0])) {
         if (streq(token->end, " ::")) {
             lex(context);
-
             if (context->cur_token.end[0] != '\n') {
                 context->reg.type = NREG;
             }
             reg_t *reg = add_id(token_str, NREG, context->nreg_count);
             context->reg.offset = context->nreg_count++;
-            printf("off: %d\n", reg->offset);
             arr_target_push(&context->targets, (target){.reg = reg});
             return true;
         }
@@ -373,11 +370,6 @@ void parse(parser_context *restrict context) {
         if (cur_target == NULL || cur_target->reg->type != NREG) {
             compile_err("nothing to assign\n");
             return;
-        }
-        printf("assign off: %d\n", cur_target->reg->offset);
-        printf("num targets: %ld\n", context->targets.cur - context->targets.data);
-        for (target *t = context->targets.data; t < context->targets.cur; ++t) {
-            printf("offs: %d\n", t->reg->offset);
         }
         context->reg = *cur_target->reg;
         cur_target->target_assigned = true;
@@ -465,7 +457,7 @@ int main(int argc, const char *argv[]) {
             }
 
             arr_target_pop(&context->targets);
-            printf("end of a block\n\n");
+            printd("end of a block\n\n");
 
         }
     }

@@ -62,6 +62,8 @@ int get_regoff(reg_t e) {
         e.offset += 19;
     else if (e.type == FRAME)
         e.offset = 29;
+    else if (e.type == STACK)
+        e.offset = 31;
     return e.offset;
 }
 
