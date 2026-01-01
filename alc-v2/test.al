@@ -9,6 +9,8 @@ printf "Hello World\n"=>
         3
 K ::
     2 + 33
+    [P] ::
+        5 =[]
     = 3 + 2
 
 I, 3, [I], [J]

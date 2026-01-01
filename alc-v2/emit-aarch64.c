@@ -13,6 +13,7 @@
 
 #define INSTR(s) "\t"s"\n"
 #define STR_FROM_INSTR(s) &STR_FROM(INSTR(s))
+#define ALIGN_TO(expr, align) ((expr) + align - 1) & ~(align - 1);
 
 DECL_PTR(static buf, text_buf);
 DECL_PTR(static buf, cstr_buf);
@@ -159,7 +160,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     if (context->calls_fn) {
         stack_size += 16;
     }
-    stack_size = (stack_size + 15) & ~15; // align up to 16 bytes boundary
+    stack_size = ALIGN_TO(stack_size, 16);
 
     int cur_stackoff = 0;
     int frame_stackoff = context->stack_size;// + stack variable size;
@@ -198,7 +199,9 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
             buf_puts(prologue_buf, STR_FROM_INSTR("mov x29, sp"));
             buf_snprintf(fn_buf, INSTR("stp x29, x30, [sp], #%d"), stack_size);
         } else {
-            buf_snprintf(prologue_buf, INSTR("add x29, sp, #%d"), stack_size - pair_size);
+
+            int fp_diff = ALIGN_TO(context->stack_size, 16); // align up to 16 bytes boundary
+            buf_snprintf(prologue_buf, INSTR("add x29, sp, #%d"), fp_diff);
             buf_snprintf(fn_buf, INSTR("ldp x29, x30, [sp, #%d]"), stack_size - pair_size);
             buf_snprintf(fn_buf, INSTR("add sp, sp, #%d"), stack_size);
         }

@@ -62,9 +62,9 @@ retry:;
     if (str_len((str *)cur_token) == 0)
         goto retry;
 
-    printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
-    str_fprintnl((str *)cur_token, stdout);
-    printd("|\n");
+    // printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
+    // str_fprintnl((str *)cur_token, stdout);
+    // printd("|\n");
 
     if (src->cur[-1] == '\n') {
         int new_indent = 0;
@@ -76,7 +76,7 @@ retry:;
             compile_err("indentation should be in mutliple of 4\n");
         }
         if (new_indent > indent) {
-            printd("\nstart of a block\n");
+            // printd("\nstart of a block\n");
         }
 
         if (new_indent < indent) {
@@ -300,11 +300,11 @@ bool expr_line(parser_context *context) {
         return false;
 
     while (token->end[0] == ',' && isspace(token->end[1])) {
-        printd(", ");
+        // printd(", ");
         context->reg.offset++;
         lex(context);
         *token = context->cur_token;
-        str_printd((str *)token);
+        // str_printd((str *)token);
         ok = expr(context);
         if (!ok)
             break;
@@ -457,7 +457,7 @@ int main(int argc, const char *argv[]) {
             }
 
             arr_target_pop(&context->targets);
-            printd("end of a block\n\n");
+            // printd("end of a block\n\n");
 
         }
     }
