@@ -49,6 +49,8 @@ void emit_string_lit(register_dst reg_dst, int regidx, const str *s);
 void emit_str_fp(reg_t src, int offset);
 void emit_ldr_fp(reg_t dst, int offset);
 
+void emit_branch(const str *label);
+void emit_label(const str *label);
 void emit_fn_prologue_epilogue(const parser_context *context);
 void emit_fn_call(const str *s);
 void emit_mainfn(void);

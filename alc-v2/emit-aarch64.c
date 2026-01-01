@@ -144,6 +144,17 @@ void emit_ldr_fp(reg_t dst, int offset) {
 }
 
 
+void emit_branch(const str *label) {
+    buf_puts(fn_buf, &STR_FROM("\tb "));
+    buf_puts(fn_buf, label);
+    buf_puts(fn_buf, &STR_FROM("\n"));
+}
+
+void emit_label(const str *label) {
+    buf_puts(fn_buf, label);
+    buf_puts(fn_buf, &STR_FROM(":\n"));
+}
+
 void emit_fn_prologue_epilogue(const parser_context *context) {
     prologue_buf->cur = prologue_buf->start;
     if (!context->calls_fn && context->nreg_count == 0) {

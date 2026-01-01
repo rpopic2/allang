@@ -62,9 +62,9 @@ retry:;
     if (str_len((str *)cur_token) == 0)
         goto retry;
 
-    // printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
-    // str_fprintnl((str *)cur_token, stdout);
-    // printd("|\n");
+    printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
+    str_fprintnl((str *)cur_token, stdout);
+    printd("|\n");
 
     if (src->cur[-1] == '\n') {
         int new_indent = 0;
@@ -76,7 +76,7 @@ retry:;
             compile_err("indentation should be in mutliple of 4\n");
         }
         if (new_indent > indent) {
-            // printd("\nstart of a block\n");
+            printd("\nstart of a block\n");
         }
 
         if (new_indent < indent) {
@@ -192,7 +192,7 @@ typedef struct {
 static const reg_t FP = (reg_t){ .type = FRAME };
 
 regable read_regable(const token_t *token) {
-    regable result = (regable){ .value = 0, .tag = 0};
+    regable result = (regable){ .value = 0, .tag = NONE};
     if (isupper(token->data[0])) {
         reg_t *e = find_id((str *)token);
         if (e->type == RD_NONE) {
@@ -300,11 +300,11 @@ bool expr_line(parser_context *context) {
         return false;
 
     while (token->end[0] == ',' && isspace(token->end[1])) {
-        // printd(", ");
+        printd(", ");
         context->reg.offset++;
         lex(context);
         *token = context->cur_token;
-        // str_printd((str *)token);
+        str_printd((str *)token);
         ok = expr(context);
         if (!ok)
             break;
@@ -389,8 +389,16 @@ void parse(parser_context *restrict context) {
         context->reg.type = SCRATCH;
         context->calls_fn = true;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
-        context->reg.type = PARAM;
-        context->deferred_fn_call = *(str *)token;
+        if (streq(token->end - 2, "->")) {
+            emit_branch(&(str){.data = token->data, .end = token->end - 2});
+        } else if (streq(token->end - 1, ":")) {
+            emit_label(&(str){.data = token->data, .end = token->end - 1});
+        } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
+            context->reg.type = PARAM;
+            context->deferred_fn_call = *(str *)token;
+        } else {
+            compile_err("unknown token "), str_fprint((str *)token, stderr);
+        }
     } else {
         compile_err("unknown token "), str_fprint((str *)token, stderr);
     }
@@ -457,7 +465,7 @@ int main(int argc, const char *argv[]) {
             }
 
             arr_target_pop(&context->targets);
-            // printd("end of a block\n\n");
+            printd("end of a block\n\n");
 
         }
     }

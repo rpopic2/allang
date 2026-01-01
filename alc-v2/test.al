@@ -13,6 +13,12 @@ K ::
         5 =[]
     = 3 + 2
 
+cool->
+
+P :: 3
+
+cool:
+
 I, 3, [I], [J]
 "hi", "ok"
 ret false
