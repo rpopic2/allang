@@ -19,6 +19,8 @@ K is 3 cool->
     P :: = ^K
 cool:
 
+7 =[J]
+
 I, 3, [I], [J]
 "hi", "ok"
 ret false

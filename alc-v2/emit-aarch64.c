@@ -72,8 +72,8 @@ int get_regoff(reg_t e) {
     return e.offset;
 }
 
-void emit_mov(register_dst reg_dst, int regidx, i64 value) {
-    regidx = get_regoff((reg_t){reg_dst, regidx});
+void emit_mov(reg_t dst, i64 value) {
+    int regidx = get_regoff(dst);
     buf_snprintf(fn_buf, INSTR("mov w%d, #%"PRId64), regidx, value);
 }
 

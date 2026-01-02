@@ -52,7 +52,7 @@ void emit(FILE *out);
 
 bool emit_need_escaping(void);
 
-void emit_mov(register_dst reg_dst, int regidx, i64 value);
+void emit_mov(reg_t dst, i64 value);
 void emit_mov_reg(register_dst reg_dst, int regidx, register_dst reg_src, int regidx_src);
 void emit_add(reg_t dst, reg_t lhs, i64 rhs);
 void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs);

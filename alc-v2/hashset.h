@@ -101,7 +101,7 @@ inline static bool find_id(const token_t *id, reg_t **out, int up) {
     mini_hashset *target = (local_ids.cur - up);
     if (target < local_ids.data || target >= local_ids.data + MAX_DEPTH) {
         compile_err(id, "invalid access to local id scope\n");
-        abort();
+        return false;
     }
     hash_entry *entry = find_entry(*target, id);
     *out = &entry->value;

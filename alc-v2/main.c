@@ -230,6 +230,26 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     lex(context);
     token_t op_token = context->cur_token;
 
+    if (streq(op_token.data, "=[")) {
+        op_token.data += 2, op_token.end -= 1;
+        regable rhs = read_regable(op_token);
+        if (rhs.tag != REG) {
+            compile_err(&op_token, "register required for store target\n");
+            return;
+        }
+        reg_t reg_to_store;
+        if (lhs->tag == VALUE) {
+            reg_to_store = (reg_t){.type = SCRATCH, .offset = context->reg.offset};
+            emit_mov(reg_to_store, lhs->value);
+        } else if (lhs->tag == REG) {
+            reg_to_store = lhs->reg;
+        } else {
+            unreachable;
+        }
+        emit_str_fp(reg_to_store, rhs.reg.offset);
+        return;
+    }
+
     lex(context);
     token_t rhs_token = context->cur_token;
     regable rhs = read_regable(rhs_token);
@@ -239,7 +259,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     }
     if (op_token.data[0] == '+') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
-            emit_mov(context->reg.type, context->reg.offset, lhs->value + rhs.value);
+            emit_mov(context->reg, lhs->value + rhs.value);
         } else if (lhs->tag == VALUE && rhs.tag == REG) {
             emit_add(context->reg, rhs.reg, lhs->value);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
@@ -249,13 +269,13 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         } else unreachable;
     } else if (op_token.data[0] == '-') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
-            emit_mov(context->reg.type, context->reg.offset, lhs->value - rhs.value);
+            emit_mov(context->reg, lhs->value - rhs.value);
         } else if (lhs->tag == VALUE && rhs.tag == REG) {
             int tmp_reg_off = context->reg.offset;
             if (context->reg.type == SCRATCH) {
                 tmp_reg_off += 1;
             }
-            emit_mov(SCRATCH, tmp_reg_off, lhs->value);
+            emit_mov((reg_t){SCRATCH, tmp_reg_off}, lhs->value);
             emit_sub_reg(context->reg, (reg_t){SCRATCH, tmp_reg_off}, rhs.reg);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
             emit_sub(context->reg, lhs->reg, rhs.value);
@@ -320,7 +340,7 @@ bool expr(parser_context *context) {
         binary_op(&lhs, context);
     } else {
         if (lhs.tag == VALUE) {
-            emit_mov(context->reg.type, context->reg.offset, lhs.value);
+            emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
             if (nreg->type == NREG) {

@@ -21,5 +21,5 @@ typedef uint32_t u32;
 typedef uint64_t u64;
 
 #define bool _Bool
-#define unreachable abort()
+#define unreachable (printf("unreachable\n"), abort())
 
