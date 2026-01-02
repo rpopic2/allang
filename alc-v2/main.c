@@ -364,14 +364,9 @@ bool stmt(parser_context *restrict context) {
     } else if (token->data[0] == '[') {
         token->data += 1;
         token->end -= 1;
-        reg_t *e;
-        if (find_id(token, &e))
-            return false;
         if (token->end[0] != ']') {
             compile_err(token, "closing ']' expected(stmt)\n");
         }
-        if (e->type != NONE)
-            return false;
         context->reg.type = SCRATCH;
         context->stack_size += sizeof (i32);
         int offset = context->stack_size;
