@@ -14,15 +14,17 @@ const int array_len = 'Z' - 'A' + 1;
 
 typedef hash_entry mini_hashset[array_len];
 
+#define MAX_DEPTH 5
+
 typedef struct {
-    mini_hashset data[5];
+    mini_hashset data[MAX_DEPTH];
     mini_hashset *cur;
 } arr_mini_hashset;
 static inline void arr_mini_hashset_new(arr_mini_hashset *arr) {
     arr->cur = arr->data;
 }
 static inline mini_hashset *arr_mini_hashset_push(arr_mini_hashset *arr) {
-    if (arr->cur == arr->data + 5) {
+    if (arr->cur == arr->data + MAX_DEPTH) {
         fputs("arr was full", stderr);
         abort();
     }
@@ -52,16 +54,14 @@ int hash(str id) {
     return index;
 }
 
-#define entries (*local_ids.cur)
-
-inline static hash_entry *find_entry(const token_t *id) {
+inline static hash_entry *find_entry(mini_hashset set, const token_t *id) {
     printf("hash "), str_print(&id->id);
     int index = hash(id->id) % array_len;
     printf("hash was: %d\n", index);
     int start = index;
 
-    while (!str_empty(&entries[index].key)) {
-        if (str_eq(entries[index].key, id->id)) {
+    while (!str_empty(&set[index].key)) {
+        if (str_eq(set[index].key, id->id)) {
             break;
         }
         index += 1;
@@ -71,19 +71,22 @@ inline static hash_entry *find_entry(const token_t *id) {
             abort();
         }
     }
-    return &entries[index];
+    return &set[index];
 }
+
+#define entries (*local_ids.cur)
+
 
 inline static reg_t *overwrite_id(const token_t *id, const reg_t *value) {
     printf("ov\n");
-    hash_entry *entry = find_entry(id);
+    hash_entry *entry = find_entry(entries, id);
     entry->key = id->id, entry->value = *value;
     return &entry->value;
 }
 
 inline static reg_t *add_id(token_t *id, const reg_t *value) {
     printf("add\n");
-    hash_entry *entry = find_entry(id);
+    hash_entry *entry = find_entry(entries, id);
     if (!str_empty(&entry->key)) {
         compile_err(id, "duplicate identifier: "),
             str_print(&id->id);
@@ -93,9 +96,14 @@ inline static reg_t *add_id(token_t *id, const reg_t *value) {
     return &entry->value;
 }
 
-inline static bool find_id(const token_t *id, reg_t **out) {
+inline static bool find_id(const token_t *id, reg_t **out, int up) {
     printf("find\n");
-    hash_entry *entry = find_entry(id);
+    mini_hashset *target = (local_ids.cur - up);
+    if (target < local_ids.data || target >= local_ids.data + MAX_DEPTH) {
+        compile_err(id, "invalid access to local id scope\n");
+        abort();
+    }
+    hash_entry *entry = find_entry(*target, id);
     *out = &entry->value;
     if (str_empty(&entry->key)) {
         return false;

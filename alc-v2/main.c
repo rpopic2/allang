@@ -12,8 +12,8 @@
 
 OPT_GENERIC(i64)
 
-int lineno = 1;
-int indent = 0;
+unsigned char lineno = 1;
+unsigned char indent = 0;
 bool has_compile_err = false;
 
 
@@ -72,7 +72,7 @@ retry:;
     printd("|\n");
 
     if (src->cur[-1] == '\n') {
-        int new_indent = 0;
+        unsigned char new_indent = 0;
         while (src->cur[0] == ' ') {
             src->cur++;
             ++new_indent;
@@ -198,11 +198,18 @@ typedef struct {
 // static const entry SP = (entry){ .type = STACK };
 static const reg_t FP = (reg_t){ .type = FRAME };
 
-regable read_regable(const token_t *token) {
+regable read_regable(token_t _token) {
+    token_t *token = &_token;
     regable result = (regable){ .value = 0, .tag = NONE};
-    if (isupper(token->data[0])) {
+    if (isupper(token->data[0]) || token->data[0] == '^') {
+
+        int scope_up = 0;
+        while (token->data[0] == '^') {
+            scope_up += 1;
+            ++token->data;
+        }
         reg_t *e;
-        if (!find_id(token, &e)
+        if (!find_id(token, &e, scope_up)
             || e->type == RD_NONE) {
             compile_err(token, "unknown id "), str_fprint((str *)token, stderr);
         } else {
@@ -225,7 +232,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 
     lex(context);
     token_t rhs_token = context->cur_token;
-    regable rhs = read_regable(&rhs_token);
+    regable rhs = read_regable(rhs_token);
 
     if (rhs.tag == NONE) {
         compile_err(&rhs_token, "expected operand, but found "), str_print((str *)&rhs_token);
@@ -288,8 +295,13 @@ bool expr(parser_context *context) {
     }
     if (token->data[0] == '[') {
         token->data += 1, token->end -= 1;
+        int scope_up = 0;
+        while (token->data[0] == '^') {
+            scope_up += 1;
+            ++token->data;
+        }
         reg_t *e;
-        if (!find_id(token, &e))
+        if (!find_id(token, &e, scope_up))
             return false;
         if (token->end[0] != ']') {
             compile_err(token, "closing ']' expected(expr)\n");
@@ -299,7 +311,7 @@ bool expr(parser_context *context) {
         return true;
     }
 
-    regable lhs = read_regable(token);
+    regable lhs = read_regable(*token);
     if (lhs.tag == NONE) {
         return false;
     }
