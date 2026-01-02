@@ -7,6 +7,11 @@
 #include "str.h"
 #include "types.h"
 
+// end of a block, start of a block
+typedef enum {
+    EOB_NONE, EOB, SOB
+} eob_t;
+
 typedef struct {
     union {
         struct {
@@ -17,7 +22,7 @@ typedef struct {
     };
     int lineno;
     int indent;
-    bool eob;   // end of block
+    eob_t eob;   // end of block
 } token_t;
 
 inline str str_from_token(const token_t *token) {

@@ -81,11 +81,11 @@ retry:;
             compile_err(cur_token, "indentation should be in mutliple of 4\n");
         }
         if (new_indent > indent) {
-            printd("\nstart of a block\n");
+            context->cur_token.eob = SOB;
         }
 
         if (new_indent < indent) {
-            context->cur_token.eob = true;
+            context->cur_token.eob = EOB;
         }
         indent = new_indent;
     }
@@ -470,6 +470,7 @@ int main(int argc, const char *argv[]) {
     iter _src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
 
     emit_init();
+    arr_mini_hashset_new(&local_ids);
 
     emit_mainfn();
 
@@ -491,7 +492,10 @@ int main(int argc, const char *argv[]) {
             continue;
         parse(context);
 
-        if (cur_token->eob) {
+        if (cur_token->eob == SOB) {
+            printd("\nstart of a block\n");
+            arr_mini_hashset_push(&local_ids);
+        } else if (cur_token->eob == EOB) {
             target *cur_target = arr_target_top(&context->targets);
             if (cur_target && !cur_target->target_assigned) {
                 if (cur_target->reg->type == STACK)
@@ -501,8 +505,8 @@ int main(int argc, const char *argv[]) {
             }
 
             arr_target_pop(&context->targets);
+            arr_mini_hashset_pop(&local_ids);
             printd("end of a block\n\n");
-
         }
     }
 
