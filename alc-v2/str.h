@@ -19,18 +19,23 @@ typedef struct {
 
 static const str str_null = {.data = 0, .end = 0};
 
-inline static size_t str_len(const str *s) {
-    if (s->end - s->data < 0)
+inline static size_t str_len(str s) {
+    if (s.end - s.data < 0)
         abort();
-    return (size_t)(s->end - s->data);
+    return (size_t)(s.end - s.data);
 }
 
-inline static bool str_is_empty(const str *s) {
+inline static bool str_empty(const str *s) {
     return s->end == s->data;
 }
 
+inline static bool str_eq(const str lhs, const str rhs) {
+    return str_len(lhs) == str_len(rhs)
+        && memcmp(lhs.data, rhs.data, str_len(lhs)) == 0;
+}
+
 inline static bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
-    return str_len(s) == strlen(cstr) && memcmp(s->data, cstr, strlen(cstr)) == 0;
+    return str_len(*s) == strlen(cstr) && memcmp(s->data, cstr, strlen(cstr)) == 0;
 }
 
 inline static str str_move(str *s) {
@@ -41,7 +46,7 @@ inline static str str_move(str *s) {
 
 inline static bool str_ends_with(const str *restrict token, const char *restrict cstr) {
     size_t len = strlen(cstr);
-    return str_len(token) >= len && memcmp(token->end - len, cstr, len) == 0;
+    return str_len(*token) >= len && memcmp(token->end - len, cstr, len) == 0;
 }
 
 #define streq(s, t) (memcmp((s), (t), strlen(t)) == 0)
@@ -50,8 +55,8 @@ static inline void str_fprintnl(const str *s, FILE *file) {
     if (s->data == s->end) {
         fputs("(empty)", file);
     } else {
-        if (str_len(s) > 0)
-            fwrite(s->data, sizeof (char), (size_t)str_len(s), file);
+        if (str_len(*s) > 0)
+            fwrite(s->data, sizeof (char), (size_t)str_len(*s), file);
     }
 }
 

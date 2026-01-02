@@ -8,12 +8,21 @@
 #include "types.h"
 
 typedef struct {
-    const char *data;
-    const char *end;
+    union {
+        struct {
+            const char *data;
+            const char *end;
+        };
+        str id;
+    };
     int lineno;
     int indent;
     bool eob;   // end of block
 } token_t;
+
+inline str str_from_token(const token_t *token) {
+    return (str){ token->data, token->end };
+}
 
 typedef struct {
     reg_t *reg;

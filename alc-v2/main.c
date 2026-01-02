@@ -64,7 +64,7 @@ retry:;
         *cur_token = (token_t){0};
         return;
     }
-    if (str_len((str *)cur_token) == 0)
+    if (str_len((str){cur_token->data, cur_token->end}) == 0)
         goto retry;
 
     printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
@@ -124,7 +124,8 @@ void literal_string(const parser_context *restrict context, const token_t *restr
         emit_string_lit(context->reg.type, context->reg.offset, (str *)token);
         return;
     }
-    size_t len = str_len((str *)token);
+    str token_str = (str){token->data, token->end};
+    size_t len = str_len(token_str);
     iter unescaped = iter_init(malloc(len), len);
 
     for (size_t i = 0; i < len; ++i) {
@@ -200,8 +201,9 @@ static const reg_t FP = (reg_t){ .type = FRAME };
 regable read_regable(const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE};
     if (isupper(token->data[0])) {
-        reg_t *e = find_id((str *)token);
-        if (e->type == RD_NONE) {
+        reg_t *e;
+        if (!find_id(token, &e)
+            || e->type == RD_NONE) {
             compile_err(token, "unknown id "), str_fprint((str *)token, stderr);
         } else {
             result.tag = REG;
@@ -278,16 +280,19 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 }
 
 bool expr(parser_context *context) {
-    const token_t *token = &context->cur_token;
+    token_t _token = context->cur_token;
+    token_t *token = &_token;
     if (token->data[0] == '"') {
         literal_string(context, token);
         return true;
     }
     if (token->data[0] == '[') {
-        str id = {.data = token->data + 1, .end = token->end - 1};
-        reg_t *e = find_id(&id);
-        if (token->end[-1] != ']') {
-            compile_err(token, "closing ']' expected\n");
+        token->data += 1, token->end -= 1;
+        reg_t *e;
+        if (!find_id(token, &e))
+            return false;
+        if (token->end[0] != ']') {
+            compile_err(token, "closing ']' expected(expr)\n");
         }
         if (e->type != NONE)
             emit_ldr_fp(context->reg, e->offset);
@@ -340,8 +345,8 @@ bool expr_line(parser_context *context) {
 }
 
 bool stmt(parser_context *restrict context) {
-    token_t *token = &context->cur_token;
-    str token_str = (str){.data = token->data, .end = token->end};
+    token_t _token = context->cur_token;
+    token_t *token = &_token;
 
     if (isupper(token->data[0])) {
         if (streq(token->end, " ::")) {
@@ -349,23 +354,28 @@ bool stmt(parser_context *restrict context) {
             if (context->cur_token.end[0] != '\n') {
                 context->reg.type = NREG;
             }
-            reg_t *reg = add_id(token_str, NREG, context->nreg_count);
+            printf("decl nreg\n");
+            reg_t *reg = overwrite_id(token, &(reg_t){NREG, context->nreg_count});
             context->reg.offset = context->nreg_count++;
             arr_target_push(&context->targets, (target){.reg = reg});
             return true;
         }
     } else if (token->data[0] == '[') {
-        str id = {.data = token->data + 1, .end = token->end - 1};
-        reg_t *e = find_id(&id);
-        if (token->end[-1] != ']') {
-            compile_err(token, "closing ']' expected\n");
+        token->data += 1;
+        token->end -= 1;
+        reg_t *e;
+        if (find_id(token, &e))
+            return false;
+        if (token->end[0] != ']') {
+            compile_err(token, "closing ']' expected(stmt)\n");
         }
         if (e->type != NONE)
             return false;
         context->reg.type = SCRATCH;
         context->stack_size += sizeof (i32);
         int offset = context->stack_size;
-        reg_t *reg = add_id(id, STACK, offset);
+        printf("decl stack\n");
+        reg_t *reg = overwrite_id(token, &(reg_t){STACK, offset});
         arr_target_push(&context->targets, (target){.reg = reg});
 
         lex(context);
@@ -402,10 +412,10 @@ void parse(parser_context *restrict context) {
         context->reg.type = RET;
     } else if (str_ends_with(token_str, "=>")) {
         str *fn_name = &(str){token->data, token->end - 2};
-        if (!str_is_empty(&context->deferred_fn_call) && str_is_empty(fn_name)) {
+        if (!str_empty(&context->deferred_fn_call) && str_empty(fn_name)) {
             str s = str_move(&context->deferred_fn_call);
             emit_fn_call(&s);
-        } else if (!str_is_empty(fn_name)) {
+        } else if (!str_empty(fn_name)) {
             emit_fn_call(fn_name);
         } else {
             compile_err(token, "empty function name");
@@ -476,7 +486,8 @@ int main(int argc, const char *argv[]) {
     while (src->cur < src->end) {
         lex(context);
         token_t *cur_token = &context->cur_token;
-        if (str_len((str *)cur_token) == 0)
+        str token_str = (str){cur_token->data, cur_token->end};
+        if (str_len(token_str) == 0)
             continue;
         parse(context);
 

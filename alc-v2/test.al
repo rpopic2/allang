@@ -6,7 +6,7 @@ printf "Hello World\n"=>
 [J] ::
     [I] =[]
     2 + 9 =[], [I]
-        3
+
 K ::
     2 + 33
     [P] ::
