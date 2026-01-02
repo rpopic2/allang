@@ -6,6 +6,10 @@ typedef enum {
     RD_NONE, RET, PARAM, SCRATCH, NREG, STACK, FRAME
 } register_dst;
 
+typedef enum {
+    COND_EQ,
+} cond;
+
 typedef struct {
     register_dst type;
     int offset;

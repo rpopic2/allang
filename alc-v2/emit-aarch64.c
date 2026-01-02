@@ -31,6 +31,10 @@ extern const char *mainfn_annotation;
 extern const char *local_string_prefix;
 
 
+const char *const cond_str[] = {
+    "eq",
+};
+
 void emit_init(void) {
     buf_init(text_buf, INIT_BUFSIZ);
     buf_puts(text_buf, &STR_FROM(text_section_header));
@@ -157,6 +161,18 @@ void emit_ldr_fp(reg_t dst, int offset) {
 void emit_branch(const str *label) {
     buf_puts(fn_buf, &STR_FROM("\tb "));
     buf_puts(fn_buf, label);
+    buf_puts(fn_buf, &STR_FROM("\n"));
+}
+
+void emit_branch_cond(cond condition, const token_t *label) {
+    buf_puts(fn_buf, &STR_FROM("\tb."));
+    if (condition >= (sizeof (cond_str) / sizeof cond_str[0])) {
+        compile_err(label, "unknown condition %d", condition);
+        unreachable;
+    }
+    buf_puts(fn_buf, &STR_FROM(cond_str[condition]));
+    buf_putc(fn_buf, ' ');
+    buf_puts(fn_buf, (str *)label);
     buf_puts(fn_buf, &STR_FROM("\n"));
 }
 

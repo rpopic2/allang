@@ -74,4 +74,3 @@ inline static iter iter_init(char *start, size_t end) {
 }
 
 #define STR_FROM(s) (str) { .data = (s), .end = (s) + strlen(s) }
-

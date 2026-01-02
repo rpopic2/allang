@@ -16,6 +16,11 @@ int lineno = 1;
 int indent = 0;
 bool has_compile_err = false;
 
+
+inline static bool is_id(char c) {
+    return isalnum(c) || c == '_';
+}
+
 void lex(parser_context *context) {
 retry:;
     iter *src = &context->src;
@@ -257,6 +262,16 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         else if (rhs.tag == REG)
             emit_cmp_reg(lhs->reg, rhs.reg);
         else unreachable;
+        if (is_id(rhs_token.end[1])) {
+            // ternary operator.
+            lex(context);
+            token_t jump_target = context->cur_token;
+            if (!streq(jump_target.end - 2, "->")) {
+                compile_err(&jump_target, "-> expected at the end of a conditional branch");
+            }
+            jump_target.end -= 2;
+            emit_branch_cond(COND_EQ, &jump_target);
+        }
     } else {
         compile_err(&op_token, "unknown operator "), str_print((str *)&op_token);
     }
@@ -284,10 +299,8 @@ bool expr(parser_context *context) {
         return false;
     }
 
-    const char *next = token->end + 1;
     if (token->end[0] != ',' && token->end[0] != '\n' && !streq(token->end + 1, "=[]")) {
         binary_op(&lhs, context);
-    } else if (streq(next, "is")) {
     } else {
         if (lhs.tag == VALUE) {
             emit_mov(context->reg.type, context->reg.offset, lhs.value);
