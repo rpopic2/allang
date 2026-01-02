@@ -347,19 +347,20 @@ bool expr_line(parser_context *context) {
 bool stmt(parser_context *restrict context) {
     token_t _token = context->cur_token;
     token_t *token = &_token;
+    if (!streq(token->end, " ::")) {
+        return false;
+    }
 
     if (isupper(token->data[0])) {
-        if (streq(token->end, " ::")) {
-            lex(context);
-            if (context->cur_token.end[0] != '\n') {
-                context->reg.type = NREG;
-            }
-            printf("decl nreg\n");
-            reg_t *reg = overwrite_id(token, &(reg_t){NREG, context->nreg_count});
-            context->reg.offset = context->nreg_count++;
-            arr_target_push(&context->targets, (target){.reg = reg});
-            return true;
+        lex(context);
+        if (context->cur_token.end[0] != '\n') {
+            context->reg.type = NREG;
         }
+        printf("decl nreg\n");
+        reg_t *reg = overwrite_id(token, &(reg_t){NREG, context->nreg_count});
+        context->reg.offset = context->nreg_count++;
+        arr_target_push(&context->targets, (target){.reg = reg});
+        return true;
     } else if (token->data[0] == '[') {
         token->data += 1;
         token->end -= 1;
