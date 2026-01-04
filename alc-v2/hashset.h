@@ -10,6 +10,14 @@ typedef struct {
     reg_t value;
 } hash_entry;
 
+bool hash_entry_valid(const hash_entry *entry) {
+    return entry->key.data;
+}
+
+void hash_entry_invalidate(hash_entry *entry) {
+    entry->key.data = NULL;
+}
+
 const int array_len = 'Z' - 'A' + 1;
 
 typedef hash_entry mini_hashset[array_len];
@@ -36,7 +44,8 @@ static inline void arr_mini_hashset_pop(arr_mini_hashset *arr) {
     if (arr->cur == arr->data)
         return;
     for (int i = 0; i < array_len; ++i) {
-        arr->cur[0][i].key = str_null;
+        // arr->cur[0][i].key = str_null;
+        hash_entry_invalidate(arr->cur[0] + i);
     }
     arr->cur--;
     printf("array is now %zd\n", arr->cur - arr->data);
@@ -60,7 +69,7 @@ inline static hash_entry *find_entry(mini_hashset set, const token_t *id) {
     printf("hash was: %d\n", index);
     int start = index;
 
-    while (!str_empty(&set[index].key)) {
+    while (hash_entry_valid(&set[index])) {
         if (str_eq(set[index].key, id->id)) {
             break;
         }
@@ -87,7 +96,7 @@ inline static reg_t *overwrite_id(const token_t *id, const reg_t *value) {
 inline static reg_t *add_id(token_t *id, const reg_t *value) {
     printf("add\n");
     hash_entry *entry = find_entry(entries, id);
-    if (!str_empty(&entry->key)) {
+    if (hash_entry_valid(entry)) {
         compile_err(id, "duplicate identifier: "),
             str_print(&id->id);
     } else {
@@ -105,7 +114,7 @@ inline static bool find_id(const token_t *id, reg_t **out, int up) {
     }
     hash_entry *entry = find_entry(*target, id);
     *out = &entry->value;
-    if (str_empty(&entry->key)) {
+    if (!hash_entry_valid(entry)) {
         return false;
     }
     return true;
