@@ -1,7 +1,7 @@
 #pragma once
 
-#define bool _Bool
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 
 void abort(void);

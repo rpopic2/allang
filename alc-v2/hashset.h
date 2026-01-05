@@ -18,7 +18,7 @@ void hash_entry_invalidate(hash_entry *entry) {
     entry->key.data = NULL;
 }
 
-const int array_len = 'Z' - 'A' + 1;
+#define array_len ('Z' - 'A' + 1)
 
 typedef hash_entry mini_hashset[array_len];
 
