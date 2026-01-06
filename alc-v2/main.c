@@ -8,7 +8,7 @@
 #include "str.h"
 #include "emit.h"
 #include "opt.h"
-#include "hashset.h"
+#include "mini_hashset.h"
 
 OPT_GENERIC(i64)
 
@@ -211,7 +211,7 @@ regable read_regable(token_t _token) {
             ++token->data;
         }
         reg_t *e;
-        if (!find_id(token, &e, scope_up)
+        if (!find_id(&local_ids, token, &e, scope_up)
             || e->type == RD_NONE) {
             compile_err(token, "unknown id "), str_fprint((str *)token, stderr);
         } else {
@@ -323,7 +323,7 @@ bool expr(parser_context *context) {
             ++token->data;
         }
         reg_t *e;
-        if (!find_id(token, &e, scope_up))
+        if (!find_id(&local_ids, token, &e, scope_up))
             return false;
         if (token->end[0] != ']') {
             compile_err(token, "closing ']' expected(expr)\n");
@@ -391,7 +391,7 @@ bool stmt(parser_context *restrict context) {
             context->reg.type = NREG;
         }
         printf("decl nreg\n");
-        reg_t *reg = overwrite_id(token, &(reg_t){NREG, context->nreg_count});
+        reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){NREG, context->nreg_count});
         context->reg.offset = context->nreg_count++;
         arr_target_push(&context->targets, (target){.reg = reg});
         return true;
@@ -405,7 +405,7 @@ bool stmt(parser_context *restrict context) {
         context->stack_size += sizeof (i32);
         int offset = context->stack_size;
         printf("decl stack\n");
-        reg_t *reg = overwrite_id(token, &(reg_t){STACK, offset});
+        reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){STACK, offset});
         arr_target_push(&context->targets, (target){.reg = reg});
 
         lex(context);
@@ -438,12 +438,18 @@ void stmt_label(parser_context *context) {
             }
 			if (isupper(token->data[0])) {
                 reg_t r = {NREG, context->nreg_count++};
-				add_id(token, &r);
+				if (!add_id(*local_ids.cur, token->id, &r)) {
+                    compile_err(token, "parameter ids should be unique\n");
+                }
                 if (parsing_arg)
                     emit_mov_reg(r, (reg_t){.type=PARAM, .offset=arg_count++});
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
                 emit_fn(label);
+                reg_t r;
+                if (!add_id(fn_ids, label, &r)) {
+                    compile_err(token, "duplicate fn definition\n");
+                }
 			}
             if (break_out)
                 break;
