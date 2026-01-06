@@ -1,7 +1,7 @@
 #declare printf: (X)
 #declare foo: (X, Y => A)
 
-printf "Hello World\n", "hi"=>
+printf "Hello World\n" =>
 
 [I] ::
     4 + 9

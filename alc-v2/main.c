@@ -389,8 +389,10 @@ bool expr_line(parser_context *context) {
             break;
         context->reg.offset++;
     }
-    context->reg.offset = 0;
-    context->reg.type = SCRATCH;
+    if (context->cur_token.end[0] == '\n') {
+        context->reg.offset = 0;
+        context->reg.type = SCRATCH;
+    }
     return true;
 }
 
