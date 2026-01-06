@@ -23,7 +23,7 @@ inline static bool is_id(char c) {
 
 void lex(parser_context *context) {
 retry:;
-    iter *src = &context->src;
+    iter *src = context->src;
     token_t *cur_token = &context->cur_token;
     *cur_token = (token_t){.data = src->cur, .end = src->cur};
     cur_token->lineno = lineno;
@@ -430,7 +430,7 @@ void stmt_label(parser_context *context) {
         str_print((str *)token);
         int arg_count = 0;
         bool parsing_arg = true;
-		while (token->end < context->src.end) {
+		while (token->end < context->src->end) {
             bool break_out = false;
             if (token->end[-1] == ')') {
                 break_out = true;
@@ -442,8 +442,8 @@ void stmt_label(parser_context *context) {
                 if (parsing_arg)
                     emit_mov_reg(r, (reg_t){.type=PARAM, .offset=arg_count++});
 			} else if (streq(token->data, "=>")) {
-				printf("is fn");
                 parsing_arg = false;
+                emit_fn(label);
 			}
             if (break_out)
                 break;
@@ -479,6 +479,10 @@ void parse(parser_context *context) {
         cur_target->target_assigned = true;
     } else if (str_eq_lit(token_str, "ret")) {
         context->reg.type = RET;
+        lex(context);
+        expr_line(context);
+        context->ended = true;
+        printf("*** EOF\n\n");
     } else if (str_ends_with(token_str, "=>")) {
         str *fn_name = &(str){token->data, token->end - 2};
         if (!str_empty(&context->deferred_fn_call) && str_empty(fn_name)) {
@@ -508,6 +512,55 @@ void parse(parser_context *context) {
     }
 }
 
+void function(iter *src, FILE *object_file) {
+    emit_reset_fn();
+    arr_mini_hashset_init(&local_ids);
+
+    parser_context *context = &(parser_context){
+        .reg = (reg_t) {.type = SCRATCH, .offset = 0 },
+        .nreg_count = 0,
+        .src = src,
+        .calls_fn = false,
+        .stack_size = 0,
+        .ended = false,
+    };
+    arr_target_new(&context->targets);
+
+    if (src->cur == src->start)
+        emit_fn(STR_FROM("main"));
+
+    while (src->cur < src->end) {
+        lex(context);
+        token_t *cur_token = &context->cur_token;
+        str token_str = (str){cur_token->data, cur_token->end};
+        if (str_len(token_str) == 0)
+            continue;
+        parse(context);
+
+        if (cur_token->eob == SOB) {
+            printd("\nstart of a block\n");
+            arr_mini_hashset_push(&local_ids);
+        } else if (cur_token->eob == EOB) {
+            target *cur_target = arr_target_top(&context->targets);
+            if (cur_target && !cur_target->target_assigned) {
+                if (cur_target->reg->type == STACK)
+                    compile_err(cur_token, "this block must store\n");
+                else
+                    compile_err(cur_token, "this block must assign\n");
+            }
+
+            arr_target_pop(&context->targets);
+            arr_mini_hashset_pop(&local_ids);
+            printd("end of a block\n\n");
+        }
+        if (context->ended)
+            break;
+    }
+
+    emit_fn_prologue_epilogue(context);
+    emit_ret();
+    emit_fnbuf(object_file);
+}
 
 int main(int argc, const char *argv[]) {
     if (argc == 1) {
@@ -536,52 +589,6 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    iter _src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
-
-    emit_init();
-    arr_mini_hashset_new(&local_ids);
-
-    emit_mainfn();
-
-    parser_context *context = &(parser_context){
-        .reg = (reg_t) {.type = SCRATCH, .offset = 0 },
-        .nreg_count = 0,
-        .src = _src,
-        .calls_fn = false,
-        .stack_size = 0,
-    };
-    arr_target_new(&context->targets);
-    iter *src = &context->src;
-
-    while (src->cur < src->end) {
-        lex(context);
-        token_t *cur_token = &context->cur_token;
-        str token_str = (str){cur_token->data, cur_token->end};
-        if (str_len(token_str) == 0)
-            continue;
-        parse(context);
-
-        if (cur_token->eob == SOB) {
-            printd("\nstart of a block\n");
-            arr_mini_hashset_push(&local_ids);
-        } else if (cur_token->eob == EOB) {
-            target *cur_target = arr_target_top(&context->targets);
-            if (cur_target && !cur_target->target_assigned) {
-                if (cur_target->reg->type == STACK)
-                    compile_err(cur_token, "this block must store\n");
-                else
-                    compile_err(cur_token, "this block must assign\n");
-            }
-
-            arr_target_pop(&context->targets);
-            arr_mini_hashset_pop(&local_ids);
-            printd("end of a block\n\n");
-        }
-    }
-
-    emit_fn_prologue_epilogue(context);
-    emit_ret();
-
     size_t source_name_len = strlen(source_name);
     char *out_name = malloc(source_name_len + 1);
 	memset(out_name, 0, source_name_len + 1);
@@ -593,7 +600,16 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, "error: failed to create file\n");
         exit(EXIT_FAILURE);
     }
-    emit(object_file);
+
+    iter src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
+
+    emit_init();
+    while (src.cur < src.end) {
+        function(&src, object_file);
+        function(&src, object_file);
+    }
+
+    emit_cstr(object_file);
 
     if (has_compile_err)
         fprintf(stderr, CSC_RED"compilation failed"CSC_RESET);

@@ -1,7 +1,3 @@
-foo: (X, Y => A)
-    ret X + Y
-
-
 printf "Hello World\n"=>
 
 [I] ::
@@ -26,4 +22,12 @@ cool:
 
 I, 3, [I], [J]
 "hi", "ok"
-ret false
+ret false, true
+
+foo: (X, Y => A)
+    ret X + Y
+
+
+foo2: (X, Y => A)
+    ret X + Y
+

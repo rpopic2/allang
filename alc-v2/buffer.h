@@ -36,7 +36,8 @@ inline static void buf_grow(buf *buffer, size_t adding_size) {
 }
 
 inline static void buf_init(buf *buffer, size_t size) {
-    buffer->start = malloc(size);
+    if (buffer->start == NULL)
+        buffer->start = malloc(size);
     buffer->cur = buffer->start;
     buffer->end = buffer->start + size;
 }

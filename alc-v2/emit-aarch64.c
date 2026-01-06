@@ -18,6 +18,7 @@
 DECL_PTR(static buf, text_buf);
 DECL_PTR(static buf, cstr_buf);
 
+DECL_PTR(static buf, fn_header_buf);
 DECL_PTR(static buf, prologue_buf);
 DECL_PTR(static buf, fn_buf);
 
@@ -43,14 +44,26 @@ void emit_init(void) {
     buf_puts(cstr_buf, &STR_FROM(string_section_header));
     cstr_begin = cstr_buf->cur;
 
+    emit_reset_fn();
+}
+
+void emit_reset_fn(void) {
+    buf_init(fn_header_buf, 0x100);
     buf_init(prologue_buf, INIT_BUFSIZ);
     buf_init(fn_buf, INIT_BUFSIZ);
 }
 
-void emit(FILE *out) {
-    buf_fwrite(text_buf, out);
+void emit_fnbuf(FILE *out) {
+    buf_fwrite(fn_header_buf, out);
     buf_fwrite(prologue_buf, out);
     buf_fwrite(fn_buf, out);
+}
+
+void emit_text(FILE *out) {
+    buf_fwrite(text_buf, out);
+}
+
+void emit_cstr(FILE *out) {
     if (cstr_begin < cstr_buf->cur) {
         buf_fwrite(cstr_buf, out);
     }
@@ -249,26 +262,17 @@ void emit_fn_call(const str *s) {
     buf_putc(fn_buf, '\n');
 }
 
-void emit_mainfn(void) {
-	const char *fn_name = "main";
-    buf_puts(fn_buf, &STR_FROM("\t.globl "));
-    buf_puts(fn_buf, &STR_FROM(fn_prefix));
-	buf_puts(fn_buf, &STR_FROM(fn_name));
-    buf_puts(fn_buf, &STR_FROM("\n\t.p2align 2\n"));
-    buf_puts(fn_buf, &STR_FROM(mainfn_annotation));
-    buf_puts(fn_buf, &STR_FROM(fn_prefix));
-	buf_puts(fn_buf, &STR_FROM(fn_name));
-    buf_puts(fn_buf, &STR_FROM(":\n"));
-}
-
 void emit_fn(str fn_name) {
-    buf_puts(text_buf, &STR_FROM("\t.globl "));
-    buf_puts(text_buf, &STR_FROM(fn_prefix));
-	buf_puts(text_buf, &fn_name);
-    buf_puts(text_buf, &STR_FROM("\n\t.p2align 2\n"));
-    buf_puts(text_buf, &STR_FROM(fn_prefix));
-	buf_puts(text_buf, &fn_name);
-    buf_puts(text_buf, &STR_FROM(":\n"));
+    buf_puts(fn_header_buf, &STR_FROM("\t.globl "));
+    buf_puts(fn_header_buf, &STR_FROM(fn_prefix));
+	buf_puts(fn_header_buf, &fn_name);
+    buf_puts(fn_header_buf, &STR_FROM("\n\t.p2align 2\n"));
+    if (str_eq_lit(&fn_name, "main")) {
+        buf_puts(fn_header_buf, &STR_FROM(mainfn_annotation));
+    }
+    buf_puts(fn_header_buf, &STR_FROM(fn_prefix));
+	buf_puts(fn_header_buf, &fn_name);
+    buf_puts(fn_header_buf, &STR_FROM(":\n"));
 }
 
 void emit_ret(void) {

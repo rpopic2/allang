@@ -28,7 +28,7 @@ typedef struct {
     mini_hashset data[MAX_DEPTH];
     mini_hashset *cur;
 } arr_mini_hashset;
-static inline void arr_mini_hashset_new(arr_mini_hashset *arr) {
+static inline void arr_mini_hashset_init(arr_mini_hashset *arr) {
     arr->cur = arr->data;
 }
 static inline mini_hashset *arr_mini_hashset_push(arr_mini_hashset *arr) {

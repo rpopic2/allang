@@ -40,15 +40,19 @@ typedef struct {
     reg_t reg;
     int nreg_count;
     str deferred_fn_call;
-    iter src;
+    iter *src;
     bool calls_fn;
     int stack_size;
     token_t cur_token;
     arr_target targets;
+    bool ended;
 } parser_context;
 
 void emit_init(void);
-void emit(FILE *out);
+void emit_reset_fn(void);
+void emit_fnbuf(FILE *out);
+void emit_text(FILE *out);
+void emit_cstr(FILE *out);
 
 bool emit_need_escaping(void);
 
@@ -70,7 +74,6 @@ void emit_branch_cond(cond condition, const token_t *label);
 void emit_label(const str *label);
 void emit_fn_prologue_epilogue(const parser_context *context);
 void emit_fn_call(const str *s);
-void emit_mainfn(void);
 void emit_fn(str fn_name);
 void emit_ret(void);
 
