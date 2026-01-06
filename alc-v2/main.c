@@ -432,7 +432,8 @@ bool stmt(parser_context *restrict context) {
     return false;
 }
 
-symbol_t *label_meta(parser_context *context) {
+// out_param_names: set to NULL if not needed
+symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 	token_t _token = context->cur_token;
     token_t *token = &_token;
     str label = { .data = token->data, .end = token->end - 1 };
@@ -442,7 +443,8 @@ symbol_t *label_meta(parser_context *context) {
         .airity = 0,
         .is_fn = false,
     };
-    arr_str_init(&symbol.params);
+    if (out_param_names)
+        arr_str_init(out_param_names);
 
 	if (streq(token->end, " (")) {
         indent += 4;
@@ -461,7 +463,8 @@ symbol_t *label_meta(parser_context *context) {
 			if (isupper(token->data[0])) {
                 if (parsing_arg) {
                     symbol.airity += 1;
-                    arr_str_push(&symbol.params, token->id);
+                    if (out_param_names)
+                        arr_str_push(out_param_names, token->id);
                 }
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
@@ -492,7 +495,8 @@ symbol_t *label_meta(parser_context *context) {
 }
 
 void stmt_label(parser_context *context) {
-    symbol_t *symbol = label_meta(context);
+    arr_str params;
+    symbol_t *symbol = label_meta(context, &params);
     if (symbol == NULL)
         return;
 
@@ -502,7 +506,7 @@ void stmt_label(parser_context *context) {
         reg_t arg_reg = {.type = PARAM, .offset = i};
         reg_t r = {NREG, context->nreg_count++};
         emit_mov_reg(r, arg_reg);
-        str param_name = symbol->params.data[i];
+        str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {
             compile_err(&context->cur_token, "parameter ids should be unique\n");
         }
@@ -522,7 +526,7 @@ bool directives(parser_context *context) {
     if (str_eq_lit(&token_str, "declare")) {
         printf("declare directive\n");
         lex(context);
-        symbol_t *symbol = label_meta(context);
+        symbol_t *symbol = label_meta(context, NULL);
         if (symbol == NULL) {
             return true;
         }

@@ -54,7 +54,7 @@ ARR_GENERIC(str, PARAMS_MAX)
 typedef struct {
     str name;
     u8 airity;
-    arr_str params;
+    u8 ret_airity;
     bool is_fn;
 } symbol_t;
 
