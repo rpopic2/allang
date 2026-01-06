@@ -91,9 +91,11 @@ retry:;
     }
 }
 
+#define CSC_RED "\x1b[31m"
+#define CSC_RESET "\x1b[0m"
 void compile_err(const token_t *token, const char *format, ...) {
     has_compile_err = true;
-    fputs("\x1b[31m", stderr);
+    fputs(CSC_RED, stderr);
     fprintf(stderr, "error in line %d: ", token->lineno);
 
     va_list args;
@@ -344,7 +346,7 @@ bool expr(parser_context *context) {
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
             if (nreg->type == NREG) {
-                emit_mov_reg(context->reg.type, context->reg.offset, nreg->type, nreg->offset);
+                emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->type == STACK) {
                 emit_sub(context->reg, FP, nreg->offset);
             } else {
@@ -412,7 +414,46 @@ bool stmt(parser_context *restrict context) {
     return false;
 }
 
-void parse(parser_context *restrict context) {
+void stmt_label(parser_context *context) {
+	token_t _token = context->cur_token;
+    token_t *token = &_token;
+    str label = {.data = token->data, .end = token->end - 1 };
+	emit_label(&label);
+
+	if (streq(token->end, " (")) {
+        indent += 4;
+        arr_mini_hashset_push(&local_ids);
+
+        lex(context);
+        _token = context->cur_token;
+        token->data += 1;
+        str_print((str *)token);
+        int arg_count = 0;
+        bool parsing_arg = true;
+		while (token->end < context->src.end) {
+            bool break_out = false;
+            if (token->end[-1] == ')') {
+                break_out = true;
+                token->end -= 1;
+            }
+			if (isupper(token->data[0])) {
+                reg_t r = {NREG, context->nreg_count++};
+				add_id(token, &r);
+                if (parsing_arg)
+                    emit_mov_reg(r, (reg_t){.type=PARAM, .offset=arg_count++});
+			} else if (streq(token->data, "=>")) {
+				printf("is fn");
+                parsing_arg = false;
+			}
+            if (break_out)
+                break;
+            lex(context);
+            token = &context->cur_token;
+		}
+	}
+}
+
+void parse(parser_context *context) {
     token_t *token = &context->cur_token;
     str *token_str = &(str){.data = token->data, .end = token->end};
     if (stmt(context)) {
@@ -455,7 +496,7 @@ void parse(parser_context *restrict context) {
         if (streq(token->end - 2, "->")) {
             emit_branch(&(str){.data = token->data, .end = token->end - 2});
         } else if (streq(token->end - 1, ":")) {
-            emit_label(&(str){.data = token->data, .end = token->end - 1});
+			stmt_label(context);
         } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
             context->reg.type = PARAM;
             context->deferred_fn_call = *(str *)token;
@@ -554,6 +595,8 @@ int main(int argc, const char *argv[]) {
     }
     emit(object_file);
 
+    if (has_compile_err)
+        fprintf(stderr, CSC_RED"compilation failed"CSC_RESET);
     return has_compile_err;
 }
 

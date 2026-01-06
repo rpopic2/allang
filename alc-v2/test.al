@@ -1,3 +1,7 @@
+foo: (X, Y => A)
+    ret X + Y
+
+
 printf "Hello World\n"=>
 
 [I] ::
@@ -18,7 +22,6 @@ K ::
 K is 3 cool->
     P :: = ^K
 cool:
-
 7 =[J]
 
 I, 3, [I], [J]

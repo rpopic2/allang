@@ -77,11 +77,8 @@ void emit_mov(reg_t dst, i64 value) {
     buf_snprintf(fn_buf, INSTR("mov w%d, #%"PRId64), regidx, value);
 }
 
-void emit_mov_reg(register_dst reg_dst, int regidx, register_dst reg_src, int regidx_src) {
-    int dst = get_regoff((reg_t){reg_dst, regidx});
-    int src = get_regoff((reg_t){reg_src, regidx_src});
-
-    buf_snprintf(fn_buf, INSTR("mov w%d, w%d"), dst, src);
+void emit_mov_reg(reg_t dst, reg_t src) {
+    buf_snprintf(fn_buf, INSTR("mov w%d, w%d"), get_regoff(dst), get_regoff(src));
 }
 
 void put_reg(buf *buffer, reg_t reg) {
@@ -254,13 +251,23 @@ void emit_fn_call(const str *s) {
 
 void emit_mainfn(void) {
 	const char *fn_name = "main";
+    buf_puts(fn_buf, &STR_FROM("\t.globl "));
+    buf_puts(fn_buf, &STR_FROM(fn_prefix));
+	buf_puts(fn_buf, &STR_FROM(fn_name));
+    buf_puts(fn_buf, &STR_FROM("\n\t.p2align 2\n"));
+    buf_puts(fn_buf, &STR_FROM(mainfn_annotation));
+    buf_puts(fn_buf, &STR_FROM(fn_prefix));
+	buf_puts(fn_buf, &STR_FROM(fn_name));
+    buf_puts(fn_buf, &STR_FROM(":\n"));
+}
+
+void emit_fn(str fn_name) {
     buf_puts(text_buf, &STR_FROM("\t.globl "));
     buf_puts(text_buf, &STR_FROM(fn_prefix));
-	buf_puts(text_buf, &STR_FROM(fn_name));
+	buf_puts(text_buf, &fn_name);
     buf_puts(text_buf, &STR_FROM("\n\t.p2align 2\n"));
-    buf_puts(text_buf, &STR_FROM(mainfn_annotation));
     buf_puts(text_buf, &STR_FROM(fn_prefix));
-	buf_puts(text_buf, &STR_FROM(fn_name));
+	buf_puts(text_buf, &fn_name);
     buf_puts(text_buf, &STR_FROM(":\n"));
 }
 

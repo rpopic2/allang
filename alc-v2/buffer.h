@@ -12,12 +12,6 @@ typedef struct {
     char *cur;
 } buf;
 
-typedef struct {
-    void *start;
-    void *end;
-    void *cur;
-} fixed_arena;
-
 inline static size_t buf_cap(const buf *buffer) {
     if (buffer->end - buffer->start < 0)
         abort();
