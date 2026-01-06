@@ -377,16 +377,17 @@ bool expr_line(parser_context *context) {
     bool ok = expr(context);
     if (!ok)
         return false;
+    context->reg.offset++;
 
     while (token->end[0] == ',' && isspace(token->end[1])) {
         printd(", ");
-        context->reg.offset++;
         lex(context);
         *token = context->cur_token;
         str_printd((str *)token);
         ok = expr(context);
         if (!ok)
             break;
+        context->reg.offset++;
     }
     context->reg.offset = 0;
     context->reg.type = SCRATCH;
@@ -432,31 +433,22 @@ bool stmt(parser_context *restrict context) {
 symbol_t *label_meta(parser_context *context) {
 	token_t _token = context->cur_token;
     token_t *token = &_token;
-    str label = {.data = token->data, .end = token->end - 1 };
+    str label = { .data = token->data, .end = token->end - 1 };
 
-    symbol_t *symbol = hashmap_tryadd(fn_ids, label, symbol);
-
-    if (symbol == NULL) {
-        compile_err(token, "redefinition of fn "), str_printerr(label);
-        return NULL;
-    }
-
-    *symbol = (symbol_t) {
+    symbol_t symbol = (symbol_t) {
         .name = label,
         .airity = 0,
         .is_fn = false,
     };
-    arr_str_init(&symbol->params);
+    arr_str_init(&symbol.params);
 
 	if (streq(token->end, " (")) {
         indent += 4;
-        arr_mini_hashset_push(&local_ids); // maybe move this away
-
+        arr_mini_hashset_push(&local_ids); // TODO maybe move this to stmt_label
 
         lex(context);
         _token = context->cur_token;
         token->data += 1;
-        str_print((str *)token);
         bool parsing_arg = true;
 		while (token->end < context->src->end) {
             bool break_out = false;
@@ -466,12 +458,12 @@ symbol_t *label_meta(parser_context *context) {
             }
 			if (isupper(token->data[0])) {
                 if (parsing_arg) {
-                    symbol->airity += 1;
-                    arr_str_push(&symbol->params, token->id);
+                    symbol.airity += 1;
+                    arr_str_push(&symbol.params, token->id);
                 }
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
-                symbol->is_fn = true;
+                symbol.is_fn = true;
                 str_print(&label);
 			}
             if (break_out)
@@ -480,7 +472,21 @@ symbol_t *label_meta(parser_context *context) {
             token = &context->cur_token;
 		}
 	}
-    return symbol;
+
+    hashmap_entry *entry = hashmap_find(fn_ids, label);
+    symbol_t *symbol_existing = &entry->value;
+
+    if (hashmap_entry_valid(entry)) {
+        if (symbol_existing->airity != symbol.airity || symbol_existing->is_fn != symbol.is_fn) {
+            compile_err(token, "incorrect redefinition of fn "), str_printerr(label);
+            return NULL;
+        }
+    } else {
+        entry->key = label;
+        entry->value = symbol;
+    }
+
+    return symbol_existing;
 }
 
 void stmt_label(parser_context *context) {
@@ -505,21 +511,28 @@ void stmt_label(parser_context *context) {
     }
 }
 
-void directives(parser_context *context) {
+bool directives(parser_context *context) {
     const token_t *token = &context->cur_token;
-    str token_str = { .data = token->id.data, .end = token->id.end };
-    if (str_eq_lit(&token_str, "define")) {
+    if (token->data[0] != '#')
+        return false;
+
+    str token_str = { .data = token->id.data + 1, .end = token->id.end };
+    if (str_eq_lit(&token_str, "declare")) {
+        printf("declare directive\n");
+        lex(context);
         symbol_t *symbol = label_meta(context);
-        if (symbol == NULL)
-            return;
+        if (symbol == NULL) {
+            return true;
         }
+    }
+    return true;
 }
 
 void parse(parser_context *context) {
-    token_t *token = &context->cur_token;
+    const token_t *token = &context->cur_token;
     str *token_str = &(str){.data = token->data, .end = token->end};
-    if (token->data[0] == '#') {
-        directives(context);
+    if (directives(context)) {
+
     } else if (stmt(context)) {
 
     } else if (expr_line(context)) {
@@ -559,9 +572,9 @@ void parse(parser_context *context) {
             compile_err(token, "trying to call undefined function "), str_printerr(fn_name);
         } else {
             symbol_t *s = &entry->value;
-            int arg_counts = context->reg.offset + 1;
+            int arg_counts = context->reg.offset;
             if (arg_counts != s->airity) {
-                compile_err(token, "expected argument count %d, but found %d\n", arg_counts, s->airity);
+                compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
             }
             emit_fn_call(&fn_name);
         }
@@ -575,7 +588,7 @@ void parse(parser_context *context) {
 			stmt_label(context);
         } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
             context->reg.type = PARAM;
-            context->deferred_fn_call = *(str *)token;
+            context->deferred_fn_call = token->id;
         } else {
             compile_err(token, "unknown token "), str_fprint((str *)token, stderr);
         }

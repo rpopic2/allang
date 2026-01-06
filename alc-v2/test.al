@@ -1,6 +1,7 @@
-#define printf: (X)
+#declare printf: (X)
+#declare foo: (X, Y => A)
 
-printf "Hello World\n"=>
+printf "Hello World\n", "hi"=>
 
 [I] ::
     4 + 9
@@ -21,6 +22,8 @@ K is 3 cool->
     P :: = ^K
 cool:
 7 =[J]
+
+foo 1, 2=>
 
 I, 3, [I], [J]
 "hi", "ok"

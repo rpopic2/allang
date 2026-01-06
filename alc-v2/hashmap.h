@@ -21,10 +21,6 @@ bool hashmap_entry_valid(const hashmap_entry *entry) {
     return entry->key.data;
 }
 
-void hashmap_entry_invalidate(hashmap_entry *entry) {
-    entry->key.data = NULL;
-}
-
 inline static hashmap_entry *hashmap_find(hashmap self, const str id) {
     printf("hashmap "), str_print(&id);
     int index = hashmap_hash(id) % array_len;
