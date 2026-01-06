@@ -6,7 +6,7 @@ typedef struct { \
     T *end; \
 } arr_##T; \
  \
-static inline void arr_##T##_new(arr_##T *arr) { \
+static inline void arr_##T##_init(arr_##T *arr) { \
     arr->cur = arr->data; \
     arr->end = arr->data + SIZE; \
 } \

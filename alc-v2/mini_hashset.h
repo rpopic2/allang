@@ -26,8 +26,6 @@ void hash_entry_invalidate(hash_entry *entry) {
 
 typedef hash_entry mini_hashset[array_len];
 
-mini_hashset fn_ids;
-
 int hash(str id) {
     int index = id.data[0] - 'A';
     return index;
@@ -131,3 +129,4 @@ inline static bool find_id(arr_mini_hashset *arr, const token_t *id, reg_t **out
 }
 
 #undef entries
+#undef array_len

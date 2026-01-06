@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -9,6 +10,7 @@
 #include "emit.h"
 #include "opt.h"
 #include "mini_hashset.h"
+#include "hashmap.h"
 
 OPT_GENERIC(i64)
 
@@ -93,6 +95,10 @@ retry:;
 
 #define CSC_RED "\x1b[31m"
 #define CSC_RESET "\x1b[0m"
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 2, 3)))
+#endif
 void compile_err(const token_t *token, const char *format, ...) {
     has_compile_err = true;
     fputs(CSC_RED, stderr);
@@ -102,18 +108,27 @@ void compile_err(const token_t *token, const char *format, ...) {
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
-    fputs("\x1b[0m", stderr);
+    fputs(CSC_RESET, stderr);
 }
 
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 1, 2)))
+#endif
 void compile_warning(const char *format, ...) {
-    fputs("\x1b[33m", stderr);
+    fputs(CSC_RED, stderr);
     fprintf(stderr, "warning in line %d: ", lineno);
 
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
-    fputs("\x1b[0m", stderr);
+    fputs(CSC_RESET, stderr);
+}
+
+void str_printerr(str s) {
+    fputs(CSC_RED, stderr);
+    str_fprint(&s, stderr);
+    fputs(CSC_RESET, stderr);
 }
 
 
@@ -153,7 +168,7 @@ void literal_string(const parser_context *restrict context, const token_t *restr
             default:;
                 i64 number = strtoll(token->data, NULL, 0);
                 if (number > (signed)sizeof (char)) {
-                    compile_err(token, "%d is too large for a string literal", number);
+                    compile_err(token, "%"PRId64" is too large for a string literal", number);
                 } else {
                     result = (char)number;
                 }
@@ -414,21 +429,34 @@ bool stmt(parser_context *restrict context) {
     return false;
 }
 
-void stmt_label(parser_context *context) {
+symbol_t *label_meta(parser_context *context) {
 	token_t _token = context->cur_token;
     token_t *token = &_token;
     str label = {.data = token->data, .end = token->end - 1 };
-	emit_label(&label);
+
+    symbol_t *symbol = hashmap_tryadd(fn_ids, label, symbol);
+
+    if (symbol == NULL) {
+        compile_err(token, "redefinition of fn "), str_printerr(label);
+        return NULL;
+    }
+
+    *symbol = (symbol_t) {
+        .name = label,
+        .airity = 0,
+        .is_fn = false,
+    };
+    arr_str_init(&symbol->params);
 
 	if (streq(token->end, " (")) {
         indent += 4;
-        arr_mini_hashset_push(&local_ids);
+        arr_mini_hashset_push(&local_ids); // maybe move this away
+
 
         lex(context);
         _token = context->cur_token;
         token->data += 1;
         str_print((str *)token);
-        int arg_count = 0;
         bool parsing_arg = true;
 		while (token->end < context->src->end) {
             bool break_out = false;
@@ -437,19 +465,14 @@ void stmt_label(parser_context *context) {
                 token->end -= 1;
             }
 			if (isupper(token->data[0])) {
-                reg_t r = {NREG, context->nreg_count++};
-				if (!add_id(*local_ids.cur, token->id, &r)) {
-                    compile_err(token, "parameter ids should be unique\n");
+                if (parsing_arg) {
+                    symbol->airity += 1;
+                    arr_str_push(&symbol->params, token->id);
                 }
-                if (parsing_arg)
-                    emit_mov_reg(r, (reg_t){.type=PARAM, .offset=arg_count++});
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
-                emit_fn(label);
-                reg_t r;
-                if (!add_id(fn_ids, label, &r)) {
-                    compile_err(token, "duplicate fn definition\n");
-                }
+                symbol->is_fn = true;
+                str_print(&label);
 			}
             if (break_out)
                 break;
@@ -457,12 +480,47 @@ void stmt_label(parser_context *context) {
             token = &context->cur_token;
 		}
 	}
+    return symbol;
+}
+
+void stmt_label(parser_context *context) {
+    symbol_t *symbol = label_meta(context);
+    if (symbol == NULL)
+        return;
+
+	emit_label(&symbol->name);
+
+    for (int i = 0; i < symbol->airity; ++i) {
+        reg_t arg_reg = {.type = PARAM, .offset = i};
+        reg_t r = {NREG, context->nreg_count++};
+        emit_mov_reg(r, arg_reg);
+        str param_name = symbol->params.data[i];
+        if (!add_id(*local_ids.cur, param_name, &r)) {
+            compile_err(&context->cur_token, "parameter ids should be unique\n");
+        }
+    }
+
+    if (symbol->is_fn) {
+        emit_fn(symbol->name);
+    }
+}
+
+void directives(parser_context *context) {
+    const token_t *token = &context->cur_token;
+    str token_str = { .data = token->id.data, .end = token->id.end };
+    if (str_eq_lit(&token_str, "define")) {
+        symbol_t *symbol = label_meta(context);
+        if (symbol == NULL)
+            return;
+        }
 }
 
 void parse(parser_context *context) {
     token_t *token = &context->cur_token;
     str *token_str = &(str){.data = token->data, .end = token->end};
-    if (stmt(context)) {
+    if (token->data[0] == '#') {
+        directives(context);
+    } else if (stmt(context)) {
 
     } else if (expr_line(context)) {
 
@@ -490,14 +548,22 @@ void parse(parser_context *context) {
         context->ended = true;
         printf("*** EOF\n\n");
     } else if (str_ends_with(token_str, "=>")) {
-        str *fn_name = &(str){token->data, token->end - 2};
-        if (!str_empty(&context->deferred_fn_call) && str_empty(fn_name)) {
-            str s = str_move(&context->deferred_fn_call);
-            emit_fn_call(&s);
-        } else if (!str_empty(fn_name)) {
-            emit_fn_call(fn_name);
+        str fn_name = (str){token->data, token->end - 2};
+        if (!str_empty(&context->deferred_fn_call) && str_empty(&fn_name)) {
+            fn_name = str_move(&context->deferred_fn_call);
         } else {
             compile_err(token, "empty function name");
+        }
+        hashmap_entry *entry = hashmap_tryfind(fn_ids, fn_name);
+        if (entry == NULL) {
+            compile_err(token, "trying to call undefined function "), str_printerr(fn_name);
+        } else {
+            symbol_t *s = &entry->value;
+            int arg_counts = context->reg.offset + 1;
+            if (arg_counts != s->airity) {
+                compile_err(token, "expected argument count %d, but found %d\n", arg_counts, s->airity);
+            }
+            emit_fn_call(&fn_name);
         }
         context->reg.offset = 0;
         context->reg.type = SCRATCH;
@@ -530,7 +596,7 @@ void function(iter *src, FILE *object_file) {
         .stack_size = 0,
         .ended = false,
     };
-    arr_target_new(&context->targets);
+    arr_target_init(&context->targets);
 
     if (src->cur == src->start)
         emit_fn(STR_FROM("main"));

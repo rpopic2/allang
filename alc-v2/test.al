@@ -1,3 +1,5 @@
+#define printf: (X)
+
 printf "Hello World\n"=>
 
 [I] ::
