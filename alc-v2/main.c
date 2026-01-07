@@ -658,6 +658,10 @@ void function(iter *src, FILE *object_file) {
         }
     }
 
+    if (str_len(context->name) == 0) {
+        return;
+    }
+
     if (context->has_branched_ret) {
         emit_label(context->name, STR_FROM("ret"));
     }
