@@ -12,6 +12,8 @@
 #include "mini_hashset.h"
 #include "hashmap.h"
 
+void parse_block(parser_context *context);
+
 OPT_GENERIC(i64)
 
 unsigned char lineno = 1;
@@ -314,7 +316,16 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
                 compile_err(&jump_target, "-> expected at the end of a conditional branch");
             }
             jump_target.end -= 2;
-            emit_branch_cond(COND_EQ, context->name, &jump_target);
+            emit_branch_cond(COND_EQ, context->name, jump_target.id, 0);
+        } else if (streq(rhs_token.end + 1, "->")) {
+            printf("unnamed cond b\n");
+            str name = STR_FROM("lbb");
+            int index = context->unnamed_labels++;
+            emit_branch_cond(COND_EQ, context->name, name, index);
+            lex(context);
+            parse_block(context);
+            emit_label(context->name, name, index);
+            printf("end unnamed cond b\n");
         }
     } else {
         compile_err(&op_token, "unknown operator "), str_print((str *)&op_token);
@@ -500,7 +511,7 @@ void stmt_label(parser_context *context) {
     }
 
     if (!symbol->is_fn) {
-        emit_label(context->name, symbol->name);
+        emit_label(context->name, symbol->name, 0);
     }
 
     for (int i = 0; i < symbol->airity; ++i) {
@@ -571,6 +582,7 @@ void parse(parser_context *context) {
         } else {
             context->has_branched_ret = true;
             emit_branch(context->name, STR_FROM("ret"));
+            printf("mid ret\n");
         }
     } else if (str_ends_with(token_str, "=>")) {
         str fn_name = (str){token->data, token->end - 2};
@@ -608,6 +620,28 @@ void parse(parser_context *context) {
         }
     } else {
         compile_err(token, "unknown token "), str_fprint((str *)token, stderr);
+    }
+}
+
+void parse_block(parser_context *context) {
+    while (true) {
+        const token_t *cur_token = &context->cur_token;
+        if (cur_token->eob == SOB) {
+            printd("\nstart of a block\n"), str_print(&cur_token->id);
+            arr_mini_hashset_push(&local_ids);
+        }
+
+        lex(context);
+        cur_token = &context->cur_token;
+        if (str_len(cur_token->id) == 0) {
+            return;
+        }
+        parse(context);
+
+        if (cur_token->eob == EOB) {
+            printd("end of a block\n\n");
+            return;
+        }
     }
 }
 
@@ -663,7 +697,7 @@ void function(iter *src, FILE *object_file) {
     }
 
     if (context->has_branched_ret) {
-        emit_label(context->name, STR_FROM("ret"));
+        emit_label(context->name, STR_FROM("ret"), 0);
     }
     emit_fn_prologue_epilogue(context);
     emit_ret();

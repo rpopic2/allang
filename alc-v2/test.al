@@ -18,13 +18,16 @@ K ::
         5 =[]
     = 3 + 2
 
-K is 3 tlb->
+K is 3 ->
     P :: = ^K
     ret false
-tlb:
+
 7 =[J]
 
 foo 1, 2=>
+
+K is 2 ->
+    ret true
 
 I, 3, [I], [J]
 "hi", "ok"

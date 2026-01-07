@@ -45,6 +45,7 @@ typedef struct {
     bool ended;
     bool has_branched_ret;
     int indent;
+    int unnamed_labels;
     str deferred_fn_call;
     str name;
     token_t cur_token;
@@ -60,6 +61,15 @@ typedef struct {
     u8 ret_airity;
     bool is_fn;
 } symbol_t;
+
+// typedef struct {
+//     str fn_name;
+//     bool is_tmp;
+//     union {
+//         str name;
+//         int index;
+//     };
+// } label_t;
 
 void emit_init(void);
 void emit_reset_fn(void);
@@ -83,8 +93,8 @@ void emit_str_fp(reg_t src, int offset);
 void emit_ldr_fp(reg_t dst, int offset);
 
 void emit_branch(str fn_name, str label);
-void emit_branch_cond(cond condition, str fn_name, const token_t *label);
-void emit_label(str fn_name, str label);
+bool emit_branch_cond(cond condition, str fn_name, str label, int index);
+void emit_label(str fn_name, str label, int index);
 void emit_fn_prologue_epilogue(const parser_context *context);
 void emit_fn_call(const str *s);
 void emit_fn(str fn_name);
