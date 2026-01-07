@@ -569,7 +569,8 @@ void parse(parser_context *context) {
         if (context->indent == context->cur_token.indent) {
             context->ended = true;
         } else {
-            // need to strcat and jump to end
+            context->has_branched_ret = true;
+            emit_branch(context->name, STR_FROM("ret"));
         }
     } else if (str_ends_with(token_str, "=>")) {
         str fn_name = (str){token->data, token->end - 2};
@@ -657,6 +658,9 @@ void function(iter *src, FILE *object_file) {
         }
     }
 
+    if (context->has_branched_ret) {
+        emit_label(context->name, STR_FROM("ret"));
+    }
     emit_fn_prologue_epilogue(context);
     emit_ret();
     emit_fnbuf(object_file);
