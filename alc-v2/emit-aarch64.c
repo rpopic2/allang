@@ -167,14 +167,20 @@ void emit_ldr_fp(reg_t dst, int offset) {
     buf_snprintf(fn_buf, INSTR("ldr w%d, [x29, #-%d]"), dst_off, offset);
 }
 
+void put_label(str fn_name, str label) {
+    buf_putc(fn_buf, '.');
+    buf_puts(fn_buf, &fn_name);
+    buf_putc(fn_buf, '.');
+    buf_puts(fn_buf, &label);
+}
 
-void emit_branch(const str *label) {
+void emit_branch(str fn_name, str label) {
     buf_puts(fn_buf, &STR_FROM("\tb "));
-    buf_puts(fn_buf, label);
+    put_label(fn_name, label);
     buf_puts(fn_buf, &STR_FROM("\n"));
 }
 
-void emit_branch_cond(cond condition, const token_t *label) {
+void emit_branch_cond(cond condition, str fn_name, const token_t *label) {
     buf_puts(fn_buf, &STR_FROM("\tb."));
     if (condition >= (sizeof (cond_str) / sizeof cond_str[0])) {
         compile_err(label, "unknown condition %d", condition);
@@ -182,12 +188,12 @@ void emit_branch_cond(cond condition, const token_t *label) {
     }
     buf_puts(fn_buf, &STR_FROM(cond_str[condition]));
     buf_putc(fn_buf, ' ');
-    buf_puts(fn_buf, (str *)label);
+    put_label(fn_name, label->id);
     buf_puts(fn_buf, &STR_FROM("\n"));
 }
 
-void emit_label(const str *label) {
-    buf_puts(fn_buf, label);
+void emit_label(str fn_name, str label) {
+    put_label(fn_name, label);
     buf_puts(fn_buf, &STR_FROM(":\n"));
 }
 

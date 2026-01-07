@@ -18,10 +18,10 @@ K ::
         5 =[]
     = 3 + 2
 
-K is 3 lbb0_0->
+K is 3 tlb->
     P :: = ^K
     ret false
-lbb0_0:
+tlb:
 7 =[J]
 
 foo 1, 2=>

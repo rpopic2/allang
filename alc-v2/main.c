@@ -314,7 +314,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
                 compile_err(&jump_target, "-> expected at the end of a conditional branch");
             }
             jump_target.end -= 2;
-            emit_branch_cond(COND_EQ, &jump_target);
+            emit_branch_cond(COND_EQ, context->name, &jump_target);
         }
     } else {
         compile_err(&op_token, "unknown operator "), str_print((str *)&op_token);
@@ -500,7 +500,7 @@ void stmt_label(parser_context *context) {
     }
 
     if (!symbol->is_fn) {
-        emit_label(&symbol->name);
+        emit_label(context->name, symbol->name);
     }
 
     for (int i = 0; i < symbol->airity; ++i) {
@@ -594,7 +594,7 @@ void parse(parser_context *context) {
         context->calls_fn = true;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         if (streq(token->end - 2, "->")) {
-            emit_branch(&(str){.data = token->data, .end = token->end - 2});
+            emit_branch(context->name, (str){.data = token->data, .end = token->end - 2});
         } else if (streq(token->end - 1, ":")) {
 			stmt_label(context);
 
@@ -615,13 +615,8 @@ void function(iter *src, FILE *object_file) {
     arr_mini_hashset_init(&local_ids);
 
     parser_context *context = &(parser_context){
-        .reg = (reg_t) {.type = SCRATCH, .offset = 0 },
-        .nreg_count = 0,
         .src = src,
-        .calls_fn = false,
-        .stack_size = 0,
-        .ended = false,
-        .indent = 0,
+        .reg = (reg_t) {.type = SCRATCH, .offset = 0 },
         .name = str_null,
     };
     if (src->cur == src->start) {
