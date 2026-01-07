@@ -340,20 +340,33 @@ bool expr(parser_context *context) {
         return true;
     }
     if (token->data[0] == '[') {
-        token->data += 1, token->end -= 1;
+        token->data += 1;
         int scope_up = 0;
         while (token->data[0] == '^') {
             scope_up += 1;
             ++token->data;
         }
         reg_t *e;
+        int offset = 0;
+        if (token->end[-1] == ']') {
+            token->end -= 1;
+        } else if (token->end[0] == ',') {
+            printf("offset");
+            lex(context);
+            regable reg = read_regable(context->cur_token);
+            if (reg.tag == VALUE) {
+                offset += (i32)reg.value;
+            } else {
+                compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
+            }
+        } else if (token->end[-1] != ']') {
+            compile_err(token, "closing ']' expected in load expression\n");
+        }
         if (!find_id(&local_ids, token, &e, scope_up))
             return false;
-        if (token->end[0] != ']') {
-            compile_err(token, "closing ']' expected(expr)\n");
-        }
+        offset *= sizeof (i32);
         if (e->type != NONE)
-            emit_ldr_fp(context->reg, e->offset);
+            emit_ldr_fp(context->reg, e->offset + offset);
         return true;
     }
 

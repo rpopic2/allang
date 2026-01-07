@@ -33,7 +33,7 @@ int hash(str id) {
 
 inline static hash_entry *find_entry(mini_hashset self, const str id) {
     int index = hash(id) % array_len;
-    // printf("hash was: %d\n", index);
+    str_fprintnl(&id, stdout), printf(" -> hash was: %d\n", index);
     int start = index;
 
     while (hash_entry_valid(&self[index])) {

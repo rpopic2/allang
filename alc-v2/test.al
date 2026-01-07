@@ -10,7 +10,8 @@ printf "Hello World\n" =>
     [^I] =[]
     2 + 9 =[]
 
-[J]
+offset:
+[J, 2]
 
 K ::
     2 + 33
