@@ -39,13 +39,15 @@ ARR_GENERIC(target, 10)
 typedef struct {
     reg_t reg;
     int nreg_count;
-    str deferred_fn_call;
-    iter *src;
-    bool calls_fn;
     int stack_size;
+    bool calls_fn;
+    bool ended;
+    int indent;
+    str deferred_fn_call;
+    str name;
+    iter *src;
     token_t cur_token;
     arr_target targets;
-    bool ended;
 } parser_context;
 
 #define PARAMS_MAX 16

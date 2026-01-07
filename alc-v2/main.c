@@ -469,7 +469,6 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
                 symbol.is_fn = true;
-                str_print(&label);
 			}
             if (break_out)
                 break;
@@ -513,6 +512,7 @@ void stmt_label(parser_context *context) {
     }
 
     if (symbol->is_fn) {
+        context->name = symbol->name;
         emit_fn(symbol->name);
     }
 }
@@ -564,8 +564,11 @@ void parse(parser_context *context) {
         context->reg.type = RET;
         lex(context);
         expr_line(context);
-        context->ended = true;
-        printf("*** EOF\n\n");
+        if (context->indent == context->cur_token.indent) {
+            context->ended = true;
+        } else {
+            // need to strcat and jump to end
+        }
     } else if (str_ends_with(token_str, "=>")) {
         str fn_name = (str){token->data, token->end - 2};
         if (!str_empty(&context->deferred_fn_call) && str_empty(&fn_name)) {
@@ -592,6 +595,8 @@ void parse(parser_context *context) {
             emit_branch(&(str){.data = token->data, .end = token->end - 2});
         } else if (streq(token->end - 1, ":")) {
 			stmt_label(context);
+
+            context->indent = indent;
         } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
             context->reg.type = PARAM;
             context->deferred_fn_call = token->id;
@@ -614,18 +619,23 @@ void function(iter *src, FILE *object_file) {
         .calls_fn = false,
         .stack_size = 0,
         .ended = false,
+        .indent = 0,
+        .name = str_null,
     };
-    arr_target_init(&context->targets);
+    if (src->cur == src->start) {
+        context->name = STR_FROM("main");
+        emit_fn(context->name);
+    }
 
-    if (src->cur == src->start)
-        emit_fn(STR_FROM("main"));
+    context->indent = context->cur_token.indent;
+    arr_target_init(&context->targets);
 
     while (src->cur < src->end) {
         lex(context);
         token_t *cur_token = &context->cur_token;
-        str token_str = (str){cur_token->data, cur_token->end};
-        if (str_len(token_str) == 0)
+        if (str_len(cur_token->id) == 0) {
             continue;
+        }
         parse(context);
 
         if (cur_token->eob == SOB) {
@@ -644,8 +654,10 @@ void function(iter *src, FILE *object_file) {
             arr_mini_hashset_pop(&local_ids);
             printd("end of a block\n\n");
         }
-        if (context->ended)
+
+        if (context->ended) {
             break;
+        }
     }
 
     emit_fn_prologue_epilogue(context);
@@ -696,7 +708,6 @@ int main(int argc, const char *argv[]) {
 
     emit_init();
     while (src.cur < src.end) {
-        function(&src, object_file);
         function(&src, object_file);
     }
 

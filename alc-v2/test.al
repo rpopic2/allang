@@ -18,9 +18,10 @@ K ::
         5 =[]
     = 3 + 2
 
-K is 3 cool->
+K is 3 lbb0_0->
     P :: = ^K
-cool:
+    ret false
+lbb0_0:
 7 =[J]
 
 foo 1, 2=>
@@ -36,3 +37,5 @@ foo: (X, Y => A)
 foo2: (X, Y => A)
     ret X + Y
 
+hi: (=> A)
+    ret "hi"

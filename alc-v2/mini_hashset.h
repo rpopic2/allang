@@ -32,9 +32,8 @@ int hash(str id) {
 }
 
 inline static hash_entry *find_entry(mini_hashset self, const str id) {
-    printf("hash "), str_print(&id);
     int index = hash(id) % array_len;
-    printf("hash was: %d\n", index);
+    // printf("hash was: %d\n", index);
     int start = index;
 
     while (hash_entry_valid(&self[index])) {
@@ -44,7 +43,7 @@ inline static hash_entry *find_entry(mini_hashset self, const str id) {
         index += 1;
         index %= array_len;
         if (index == start) {
-            printf("hash tabel is full!");
+            fprintf(stderr, "hash tabel is full!");
             abort();
         }
     }
@@ -57,14 +56,12 @@ inline static bool has_entry(mini_hashset self, const str *s) {
 }
 
 inline static reg_t *overwrite_id(mini_hashset self, const token_t *id, const reg_t *value) {
-    printf("ov\n");
     hash_entry *entry = find_entry(self, id->id);
     entry->key = id->id, entry->value = *value;
     return &entry->value;
 }
 
 inline static reg_t *add_id(mini_hashset self, str id, const reg_t *value) {
-    printf("add\n");
     hash_entry *entry = find_entry(self, id);
     if (hash_entry_valid(entry)) {
         return NULL;
@@ -114,7 +111,6 @@ static inline mini_hashset *arr_mini_hashset_top(arr_mini_hashset *arr) {
 }
 
 inline static bool find_id(arr_mini_hashset *arr, const token_t *id, reg_t **out, int up) {
-    printf("find\n");
     mini_hashset *target = (arr->cur - up);
     if (target < arr->data || target >= arr->data + MAX_DEPTH) {
         compile_err(id, "invalid access to local id scope\n");
