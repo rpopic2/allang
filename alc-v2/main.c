@@ -66,7 +66,7 @@ retry:;
         *cur_token = (token_t){0};
         return;
     }
-    if (str_len((str){cur_token->data, cur_token->end}) == 0)
+    if (str_len(cur_token->id) == 0)
         goto retry;
 
     printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
@@ -193,9 +193,9 @@ opt_i64 lit_numeric(const token_t *token) {
 	    compile_err(token, "expected closing \'\n");
 	}
 	value = c;
-    } else if (str_eq_lit((str *)token, "true")) {
+    } else if (str_eq_lit(&token->id, "true")) {
         value = 1;
-    } else if (str_eq_lit((str *)token, "false")) {
+    } else if (str_eq_lit(&token->id, "false")) {
         value = 0;
     } else {
         return opt_long_none;
@@ -212,14 +212,12 @@ typedef struct {
         reg_t reg;
     };
 } regable;
-// static const entry SP = (entry){ .type = STACK };
 static const reg_t FP = (reg_t){ .type = FRAME };
 
 regable read_regable(token_t _token) {
     token_t *token = &_token;
     regable result = (regable){ .value = 0, .tag = NONE};
     if (isupper(token->data[0]) || token->data[0] == '^') {
-
         int scope_up = 0;
         while (token->data[0] == '^') {
             scope_up += 1;
@@ -443,8 +441,9 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
         .airity = 0,
         .is_fn = false,
     };
-    if (out_param_names)
+    if (out_param_names) {
         arr_str_init(out_param_names);
+    }
 
 	if (streq(token->end, " (")) {
         indent += 4;
@@ -496,10 +495,13 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 void stmt_label(parser_context *context) {
     arr_str params;
     symbol_t *symbol = label_meta(context, &params);
-    if (symbol == NULL)
+    if (symbol == NULL) {
         return;
+    }
 
-	emit_label(&symbol->name);
+    if (!symbol->is_fn) {
+        emit_label(&symbol->name);
+    }
 
     for (int i = 0; i < symbol->airity; ++i) {
         reg_t arg_reg = {.type = PARAM, .offset = i};

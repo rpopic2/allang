@@ -263,7 +263,7 @@ void emit_fn_call(const str *s) {
 }
 
 void emit_fn(str fn_name) {
-    buf_puts(fn_header_buf, &STR_FROM("\t.globl "));
+    buf_puts(fn_header_buf, &STR_FROM("\n\t.globl "));
     buf_puts(fn_header_buf, &STR_FROM(fn_prefix));
 	buf_puts(fn_header_buf, &fn_name);
     buf_puts(fn_header_buf, &STR_FROM("\n\t.p2align 2\n"));
