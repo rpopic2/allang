@@ -670,6 +670,15 @@ void start_of_block(parser_context *context) {
 }
 
 void end_of_block(parser_context *context) {
+    target *cur_target = arr_target_top(&context->targets);
+    if (cur_target && !cur_target->target_assigned) {
+        if (cur_target->reg->type == STACK)
+            compile_err(&context->cur_token, "this block must store\n");
+        else
+            compile_err(&context->cur_token, "this block must assign\n");
+    }
+
+    arr_target_pop(&context->targets);
     arr_mini_hashset_pop(&local_ids);
     arr_int_pop(&context->deferred_unnamed_br);
     printd("end of a block\n\n");
@@ -697,8 +706,12 @@ void parse_block(parser_context *context) {
         parse(context);
 
         if (cur_token->eob == EOB) {
-            printd("end of a block\n\n");
-            return;
+            printf("start %d, cur %d\n", start_indent, cur_token->indent);
+            if (cur_token->indent == start_indent + 4) {
+                printd("end of a block\n\n");
+                return;
+            }
+            end_of_block(context);
         }
     }
 }
@@ -732,15 +745,6 @@ void function(iter *src, FILE *object_file) {
         if (cur_token->eob == SOB) {
             start_of_block(context);
         } else if (cur_token->eob == EOB) {
-            target *cur_target = arr_target_top(&context->targets);
-            if (cur_target && !cur_target->target_assigned) {
-                if (cur_target->reg->type == STACK)
-                    compile_err(cur_token, "this block must store\n");
-                else
-                    compile_err(cur_token, "this block must assign\n");
-            }
-
-            arr_target_pop(&context->targets);
             end_of_block(context);
         }
 

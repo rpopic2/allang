@@ -45,7 +45,11 @@ branch_merger: (X, Y => A)
         3
         ^X is 9 ->
             9
+            >>
         30303
+        <<
+        >>
     3030
+    <<
     printf " end\n" =>
     ret X + Y
