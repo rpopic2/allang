@@ -685,6 +685,11 @@ void parse(parser_context *context) {
         reg_t src = (reg_t){.type = context->reg.type, .offset = context->reg.offset};
         emit_str(src, (reg_t){.type = FRAME }, cur_target->reg->offset);
         cur_target->target_assigned = true;
+
+        if (context->cur_token.end[0] == '\n') {
+            context->reg.offset = 0;
+            context->reg.type = SCRATCH;
+        }
     } else if (str_eq_lit(token_str, "=")) {
         target *cur_target = stmt_assign(context);
         if (!cur_target)
