@@ -1,4 +1,4 @@
-#declare printf: (X)
+#declare printf: (Format => Num_Printed)
 #declare foo: (X, Y => A)
 
 printf "Hello World\n" =>
@@ -70,7 +70,6 @@ reg_off: (=>)
         4 =[^X]
         =[]
     [X, 2]
-    [X, O]
     Y :: = X
     [Y, 1]
     [Y, O]

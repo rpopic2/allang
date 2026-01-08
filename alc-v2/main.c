@@ -19,6 +19,7 @@ OPT_GENERIC(i64)
 unsigned char lineno = 1;
 unsigned char indent = 0;
 bool has_compile_err = false;
+bool do_airity_check = true;
 
 
 inline static bool is_id(char c) {
@@ -686,13 +687,16 @@ void parse(parser_context *context) {
         } else {
             symbol_t *s = &entry->value;
             int arg_counts = context->reg.offset;
-            if (arg_counts != s->airity) {
+            if (do_airity_check && arg_counts != s->airity) {
                 compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
             }
             emit_fn_call(&fn_name);
 
             if (token_str->end[1] == '=') {
                 target *t = stmt_assign(context);
+                if (do_airity_check && s->ret_airity != 1) {
+                    compile_err(&context->cur_token, "function must return single value to be assigned\n");
+                }
                 if (t) {
                     emit_mov_reg(*t->reg, (reg_t){RET, 0});
                 }
