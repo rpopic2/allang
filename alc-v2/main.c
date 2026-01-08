@@ -825,6 +825,8 @@ void function(iter *src, FILE *object_file) {
 
     if (!is_main) {
         lex(context);
+        if (!context->cur_token.data)
+            return;
         stmt_label(context);
     }
     context->indent = context->cur_token.indent;

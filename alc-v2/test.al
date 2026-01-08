@@ -80,8 +80,3 @@ copy: (=>)
     [Y] :: [X] =[]
     ret
 
-target_push: (=>)
-    X ::
-        3
-            4
-        = 4
