@@ -157,24 +157,23 @@ void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
 }
 
 
-void emit_str_fp(reg_t src, int offset) {
-    int src_off = get_regoff(src);
-    buf_snprintf(fn_buf, INSTR("str w%d, [x29, #-%d]"), src_off, offset);
-}
-
-void emit_ldr_fp(reg_t dst, int offset) {
-    int dst_off = get_regoff(dst);
-    buf_snprintf(fn_buf, INSTR("ldr w%d, [x29, #-%d]"), dst_off, offset);
-}
-
-void emit_str(reg_t lhs, reg_t rhs, int offset) {
+void emit_str(reg_t src, reg_t dst, int offset) {
     buf_snprintf(fn_buf, INSTR("str w%d, [x%d, #%d]"),
-            get_regoff(lhs), get_regoff(rhs), offset);
+            get_regoff(src), get_regoff(dst), offset);
 }
 
-void emit_ldr(reg_t lhs, reg_t rhs, int offset) {
+void emit_ldr(reg_t dst, reg_t src, int offset) {
     buf_snprintf(fn_buf, INSTR("ldr w%d, [x%d, #%d]"),
-            get_regoff(lhs), get_regoff(rhs), offset);
+            get_regoff(dst), get_regoff(src), offset);
+}
+
+void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
+    buf_snprintf(fn_buf, INSTR("str w%d, [x%d, x%d]"),
+            get_regoff(src), get_regoff(dst), get_regoff(offset));
+}
+void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
+    buf_snprintf(fn_buf, INSTR("ldr w%d, [x%d, x%d]"),
+            get_regoff(dst), get_regoff(src), get_regoff(offset));
 }
 
 void put_label(str fn_name, str label, int index) {

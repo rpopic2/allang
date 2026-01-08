@@ -254,17 +254,21 @@ void check_unassigned(regable lhs, const parser_context *context) {
     }
 }
 
-int load_store_offset(bool store, reg_t target, str s, parser_context *context) {
+void load_store_offset(bool store, reg_t target, str s, parser_context *context) {
     const token_t *cur_token = &context->cur_token;
-    int offset = 0;
+    regable offset_regable = {.tag = VALUE, .value = 0};
     s.data += 1;
     if (s.end[-1] == ']') {
         s.end -= 1;
     } else if (s.end[0] == ',') {
         lex(context);
-        regable offset_value = read_regable(cur_token->id, cur_token);
-        if (offset_value.tag == VALUE) {
-            offset += (i32)offset_value.value * (signed)sizeof(i32);
+        str offset_str = cur_token->id;
+        offset_str.end -= 1;
+        offset_regable = read_regable(offset_str, cur_token);
+        if (offset_regable.tag == VALUE) {
+
+        } else if (offset_regable.tag == REG && offset_regable.reg.type == NREG) {
+            printf("reg offset\n");
         } else {
             compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
         }
@@ -279,22 +283,30 @@ int load_store_offset(bool store, reg_t target, str s, parser_context *context) 
         check_unassigned(regable_target, context);
     if (regable_target.tag != REG) {
         compile_err(cur_token, "register expected\n");
-        return 0;
+        return;
     }
     reg_t reg = regable_target.reg;
-    if (reg.type == STACK) {
-        offset += reg.offset;
-        if (store)
-            emit_str_fp(target, offset);
-        else
-            emit_ldr_fp(target, offset);
-    } else if (reg.type == NREG) {
+    if (offset_regable.tag == VALUE) {
+        int offset = (i32)offset_regable.value * (signed)sizeof(i32);
+        if (reg.type == STACK) {
+            offset += reg.offset;
+            reg = (reg_t){.type = FRAME };
+        }
         if (store)
             emit_str(target, reg, offset);
         else
             emit_ldr(target, reg, offset);
+    } else if (offset_regable.tag == REG) {
+        if (reg.type == STACK) {
+            compile_err(&context->cur_token, "offset of stack variable by register is not allowed\n");
+            return;
+        }
+        if (store)
+            emit_str_reg(target, reg, offset_regable.reg);
+        else
+            emit_ldr_reg(target, reg, offset_regable.reg);
     }
-    return offset;
+    return;
 }
 
 void binary_op(const regable *restrict lhs, parser_context *restrict context) {
@@ -642,7 +654,7 @@ void parse(parser_context *context) {
             return;
         }
         reg_t src = (reg_t){.type = context->reg.type, .offset = context->reg.offset};
-        emit_str_fp(src, cur_target->reg->offset);
+        emit_str(src, (reg_t){.type = FRAME }, cur_target->reg->offset);
         cur_target->target_assigned = true;
     } else if (str_eq_lit(token_str, "=")) {
         target *cur_target = stmt_assign(context);
