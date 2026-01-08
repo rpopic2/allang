@@ -18,8 +18,17 @@ OPT_GENERIC(i64)
 
 unsigned char lineno = 1;
 unsigned char indent = 0;
+bool eof = false;
 bool has_compile_err = false;
 bool do_airity_check = true;
+
+// #define array_len ('Z' - 'A' + 1)
+
+HASHMAP_GENERIC(symbol_t, 100)
+HASHMAP_GENERIC(struct_t, 100)
+
+hashmap_symbol_t fn_ids;
+hashmap_struct_t struct_ids;
 
 
 inline static bool is_id(char c) {
@@ -67,6 +76,7 @@ retry:;
     }
     if (cur_token->end > src->end) {
         *cur_token = (token_t){0};
+        eof = true;
         return;
     }
     if (str_len(cur_token->id) == 0)
@@ -469,10 +479,43 @@ int expr_line(parser_context *context) {
     return expr_count;
 }
 
-bool stmt(parser_context *restrict context) {
+bool expect(parser_context *context, str expected) {
+    if (!str_eq(context->cur_token.id, expected)) {
+        compile_err(&context->cur_token, "expected "), str_printerr(expected);
+        return false;
+    }
+    return true;
+}
+
+void stmt_struct(parser_context *context) {
+    struct_t _s = {
+        .name = context->symbol->name,
+    };
+    printf("struct "),str_print(&context->symbol->name);
+    struct_t *s = hashmap_struct_t_tryadd(struct_ids, _s.name, &_s);
+    if (!s) {
+        s = &_s;
+        compile_err(&context->cur_token, "struct with same name already exist: "), str_printerr(s->name);
+    }
+    lex(context);
+    expect(context, STR_FROM("{"));
+    str *current = &context->cur_token.id;
+    lex(context);
+    while (!str_eq(*current, STR_FROM("}"))) {
+        s->size += sizeof (i32);
+        lex(context);
+    }
+    printf("sturct size was: %zd\n", s->size);
+}
+
+bool stmt(parser_context *context) {
     token_t _token = context->cur_token;
     token_t *token = &_token;
 
+    if (str_eq_lit(&token->id, "struct")) {
+        stmt_struct(context);
+        return true;
+    }
     if (str_eq_lit(&token->id, "ret")) {
         context->reg.type = RET;
         int arg_count = 0;
@@ -592,10 +635,10 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 		}
 	}
 
-    hashmap_entry *entry = hashmap_find(fn_ids, label);
+    hashentry_symbol_t *entry = hashmap_symbol_t_find(fn_ids, label);
     symbol_t *symbol_existing = &entry->value;
 
-    if (hashmap_entry_valid(entry)) {
+    if (hashentry_symbol_t_valid(entry)) {
         if (symbol_existing->airity != symbol.airity || symbol_existing->is_fn != symbol.is_fn) {
             compile_err(token, "incorrect redefinition of fn "), str_printerr(label);
             return NULL;
@@ -616,7 +659,13 @@ void stmt_label(parser_context *context) {
     }
 
     if (!symbol->is_fn) {
-        emit_label(context->symbol->name, symbol->name, 0);
+        str outer_name = str_null;
+        if (context->symbol) {
+            outer_name = context->symbol->name;
+        } else {
+            context->symbol = symbol;
+        }
+        emit_label(outer_name, symbol->name, 0);
     }
 
     for (int i = 0; i < symbol->airity; ++i) {
@@ -699,7 +748,7 @@ void parse(parser_context *context) {
         } else {
             compile_err(token, "empty function name");
         }
-        hashmap_entry *entry = hashmap_tryfind(fn_ids, fn_name);
+        hashentry_symbol_t *entry = hashmap_symbol_t_tryfind(fn_ids, fn_name);
         if (entry == NULL) {
             compile_err(token, "trying to call undefined function "), str_printerr(fn_name);
         } else {
@@ -738,11 +787,14 @@ void parse(parser_context *context) {
         } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
             context->reg.type = PARAM;
             context->deferred_fn_call = token->id;
+            if (!hashmap_symbol_t_tryfind(fn_ids, token->id)) {
+                compile_err(token, "unknown token "), str_printerr(token->id);
+            }
         } else {
-            compile_err(token, "unknown token "), str_fprint((str *)token, stderr);
+            compile_err(token, "unknown token "), str_printerr(token->id);
         }
     } else {
-        compile_err(token, "unknown token "), str_fprint((str *)token, stderr);
+        compile_err(token, "unknown token "), str_printerr(token->id);
     }
 }
 
@@ -817,7 +869,7 @@ void function(iter *src, FILE *object_file) {
             .is_fn = true,
             .name = STR_FROM("main"),
         };
-        context->symbol = hashmap_overwrite(fn_ids, tmp.name, &tmp);
+        context->symbol = hashmap_symbol_t_overwrite(fn_ids, tmp.name, &tmp);
         context->name = context->symbol->name;
         emit_fn(context->name);
     }

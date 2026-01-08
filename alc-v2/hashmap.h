@@ -11,21 +11,21 @@ int hashmap_hash(str id) {
 typedef struct { \
     str key; \
     T value; \
-} hashmap_entry_##T; \
+} hashentry_##T; \
  \
  \
-typedef hashmap_entry_##T hashmap_##T[array_len]; \
+typedef hashentry_##T hashmap_##T[array_len]; \
  \
-bool hashmap_entry_##T##_valid(const hashmap_entry_##T *entry) { \
+bool hashentry_##T##_valid(const hashentry_##T *entry) { \
     return entry->key.data; \
 } \
  \
-inline static hashmap_entry_##T *hashmap_##T##_find(hashmap_##T self, const str id) { \
+inline static hashentry_##T *hashmap_##T##_find(hashmap_##T self, const str id) { \
     int index = hashmap_hash(id) % array_len; \
     str_printdnl(&id), printd(" -> hash was: %d\n", index); \
     int start = index; \
  \
-    while (hashmap_entry_##T##_valid(&self[index])) { \
+    while (hashentry_##T##_valid(&self[index])) { \
         if (str_eq(self[index].key, id)) { \
             break; \
         } \
@@ -40,23 +40,23 @@ inline static hashmap_entry_##T *hashmap_##T##_find(hashmap_##T self, const str 
     return &self[index]; \
 } \
  \
-inline static hashmap_entry_##T *hashmap_##T##_tryfind(hashmap_##T self, const str s) { \
-    hashmap_entry_##T *entry = hashmap_##T##_find(self, s); \
-    if (hashmap_entry_##T##_valid(entry)) \
+inline static hashentry_##T *hashmap_##T##_tryfind(hashmap_##T self, const str s) { \
+    hashentry_##T *entry = hashmap_##T##_find(self, s); \
+    if (hashentry_##T##_valid(entry)) \
         return entry; \
     else \
         return NULL; \
 } \
  \
 inline static T *hashmap_##T##_overwrite(hashmap_##T self, str id, const T *value) { \
-    hashmap_entry_##T *entry = hashmap_##T##_find(self, id); \
+    hashentry_##T *entry = hashmap_##T##_find(self, id); \
     entry->key = id, entry->value = *value; \
     return &entry->value; \
 } \
  \
 inline static T *hashmap_##T##_tryadd(hashmap_##T self, str id, const T *value) { \
-    hashmap_entry_##T *entry = hashmap_##T##_find(self, id); \
-    if (hashmap_entry_##T##_valid(entry)) { \
+    hashentry_##T *entry = hashmap_##T##_find(self, id); \
+    if (hashentry_##T##_valid(entry)) { \
         return NULL; \
     } else { \
         entry->key = id, entry->value = *value; \

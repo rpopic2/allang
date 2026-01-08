@@ -80,3 +80,8 @@ copy: (=>)
     [Y] :: [X] =[]
     ret
 
+cool:
+    struct {
+        X, Y
+    }
+
