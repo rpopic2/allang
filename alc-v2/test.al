@@ -34,7 +34,7 @@ K is 2 ->
 
 I, 3, [I], [J]
 "hi", "ok"
-ret false, true
+ret false
 
 foo: (X, Y => A)
     ret X + Y
@@ -54,16 +54,16 @@ branch_merger: (X, Y => A)
     printf " end\n" =>
     ret X + Y
 
-fn_assign: (=>)
+fn_assign: (=> R)
     Num_Printed :: printf "hello" => =
     Test :: = 3
     ret Num_Printed
 
-stack_var: (=>)
+stack_var: (=> R)
     [X] :: 3 =[]
     ret 0
 
-reg_off: (=>)
+reg_off: (=> R)
     O :: = 2
     [X] ::
         ^X

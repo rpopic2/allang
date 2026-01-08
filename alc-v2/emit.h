@@ -34,6 +34,13 @@ typedef struct {
     bool target_assigned;
 } target;
 
+typedef struct {
+    str name;
+    u8 airity;
+    u8 ret_airity;
+    bool is_fn;
+} symbol_t;
+
 #define MAX_BLOCK_DEPTH 10
 ARR_GENERIC(target, MAX_BLOCK_DEPTH)
 ARR_GENERIC(int, MAX_BLOCK_DEPTH)
@@ -53,18 +60,12 @@ typedef struct {
     token_t cur_token;
     arr_target targets;
     arr_int deferred_unnamed_br;
+    symbol_t *symbol;
 } parser_context;
 #define DEFERRED_NONE -1
 
 #define PARAMS_MAX 16
 ARR_GENERIC(str, PARAMS_MAX)
-
-typedef struct {
-    str name;
-    u8 airity;
-    u8 ret_airity;
-    bool is_fn;
-} symbol_t;
 
 // typedef struct {
 //     str fn_name;

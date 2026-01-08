@@ -437,11 +437,11 @@ bool expr(parser_context *context) {
     return true;
 }
 
-bool expr_line(parser_context *context) {
+int expr_line(parser_context *context) {
     token_t *token = &context->cur_token;
     bool ok = expr(context);
     if (!ok)
-        return false;
+        return 0;
     context->reg.offset++;
 
     while (token->end[0] == ',' && isspace(token->end[1])) {
@@ -454,11 +454,12 @@ bool expr_line(parser_context *context) {
             break;
         context->reg.offset++;
     }
+    int expr_count = context->reg.offset;
     if (context->cur_token.end[0] == '\n') {
         context->reg.offset = 0;
         context->reg.type = SCRATCH;
     }
-    return true;
+    return expr_count;
 }
 
 bool stmt(parser_context *restrict context) {
@@ -593,7 +594,7 @@ void stmt_label(parser_context *context) {
     }
 
     if (!symbol->is_fn) {
-        emit_label(context->name, symbol->name, 0);
+        emit_label(context->symbol->name, symbol->name, 0);
     }
 
     for (int i = 0; i < symbol->airity; ++i) {
@@ -607,8 +608,9 @@ void stmt_label(parser_context *context) {
     }
 
     if (symbol->is_fn) {
-        context->name = symbol->name;
         emit_fn(symbol->name);
+        context->symbol = symbol;
+        context->name = symbol->name;
     }
 }
 
@@ -666,13 +668,17 @@ void parse(parser_context *context) {
     } else if (str_eq_lit(token_str, "ret")) {
         context->reg.type = RET;
         lex(context);
-        expr_line(context);
+        printf("ret stmt\n");
+        int arg_count = expr_line(context);
+        if (do_airity_check && arg_count != context->symbol->ret_airity) {
+            compile_err(token, "expected to return %d values, but found %d\n",
+                    context->symbol->ret_airity, arg_count);
+        }
         if (context->indent == context->cur_token.indent) {
             context->ended = true;
         } else {
             context->has_branched_ret = true;
-            emit_branch(context->name, STR_FROM("ret"), 0);
-            printf("mid ret\n");
+            emit_branch(context->symbol->name, STR_FROM("ret"), 0);
         }
     } else if (str_ends_with(token_str, "=>")) {
         str fn_name = (str){token->data, token->end - 2};
@@ -712,7 +718,7 @@ void parse(parser_context *context) {
         context->calls_fn = true;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         if (streq(token->end - 2, "->")) {
-            emit_branch(context->name, (str){.data = token->data, .end = token->end - 2}, 0);
+            emit_branch(context->symbol->name, (str){.data = token->data, .end = token->end - 2}, 0);
         } else if (streq(token->end - 1, ":")) {
 			stmt_label(context);
 
@@ -789,11 +795,18 @@ void function(iter *src, FILE *object_file) {
     parser_context *context = &(parser_context){
         .src = src,
         .reg = (reg_t) {.type = SCRATCH, .offset = 0 },
-        .name = str_null,
+        .symbol = NULL,
     };
     arr_int_init(&context->deferred_unnamed_br);
     if (src->cur == src->start) {
-        context->name = STR_FROM("main");
+        symbol_t tmp = {
+            .airity = 2,
+            .ret_airity = 1,
+            .is_fn = true,
+            .name = STR_FROM("main"),
+        };
+        context->symbol = hashmap_overwrite(fn_ids, tmp.name, &tmp);
+        context->name = context->symbol->name;
         emit_fn(context->name);
     }
 
