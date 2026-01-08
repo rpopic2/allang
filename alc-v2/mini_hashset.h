@@ -33,7 +33,7 @@ int hash(str id) {
 
 inline static hash_entry *find_entry(mini_hashset self, const str id) {
     int index = hash(id) % array_len;
-    str_fprintnl(&id, stdout), printf(" -> hash was: %d\n", index);
+    str_printdnl(&id), printd(" -> hash was: %d\n", index);
     int start = index;
 
     while (hash_entry_valid(&self[index])) {
@@ -91,7 +91,7 @@ static inline mini_hashset *arr_mini_hashset_push(arr_mini_hashset *arr) {
         abort();
     }
     arr->cur++;
-    printf("array is now %zd\n", arr->cur - arr->data);
+    printd("array is now %zd\n", arr->cur - arr->data);
     return arr->cur - 1;
 }
 static inline void arr_mini_hashset_pop(arr_mini_hashset *arr) {
@@ -102,7 +102,7 @@ static inline void arr_mini_hashset_pop(arr_mini_hashset *arr) {
         hash_entry_invalidate(arr->cur[0] + i);
     }
     arr->cur--;
-    printf("array is now %zd\n", arr->cur - arr->data);
+    printd("array is now %zd\n", arr->cur - arr->data);
 }
 static inline mini_hashset *arr_mini_hashset_top(arr_mini_hashset *arr) {
     if (arr->cur == arr->data)

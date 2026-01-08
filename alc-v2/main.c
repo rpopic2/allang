@@ -73,7 +73,7 @@ retry:;
         goto retry;
 
     printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
-    str_fprintnl((str *)cur_token, stdout);
+    str_printdnl((str *)cur_token);
     printd("|\n");
 
     if (src->cur[-1] == '\n') {
@@ -340,7 +340,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     regable rhs = read_regable(rhs_token.id, &rhs_token);
 
     if (rhs.tag == NONE) {
-        compile_err(&rhs_token, "expected operand, but found "), str_print((str *)&rhs_token);
+        compile_err(&rhs_token, "expected operand, but found "), str_printerr(rhs_token.id);
     } else if (rhs.tag == REG && rhs.reg.type == NREG) {
         check_unassigned(rhs, context);
     }
@@ -398,7 +398,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             // printf("end unnamed cond b\n");
         }
     } else {
-        compile_err(&op_token, "unknown operator "), str_print((str *)&op_token);
+        compile_err(&op_token, "unknown operator "), str_printerr(op_token.id);
     }
 }
 
@@ -455,7 +455,7 @@ int expr_line(parser_context *context) {
         printd(", ");
         lex(context);
         *token = context->cur_token;
-        str_printd((str *)token);
+        str_printd(&token->id);
         ok = expr(context);
         if (!ok)
             break;
@@ -915,7 +915,7 @@ int main(int argc, const char *argv[]) {
     emit_cstr(object_file);
 
     if (has_compile_err)
-        fprintf(stderr, CSC_RED"compilation failed"CSC_RESET);
+        fprintf(stderr, CSC_RED"compilation failed\n"CSC_RESET);
     return has_compile_err;
 }
 

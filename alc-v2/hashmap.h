@@ -1,6 +1,7 @@
 #pragma once
 
 #include "emit.h"
+#include "err.h"
 
 typedef struct {
     str key;
@@ -23,14 +24,14 @@ bool hashmap_entry_valid(const hashmap_entry *entry) {
 
 inline static hashmap_entry *hashmap_find(hashmap self, const str id) {
     int index = hashmap_hash(id) % array_len;
-    str_fprintnl(&id, stdout), printf(" -> hash was: %d\n", index);
+    str_printdnl(&id), printd(" -> hash was: %d\n", index);
     int start = index;
 
     while (hashmap_entry_valid(&self[index])) {
         if (str_eq(self[index].key, id)) {
             break;
         }
-        printf("linear probe\n");
+        printd("linear probe\n");
         index += 1;
         index %= array_len;
         if (index == start) {
