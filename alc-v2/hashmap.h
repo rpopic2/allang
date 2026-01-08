@@ -3,7 +3,8 @@
 #include "str.h"
 int hashmap_hash(str id) {
     int index = id.data[0] - 'A';
-    return index;
+    int end = id.end[-1];
+    return index^end;
 }
 
 #define HASHMAP_GENERIC(T, array_len) \

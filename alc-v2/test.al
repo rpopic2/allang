@@ -1,5 +1,5 @@
+#declare foo: (X i32, Y i32 => A i32)
 #declare printf: (Format => Num_Printed)
-#declare foo: (X, Y => A)
 
 printf "Hello World\n" =>
 

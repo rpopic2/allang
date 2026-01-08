@@ -593,6 +593,7 @@ bool stmt(parser_context *context) {
 symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 	token_t _token = context->cur_token;
     token_t *token = &_token;
+    token_t *cur_token = &context->cur_token;
     str label = { .data = token->data, .end = token->end - 1 };
 
     symbol_t symbol = (symbol_t) {
@@ -624,10 +625,17 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 } else {
                     symbol.ret_airity += 1;
                 }
+            } else if (islower(cur_token->data[0])) {
+                hashentry_struct_t *s = hashmap_struct_t_tryfind(struct_ids, cur_token->id);
+                if (!s) {
+                    compile_err(cur_token, "unknown type "), str_printerr(cur_token->id);
+                }
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
                 symbol.is_fn = true;
-			}
+			} else {
+                compile_err(token, "unknown token "), str_printerr(token->id);
+            }
             if (break_out)
                 break;
             lex(context);
@@ -920,6 +928,42 @@ void function(iter *src, FILE *object_file) {
     printd("end of fn\n");
 }
 
+const char *fund_type_names[] = {
+    "u8", "u16", "u32", "u64", "u128", "usize",
+    "i8", "i16", "i32", "i64", "i128", "isize",
+};
+const size_t fund_type_sizes[] = {
+    8, 16, 32, 64, 128, sizeof (void *),
+    8, 16, 32, 64, 128, sizeof (void *),
+};
+
+void register_fund_types(void) {
+    size_t fund_types_count = sizeof fund_type_names / sizeof (char *);
+    for (size_t i = 0; i < fund_types_count; ++i) {
+        str name = STR_FROM(fund_type_names[i]);
+        struct_t s = {
+            .name = name,
+            .size = fund_type_sizes[i],
+        };
+        hashmap_struct_t_overwrite(struct_ids, name, &s);
+        printd("reg type "), str_print(&name);
+    }
+    // const char *names[2] = {"u%zd", "i%zd"};
+    // for (int i = 0; i < 2; ++i) {
+    //     for (size_t size = 8; size <= 128; size *= 2) {
+    //         char *buf = malloc(5);
+    //         int len = snprintf(buf, 5, names[i], size);
+    //         str name = { .data = buf, .end = buf + len };
+    //         struct_t s = {
+    //             .name = name,
+    //             .size = size,
+    //         };
+    //         hashmap_struct_t_overwrite(struct_ids, name, &s);
+    //         printd("reg type "), str_print(&name);
+    //     }
+    // }
+}
+
 int main(int argc, const char *argv[]) {
     if (argc == 1) {
         fprintf(stderr, "usage: alc [filename]\n");
@@ -962,6 +1006,7 @@ int main(int argc, const char *argv[]) {
     iter src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
 
     emit_init();
+    register_fund_types();
     while (src.cur < src.end) {
         function(&src, object_file);
     }
