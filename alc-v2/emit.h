@@ -54,6 +54,7 @@ typedef struct {
     bool ended;
     bool has_branched_ret;
     int indent;
+    int start_indent;
     int unnamed_labels;
     str deferred_fn_call;
     str name;

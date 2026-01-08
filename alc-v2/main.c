@@ -93,6 +93,10 @@ retry:;
             context->cur_token.eob = EOB;
         }
         indent = new_indent;
+
+        if (context->indent > indent) {
+            context->ended = true;
+        }
     }
 }
 
@@ -739,7 +743,7 @@ void parse(parser_context *context) {
         } else if (streq(token->end - 1, ":")) {
 			stmt_label(context);
 
-            context->indent = indent;
+            // context->indent = indent;
         } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
             context->reg.type = PARAM;
             context->deferred_fn_call = token->id;
@@ -815,7 +819,8 @@ void function(iter *src, FILE *object_file) {
         .symbol = NULL,
     };
     arr_int_init(&context->deferred_unnamed_br);
-    if (src->cur == src->start) {
+    bool is_main = src->cur == src->start;
+    if (is_main) {
         symbol_t tmp = {
             .airity = 2,
             .ret_airity = 1,
@@ -826,9 +831,14 @@ void function(iter *src, FILE *object_file) {
         context->name = context->symbol->name;
         emit_fn(context->name);
     }
-
-    context->indent = context->cur_token.indent;
     arr_target_init(&context->targets);
+
+    if (!is_main) {
+        lex(context);
+        stmt_label(context);
+    }
+    context->indent = context->cur_token.indent;
+    printf("fn indent: %d", context->indent);
 
     while (src->cur < src->end) {
         lex(context);
