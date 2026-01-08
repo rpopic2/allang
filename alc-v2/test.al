@@ -82,6 +82,6 @@ copy: (=>)
 
 cool:
     struct {
-        X, Y
+        X i32, Y i32
     }
 

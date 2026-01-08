@@ -41,10 +41,7 @@ typedef struct {
     bool is_fn;
 } symbol_t;
 
-typedef struct {
-    str name;
-    size_t size;
-} struct_t;
+typedef struct _struct_t struct_t;
 
 #define MAX_BLOCK_DEPTH 10
 ARR_GENERIC(target, MAX_BLOCK_DEPTH)

@@ -24,6 +24,13 @@ bool do_airity_check = true;
 
 // #define array_len ('Z' - 'A' + 1)
 
+DYN_GENERIC(struct_t)
+typedef struct _struct_t {
+    str name;
+    size_t size;
+    dyn_T members;
+} struct_t;
+
 HASHMAP_GENERIC(symbol_t, 100)
 HASHMAP_GENERIC(struct_t, 100)
 
