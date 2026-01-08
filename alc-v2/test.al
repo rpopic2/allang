@@ -52,7 +52,7 @@ branch_merger: (X, Y => A)
     3030
     <<
     printf " end\n" =>
-    ret X + Y
+    ret 2
 
 fn_assign: (=> R)
     Num_Printed :: printf "hello" => =

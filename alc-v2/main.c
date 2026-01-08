@@ -485,16 +485,14 @@ bool stmt(parser_context *restrict context) {
             compile_err(token, "expected to return %d values, but found %d\n",
                     context->symbol->ret_airity, arg_count);
         }
-        if (context->cur_token.data == NULL) {
+        if (context->cur_token.data == NULL
+                || context->indent == context->cur_token.indent) {
             context->ended = true;
+            context->last_line_ret = true;
             return true;
         }
-        if (context->indent == context->cur_token.indent) {
-            context->ended = true;
-        } else {
-            context->has_branched_ret = true;
-            emit_branch(context->symbol->name, STR_FROM("ret"), 0);
-        }
+        context->has_branched_ret = true;
+        emit_branch(context->symbol->name, STR_FROM("ret"), 0);
         return true;
     } else if (streq(token->data, ">>")) {
         printf("branch merge start\n");
@@ -865,6 +863,11 @@ void function(iter *src, FILE *object_file) {
 
     if (context->has_branched_ret) {
         emit_label(context->name, STR_FROM("ret"), 0);
+    }
+    if (do_airity_check && !context->last_line_ret) {
+        if (context->symbol->airity != 0) {
+            compile_err(&context->cur_token, "expected to return values\n");
+        }
     }
     emit_fn_prologue_epilogue(context);
     emit_ret();

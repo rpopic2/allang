@@ -53,8 +53,8 @@ typedef struct {
     bool calls_fn;
     bool ended;
     bool has_branched_ret;
+    bool last_line_ret;
     int indent;
-    int start_indent;
     int unnamed_labels;
     str deferred_fn_call;
     str name;
