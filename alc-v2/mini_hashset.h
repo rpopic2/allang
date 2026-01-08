@@ -110,13 +110,13 @@ static inline mini_hashset *arr_mini_hashset_top(arr_mini_hashset *arr) {
     return arr->cur - 1;
 }
 
-inline static bool find_id(arr_mini_hashset *arr, const token_t *id, reg_t **out, int up) {
+inline static bool find_id(arr_mini_hashset *arr, str id, const token_t *token, reg_t **out, int up) {
     mini_hashset *target = (arr->cur - up);
     if (target < arr->data || target >= arr->data + MAX_DEPTH) {
-        compile_err(id, "invalid access to local id scope\n");
+        compile_err(token, "invalid access to local id scope\n");
         return false;
     }
-    hash_entry *entry = find_entry(*target, id->id);
+    hash_entry *entry = find_entry(*target, id);
     *out = &entry->value;
     if (!hash_entry_valid(entry)) {
         return false;

@@ -216,17 +216,16 @@ typedef struct {
 } regable;
 static const reg_t FP = (reg_t){ .type = FRAME };
 
-regable read_regable(token_t _token) {
-    token_t *token = &_token;
+regable read_regable(str s, const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE};
-    if (isupper(token->data[0]) || token->data[0] == '^') {
+    if (isupper(s.data[0]) || s.data[0] == '^') {
         int scope_up = 0;
-        while (token->data[0] == '^') {
+        while (s.data[0] == '^') {
             scope_up += 1;
-            ++token->data;
+            ++s.data;
         }
         reg_t *e;
-        if (!find_id(&local_ids, token, &e, scope_up)
+        if (!find_id(&local_ids, s, token, &e, scope_up)
             || e->type == RD_NONE) {
             compile_err(token, "unknown id "), str_fprint((str *)token, stderr);
         } else {
@@ -242,18 +241,45 @@ regable read_regable(token_t _token) {
     return result;
 }
 
+int load_store_offset(str s, parser_context *context) {
+    const token_t *cur_token = &context->cur_token;
+    int offset = 0;
+    s.data += 1;
+    if (s.end[-1] == ']') {
+        s.end -= 1;
+    } else if (s.end[0] == ',') {
+        lex(context);
+        regable reg = read_regable(cur_token->id, cur_token);
+        if (reg.tag == VALUE) {
+            offset += (i32)reg.value;
+        } else {
+            compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
+        }
+        if (cur_token->id.end[-1] != ']') {
+            compile_err(cur_token, "closing ']' expected\n");
+        }
+    } else if (s.end[-1] != ']') {
+        compile_err(cur_token, "closing ']' expected\n");
+    }
+    regable rhs = read_regable(s, cur_token);
+    if (rhs.tag != REG) {
+        compile_err(cur_token, "register required\n");
+        return 0;
+    }
+    offset *= sizeof (i32);
+    offset += rhs.reg.offset;
+    return offset;
+}
+
 void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t lhs_token = context->cur_token;
     lex(context);
     token_t op_token = context->cur_token;
 
     if (streq(op_token.data, "=[")) {
-        op_token.data += 2, op_token.end -= 1;
-        regable rhs = read_regable(op_token);
-        if (rhs.tag != REG) {
-            compile_err(&op_token, "register required for store target\n");
-            return;
-        }
+        str s = op_token.id;
+        s.data += 1;
+        int offset = load_store_offset(s, context);
         reg_t reg_to_store;
         if (lhs->tag == VALUE) {
             reg_to_store = (reg_t){.type = SCRATCH, .offset = context->reg.offset};
@@ -263,13 +289,13 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         } else {
             unreachable;
         }
-        emit_str_fp(reg_to_store, rhs.reg.offset);
+        emit_str_fp(reg_to_store, offset);
         return;
     }
 
     lex(context);
     token_t rhs_token = context->cur_token;
-    regable rhs = read_regable(rhs_token);
+    regable rhs = read_regable(rhs_token.id, &rhs_token);
 
     if (rhs.tag == NONE) {
         compile_err(&rhs_token, "expected operand, but found "), str_print((str *)&rhs_token);
@@ -340,37 +366,12 @@ bool expr(parser_context *context) {
         return true;
     }
     if (token->data[0] == '[') {
-        token->data += 1;
-        int scope_up = 0;
-        while (token->data[0] == '^') {
-            scope_up += 1;
-            ++token->data;
-        }
-        reg_t *e;
-        int offset = 0;
-        if (token->end[-1] == ']') {
-            token->end -= 1;
-        } else if (token->end[0] == ',') {
-            printf("offset");
-            lex(context);
-            regable reg = read_regable(context->cur_token);
-            if (reg.tag == VALUE) {
-                offset += (i32)reg.value;
-            } else {
-                compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
-            }
-        } else if (token->end[-1] != ']') {
-            compile_err(token, "closing ']' expected in load expression\n");
-        }
-        if (!find_id(&local_ids, token, &e, scope_up))
-            return false;
-        offset *= sizeof (i32);
-        if (e->type != NONE)
-            emit_ldr_fp(context->reg, e->offset + offset);
+        int offset = load_store_offset(token->id, context);
+        emit_ldr_fp(context->reg, offset);
         return true;
     }
 
-    regable lhs = read_regable(*token);
+    regable lhs = read_regable(token->id, token);
     if (lhs.tag == NONE) {
         return false;
     }
@@ -637,15 +638,22 @@ void parse(parser_context *context) {
 }
 
 void parse_block(parser_context *context) {
+    const token_t *cur_token = &context->cur_token;
+    int start_indent = cur_token->indent;
+    bool check_start = true;
     while (true) {
-        const token_t *cur_token = &context->cur_token;
         if (cur_token->eob == SOB) {
             printd("\nstart of a block\n"), str_print(&cur_token->id);
             arr_mini_hashset_push(&local_ids);
         }
 
         lex(context);
-        cur_token = &context->cur_token;
+        if (check_start) {
+            check_start = false;
+            if (cur_token->indent != start_indent + 4) {
+                compile_err(cur_token, "indented block expected\n");
+            }
+        }
         if (str_len(cur_token->id) == 0) {
             return;
         }

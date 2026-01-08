@@ -12,6 +12,7 @@ printf "Hello World\n" =>
 
 offset:
 [J, 2]
+3 =[J, 1]
 
 K ::
     2 + 33
@@ -21,6 +22,7 @@ K ::
 
 K is 3 ->
     P :: = ^K
+    K :: = 0
     ret false
 
 7 =[J]
