@@ -254,7 +254,7 @@ void check_unassigned(regable lhs, const parser_context *context) {
     }
 }
 
-int load_store_offset(str s, parser_context *context) {
+int load_store_offset(bool store, reg_t target, str s, parser_context *context) {
     const token_t *cur_token = &context->cur_token;
     int offset = 0;
     s.data += 1;
@@ -264,7 +264,7 @@ int load_store_offset(str s, parser_context *context) {
         lex(context);
         regable offset_value = read_regable(cur_token->id, cur_token);
         if (offset_value.tag == VALUE) {
-            offset += (i32)offset_value.value;
+            offset += (i32)offset_value.value * (signed)sizeof(i32);
         } else {
             compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
         }
@@ -274,15 +274,26 @@ int load_store_offset(str s, parser_context *context) {
     } else if (s.end[-1] != ']') {
         compile_err(cur_token, "closing ']' expected\n");
     }
-    regable reg = read_regable(s, cur_token);
+    regable regable_target = read_regable(s, cur_token);
     if (s.data[-2] != '=')
-        check_unassigned(reg, context);
-    if (reg.tag != REG) {
+        check_unassigned(regable_target, context);
+    if (regable_target.tag != REG) {
         compile_err(cur_token, "register expected\n");
         return 0;
     }
-    offset *= sizeof (i32);
-    offset += reg.reg.offset;
+    reg_t reg = regable_target.reg;
+    if (reg.type == STACK) {
+        offset += reg.offset;
+        if (store)
+            emit_str_fp(target, offset);
+        else
+            emit_ldr_fp(target, offset);
+    } else if (reg.type == NREG) {
+        if (store)
+            emit_str(target, reg, offset);
+        else
+            emit_ldr(target, reg, offset);
+    }
     return offset;
 }
 
@@ -294,7 +305,6 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     if (streq(op_token.data, "=[")) {
         str s = op_token.id;
         s.data += 1;
-        int offset = load_store_offset(s, context);
         reg_t reg_to_store;
         if (lhs->tag == VALUE) {
             reg_to_store = (reg_t){.type = SCRATCH, .offset = context->reg.offset};
@@ -304,7 +314,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         } else {
             unreachable;
         }
-        emit_str_fp(reg_to_store, offset);
+        load_store_offset(true, reg_to_store, s, context);
         return;
     }
 
@@ -383,8 +393,7 @@ bool expr(parser_context *context) {
         return true;
     }
     if (token->data[0] == '[') {
-        int offset = load_store_offset(token->id, context);
-        emit_ldr_fp(context->reg, offset);
+        load_store_offset(false, context->reg, token->id, context);
         return true;
     }
 
@@ -757,6 +766,7 @@ void parse_block(parser_context *context) {
 }
 
 void function(iter *src, FILE *object_file) {
+    printf("\nstart of fn\n");
     emit_reset_fn();
     arr_mini_hashset_init(&local_ids);
 
@@ -803,6 +813,7 @@ void function(iter *src, FILE *object_file) {
     emit_fn_prologue_epilogue(context);
     emit_ret();
     emit_fnbuf(object_file);
+    printf("end of fn\n");
 }
 
 int main(int argc, const char *argv[]) {

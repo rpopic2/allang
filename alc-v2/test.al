@@ -59,9 +59,17 @@ fn_assign: (=>)
     Test :: = 3
     ret Num_Printed
 
+stack_var: (=>)
+    [X] :: 3 =[]
+    ret 0
+
 reg_off: (=>)
     [X] ::
         ^X
         4 =[^X]
-        4 =[]
-    Y :: = 3
+        =[]
+    [X]
+    Y :: = X
+    [Y, 2]
+    3 =[Y]
+    ret 0

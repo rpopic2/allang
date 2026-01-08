@@ -95,6 +95,8 @@ void emit_string_lit(register_dst reg_dst, int regidx, const str *s);
 
 void emit_str_fp(reg_t src, int offset);
 void emit_ldr_fp(reg_t dst, int offset);
+void emit_str(reg_t src, reg_t dst, int offset);
+void emit_ldr(reg_t dst, reg_t src, int offset);
 
 void emit_branch(str fn_name, str label, int index);
 bool emit_branch_cond(cond condition, str fn_name, str label, int index);

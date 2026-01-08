@@ -167,6 +167,16 @@ void emit_ldr_fp(reg_t dst, int offset) {
     buf_snprintf(fn_buf, INSTR("ldr w%d, [x29, #-%d]"), dst_off, offset);
 }
 
+void emit_str(reg_t lhs, reg_t rhs, int offset) {
+    buf_snprintf(fn_buf, INSTR("str w%d, [x%d, #%d]"),
+            get_regoff(lhs), get_regoff(rhs), offset);
+}
+
+void emit_ldr(reg_t lhs, reg_t rhs, int offset) {
+    buf_snprintf(fn_buf, INSTR("ldr w%d, [x%d, #%d]"),
+            get_regoff(lhs), get_regoff(rhs), offset);
+}
+
 void put_label(str fn_name, str label, int index) {
     buf_putc(fn_buf, '.');
     buf_puts(fn_buf, &fn_name);
