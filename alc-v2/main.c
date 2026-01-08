@@ -241,6 +241,19 @@ regable read_regable(str s, const token_t *token) {
     return result;
 }
 
+void check_unassigned(regable lhs, const parser_context *context) {
+    target *top = arr_target_top(&context->targets);
+    if (!top)
+        return;
+    reg_t top_reg = *top->reg;
+    if (top_reg.type == lhs.reg.type
+            && top_reg.offset == lhs.reg.offset
+            && !top->target_assigned) {
+        const token_t *token = &context->cur_token;
+        compile_err(token, "use of unassigned register "), str_printerr(token->id);
+    }
+}
+
 int load_store_offset(str s, parser_context *context) {
     const token_t *cur_token = &context->cur_token;
     int offset = 0;
@@ -249,9 +262,9 @@ int load_store_offset(str s, parser_context *context) {
         s.end -= 1;
     } else if (s.end[0] == ',') {
         lex(context);
-        regable reg = read_regable(cur_token->id, cur_token);
-        if (reg.tag == VALUE) {
-            offset += (i32)reg.value;
+        regable offset_value = read_regable(cur_token->id, cur_token);
+        if (offset_value.tag == VALUE) {
+            offset += (i32)offset_value.value;
         } else {
             compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
         }
@@ -261,13 +274,15 @@ int load_store_offset(str s, parser_context *context) {
     } else if (s.end[-1] != ']') {
         compile_err(cur_token, "closing ']' expected\n");
     }
-    regable rhs = read_regable(s, cur_token);
-    if (rhs.tag != REG) {
-        compile_err(cur_token, "register required\n");
+    regable reg = read_regable(s, cur_token);
+    if (s.data[-2] != '=')
+        check_unassigned(reg, context);
+    if (reg.tag != REG) {
+        compile_err(cur_token, "register expected\n");
         return 0;
     }
     offset *= sizeof (i32);
-    offset += rhs.reg.offset;
+    offset += reg.reg.offset;
     return offset;
 }
 
@@ -299,6 +314,8 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 
     if (rhs.tag == NONE) {
         compile_err(&rhs_token, "expected operand, but found "), str_print((str *)&rhs_token);
+    } else if (rhs.tag == REG && rhs.reg.type == NREG) {
+        check_unassigned(rhs, context);
     }
     if (op_token.data[0] == '+') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
@@ -374,6 +391,9 @@ bool expr(parser_context *context) {
     regable lhs = read_regable(token->id, token);
     if (lhs.tag == NONE) {
         return false;
+    }
+    if (lhs.tag == REG && lhs.reg.type == NREG) {
+        check_unassigned(lhs, context);
     }
 
     if (token->end[0] != ',' && token->end[0] != '\n' && !streq(token->end + 1, "=[]")) {

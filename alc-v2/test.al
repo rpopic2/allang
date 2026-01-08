@@ -58,3 +58,10 @@ fn_assign: (=>)
     Num_Printed :: printf "hello" => =
     Test :: = 3
     ret Num_Printed
+
+reg_off: (=>)
+    [X] ::
+        ^X
+        4 =[^X]
+        4 =[]
+    Y :: = 3
