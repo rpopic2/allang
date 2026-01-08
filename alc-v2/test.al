@@ -53,3 +53,8 @@ branch_merger: (X, Y => A)
     <<
     printf " end\n" =>
     ret X + Y
+
+fn_assign: (=>)
+    Num_Printed :: printf "hello" => =
+    Test :: = 3
+    ret Num_Printed

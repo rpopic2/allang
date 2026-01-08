@@ -56,9 +56,9 @@ retry:;
         if (src->cur[0] == '\n') {
             ++lineno;
         }
-        if (c == ',' || c == '\n' || c == ' ' || c == '\0') {
+        if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';') {
             cur_token->end = src->cur++;
-            if (c == ',')
+            if (c == ',' || c == ';')
                 src->cur++;
             break;
         }
@@ -429,7 +429,7 @@ bool stmt(parser_context *restrict context) {
         int index = context->unnamed_labels++;
         arr_int *stack = &context->deferred_unnamed_br;
         int *target;
-        if (arr_int_empty(stack)) {
+        if (arr_int_is_empty(stack)) {
             target = stack->data;
         } else {
             target = stack->cur - 1;
@@ -489,8 +489,6 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 
     symbol_t symbol = (symbol_t) {
         .name = label,
-        .airity = 0,
-        .is_fn = false,
     };
     if (out_param_names) {
         arr_str_init(out_param_names);
@@ -515,6 +513,8 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                     symbol.airity += 1;
                     if (out_param_names)
                         arr_str_push(out_param_names, token->id);
+                } else {
+                    symbol.ret_airity += 1;
                 }
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
@@ -587,6 +587,16 @@ bool directives(parser_context *context) {
     return true;
 }
 
+target *stmt_assign(parser_context *context) {
+    const token_t *token = &context->cur_token;
+    target *cur_target = arr_target_top(&context->targets);
+    if (cur_target == NULL || cur_target->reg->type != NREG) {
+        compile_err(token, "nothing to assign\n");
+        return NULL;
+    }
+    return cur_target;
+}
+
 void parse(parser_context *context) {
     const token_t *token = &context->cur_token;
     str *token_str = &(str){.data = token->data, .end = token->end};
@@ -606,11 +616,9 @@ void parse(parser_context *context) {
         emit_str_fp(src, cur_target->reg->offset);
         cur_target->target_assigned = true;
     } else if (str_eq_lit(token_str, "=")) {
-        target *cur_target = arr_target_top(&context->targets);
-        if (cur_target == NULL || cur_target->reg->type != NREG) {
-            compile_err(token, "nothing to assign\n");
+        target *cur_target = stmt_assign(context);
+        if (!cur_target)
             return;
-        }
         context->reg = *cur_target->reg;
         cur_target->target_assigned = true;
     } else if (str_eq_lit(token_str, "ret")) {
@@ -641,6 +649,18 @@ void parse(parser_context *context) {
                 compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
             }
             emit_fn_call(&fn_name);
+
+            if (token_str->end[1] == '=') {
+                target *t = stmt_assign(context);
+                if (t) {
+                    emit_mov_reg(*t->reg, (reg_t){RET, 0});
+                }
+                lex(context);
+                char end = context->cur_token.end[0];
+                if (end != '\n' && end != ';') {
+                    compile_err(&context->cur_token, "expected end of line or ';' after function result assignment");
+                }
+            }
         }
         context->reg.offset = 0;
         context->reg.type = SCRATCH;

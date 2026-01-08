@@ -26,13 +26,13 @@ static inline void arr_##T##_pop(arr_##T *arr) { \
     arr->cur--; \
 } \
  \
-static inline T *arr_##T##_top(arr_##T *arr) { \
+static inline T *arr_##T##_top(const arr_##T *arr) { \
     if (arr->cur == arr->data) \
         return 0; \
     return arr->cur - 1; \
 } \
  \
-static inline bool arr_##T##_empty(arr_##T *arr) { \
+static inline bool arr_##T##_is_empty(const arr_##T *arr) { \
     return arr->cur == arr->data; \
 } \
 
@@ -65,7 +65,7 @@ static inline void arr_##T##p_pop(arr_##T##p *arr) { \
     arr->cur--; \
 } \
  \
-static inline T *arr_##T##p_top(arr_##T##p *arr) { \
+static inline T *arr_##T##p_top(const arr_##T##p *arr) { \
     if (arr->cur == arr->data) \
         return 0; \
     return arr->cur[-1]; \
