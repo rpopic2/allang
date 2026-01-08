@@ -40,8 +40,12 @@ foo: (X, Y => A)
     ret X + Y
 
 
-foo2: (X, Y => A)
+branch_merger: (X, Y => A)
+    X is 3 ->
+        3
+        ^X is 9 ->
+            9
+        30303
+    3030
+    printf " end\n" =>
     ret X + Y
-
-hi: (=> A)
-    ret "hi"

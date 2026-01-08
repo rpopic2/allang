@@ -31,6 +31,11 @@ static inline T *arr_##T##_top(arr_##T *arr) { \
         return 0; \
     return arr->cur - 1; \
 } \
+ \
+static inline bool arr_##T##_empty(arr_##T *arr) { \
+    return arr->cur == arr->data; \
+} \
+
 
 
 #define ARR_GENERICP(T, SIZE) \

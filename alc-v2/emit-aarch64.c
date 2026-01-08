@@ -177,9 +177,9 @@ void put_label(str fn_name, str label, int index) {
     }
 }
 
-void emit_branch(str fn_name, str label) {
+void emit_branch(str fn_name, str label, int index) {
     buf_puts(fn_buf, &STR_FROM("\tb "));
-    put_label(fn_name, label, 0);
+    put_label(fn_name, label, index);
     buf_puts(fn_buf, &STR_FROM("\n"));
 }
 

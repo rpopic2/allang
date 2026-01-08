@@ -422,6 +422,32 @@ bool expr_line(parser_context *context) {
 bool stmt(parser_context *restrict context) {
     token_t _token = context->cur_token;
     token_t *token = &_token;
+
+    if (streq(token->data, ">>")) {
+        printf("branch merge start\n");
+
+        int index = context->unnamed_labels++;
+        arr_int *stack = &context->deferred_unnamed_br;
+        int *target;
+        if (arr_int_empty(stack)) {
+            target = stack->data;
+        } else {
+            target = stack->cur - 1;
+        }
+        *target = index;
+        emit_branch(context->name, STR_FROM("unnamed"), index);
+        return true;
+    } else if (streq(token->data, "<<")) {
+        printf("branch merge end\n");
+        int index = *context->deferred_unnamed_br.cur;
+        if (index == DEFERRED_NONE) {
+            compile_err(token, "unmatched branch merger. expected >> before <<\n");
+            return true;
+        }
+        emit_label(context->name, STR_FROM("unnamed"), index);
+        return true;
+    }
+
     if (!streq(token->end, " ::")) {
         return false;
     }
@@ -595,7 +621,7 @@ void parse(parser_context *context) {
             context->ended = true;
         } else {
             context->has_branched_ret = true;
-            emit_branch(context->name, STR_FROM("ret"));
+            emit_branch(context->name, STR_FROM("ret"), 0);
             printf("mid ret\n");
         }
     } else if (str_ends_with(token_str, "=>")) {
@@ -621,7 +647,7 @@ void parse(parser_context *context) {
         context->calls_fn = true;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         if (streq(token->end - 2, "->")) {
-            emit_branch(context->name, (str){.data = token->data, .end = token->end - 2});
+            emit_branch(context->name, (str){.data = token->data, .end = token->end - 2}, 0);
         } else if (streq(token->end - 1, ":")) {
 			stmt_label(context);
 
@@ -637,14 +663,25 @@ void parse(parser_context *context) {
     }
 }
 
+void start_of_block(parser_context *context) {
+    printd("\nstart of a block\n");
+    arr_mini_hashset_push(&local_ids);
+    arr_int_push(&context->deferred_unnamed_br, DEFERRED_NONE);
+}
+
+void end_of_block(parser_context *context) {
+    arr_mini_hashset_pop(&local_ids);
+    arr_int_pop(&context->deferred_unnamed_br);
+    printd("end of a block\n\n");
+}
+
 void parse_block(parser_context *context) {
     const token_t *cur_token = &context->cur_token;
     int start_indent = cur_token->indent;
     bool check_start = true;
     while (true) {
         if (cur_token->eob == SOB) {
-            printd("\nstart of a block\n"), str_print(&cur_token->id);
-            arr_mini_hashset_push(&local_ids);
+            start_of_block(context);
         }
 
         lex(context);
@@ -675,6 +712,7 @@ void function(iter *src, FILE *object_file) {
         .reg = (reg_t) {.type = SCRATCH, .offset = 0 },
         .name = str_null,
     };
+    arr_int_init(&context->deferred_unnamed_br);
     if (src->cur == src->start) {
         context->name = STR_FROM("main");
         emit_fn(context->name);
@@ -692,8 +730,7 @@ void function(iter *src, FILE *object_file) {
         parse(context);
 
         if (cur_token->eob == SOB) {
-            printd("\nstart of a block\n");
-            arr_mini_hashset_push(&local_ids);
+            start_of_block(context);
         } else if (cur_token->eob == EOB) {
             target *cur_target = arr_target_top(&context->targets);
             if (cur_target && !cur_target->target_assigned) {
@@ -704,8 +741,7 @@ void function(iter *src, FILE *object_file) {
             }
 
             arr_target_pop(&context->targets);
-            arr_mini_hashset_pop(&local_ids);
-            printd("end of a block\n\n");
+            end_of_block(context);
         }
 
         if (context->ended) {

@@ -34,7 +34,9 @@ typedef struct {
     bool target_assigned;
 } target;
 
-ARR_GENERIC(target, 10)
+#define MAX_BLOCK_DEPTH 10
+ARR_GENERIC(target, MAX_BLOCK_DEPTH)
+ARR_GENERIC(int, MAX_BLOCK_DEPTH)
 
 typedef struct {
     iter *src;
@@ -50,7 +52,9 @@ typedef struct {
     str name;
     token_t cur_token;
     arr_target targets;
+    arr_int deferred_unnamed_br;
 } parser_context;
+#define DEFERRED_NONE -1
 
 #define PARAMS_MAX 16
 ARR_GENERIC(str, PARAMS_MAX)
@@ -92,7 +96,7 @@ void emit_string_lit(register_dst reg_dst, int regidx, const str *s);
 void emit_str_fp(reg_t src, int offset);
 void emit_ldr_fp(reg_t dst, int offset);
 
-void emit_branch(str fn_name, str label);
+void emit_branch(str fn_name, str label, int index);
 bool emit_branch_cond(cond condition, str fn_name, str label, int index);
 void emit_label(str fn_name, str label, int index);
 void emit_fn_prologue_epilogue(const parser_context *context);
