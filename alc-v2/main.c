@@ -273,7 +273,7 @@ void load_store_offset(bool store, reg_t target, str s, parser_context *context)
         if (offset_regable.tag == VALUE) {
 
         } else if (offset_regable.tag == REG && offset_regable.reg.type == NREG) {
-            printf("reg offset\n");
+
         } else {
             compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
         }
@@ -388,14 +388,14 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             jump_target.end -= 2;
             emit_branch_cond(COND_EQ, context->name, jump_target.id, 0);
         } else if (streq(rhs_token.end + 1, "->")) {
-            printf("unnamed cond b\n");
+            // printf("unnamed cond b\n");
             str name = STR_FROM("lbb");
             int index = context->unnamed_labels++;
             emit_branch_cond(COND_EQ, context->name, name, index);
             lex(context);
             parse_block(context);
             emit_label(context->name, name, index);
-            printf("end unnamed cond b\n");
+            // printf("end unnamed cond b\n");
         }
     } else {
         compile_err(&op_token, "unknown operator "), str_print((str *)&op_token);
@@ -474,7 +474,6 @@ bool stmt(parser_context *restrict context) {
     token_t *token = &_token;
 
     if (str_eq_lit(&token->id, "ret")) {
-        printf("ret stmt\n");
         context->reg.type = RET;
         int arg_count = 0;
         if (context->cur_token.end[0] != '\n') {
@@ -495,8 +494,6 @@ bool stmt(parser_context *restrict context) {
         emit_branch(context->symbol->name, STR_FROM("ret"), 0);
         return true;
     } else if (streq(token->data, ">>")) {
-        printf("branch merge start\n");
-
         int index = context->unnamed_labels++;
         arr_int *stack = &context->deferred_unnamed_br;
         int *target;
@@ -509,7 +506,6 @@ bool stmt(parser_context *restrict context) {
         emit_branch(context->name, STR_FROM("unnamed"), index);
         return true;
     } else if (streq(token->data, "<<")) {
-        printf("branch merge end\n");
         int index = *context->deferred_unnamed_br.cur;
         if (index == DEFERRED_NONE) {
             compile_err(token, "unmatched branch merger. expected >> before <<\n");
@@ -528,7 +524,6 @@ bool stmt(parser_context *restrict context) {
         if (context->cur_token.end[0] != '\n') {
             context->reg.type = NREG;
         }
-        printf("decl nreg\n");
         reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){NREG, context->nreg_count});
         context->reg.offset = context->nreg_count++;
         arr_target_push(&context->targets, (target){.reg = reg});
@@ -542,7 +537,6 @@ bool stmt(parser_context *restrict context) {
         context->reg.type = SCRATCH;
         context->stack_size += sizeof (i32);
         int offset = context->stack_size;
-        printf("decl stack\n");
         reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){STACK, offset});
         arr_target_push(&context->targets, (target){.reg = reg});
 
@@ -649,7 +643,6 @@ bool directives(parser_context *context) {
 
     str token_str = { .data = token->id.data + 1, .end = token->id.end };
     if (str_eq_lit(&token_str, "declare")) {
-        printf("declare directive\n");
         lex(context);
         symbol_t *symbol = label_meta(context, NULL);
         if (symbol == NULL) {
@@ -796,7 +789,6 @@ void parse_block(parser_context *context) {
         parse(context);
 
         if (cur_token->eob == EOB) {
-            printf("start %d, cur %d\n", start_indent, cur_token->indent);
             if (cur_token->indent == start_indent + 4) {
                 printd("end of a block\n\n");
                 return;
@@ -807,7 +799,7 @@ void parse_block(parser_context *context) {
 }
 
 void function(iter *src, FILE *object_file) {
-    printf("\nstart of fn\n");
+    printd("\nstart of fn\n");
     emit_reset_fn();
     arr_mini_hashset_init(&local_ids);
 
@@ -836,7 +828,6 @@ void function(iter *src, FILE *object_file) {
         stmt_label(context);
     }
     context->indent = context->cur_token.indent;
-    printf("fn indent: %d", context->indent);
 
     while (src->cur < src->end) {
         lex(context);
@@ -872,7 +863,7 @@ void function(iter *src, FILE *object_file) {
     emit_fn_prologue_epilogue(context);
     emit_ret();
     emit_fnbuf(object_file);
-    printf("end of fn\n");
+    printd("end of fn\n");
 }
 
 int main(int argc, const char *argv[]) {
