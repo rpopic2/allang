@@ -401,6 +401,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 bool expr(parser_context *context) {
     token_t _token = context->cur_token;
     token_t *token = &_token;
+
     if (token->data[0] == '"') {
         literal_string(context, token);
         return true;
@@ -439,6 +440,8 @@ bool expr(parser_context *context) {
 
 int expr_line(parser_context *context) {
     token_t *token = &context->cur_token;
+    if (token->data == NULL)
+        return 0;
     bool ok = expr(context);
     if (!ok)
         return 0;
@@ -466,7 +469,30 @@ bool stmt(parser_context *restrict context) {
     token_t _token = context->cur_token;
     token_t *token = &_token;
 
-    if (streq(token->data, ">>")) {
+    if (str_eq_lit(&token->id, "ret")) {
+        printf("ret stmt\n");
+        context->reg.type = RET;
+        int arg_count = 0;
+        if (context->cur_token.end[0] != '\n') {
+            lex(context);
+            arg_count = expr_line(context);
+        }
+        if (do_airity_check && arg_count != context->symbol->ret_airity) {
+            compile_err(token, "expected to return %d values, but found %d\n",
+                    context->symbol->ret_airity, arg_count);
+        }
+        if (context->cur_token.data == NULL) {
+            context->ended = true;
+            return true;
+        }
+        if (context->indent == context->cur_token.indent) {
+            context->ended = true;
+        } else {
+            context->has_branched_ret = true;
+            emit_branch(context->symbol->name, STR_FROM("ret"), 0);
+        }
+        return true;
+    } else if (streq(token->data, ">>")) {
         printf("branch merge start\n");
 
         int index = context->unnamed_labels++;
@@ -665,21 +691,7 @@ void parse(parser_context *context) {
             return;
         context->reg = *cur_target->reg;
         cur_target->target_assigned = true;
-    } else if (str_eq_lit(token_str, "ret")) {
-        context->reg.type = RET;
-        lex(context);
-        printf("ret stmt\n");
-        int arg_count = expr_line(context);
-        if (do_airity_check && arg_count != context->symbol->ret_airity) {
-            compile_err(token, "expected to return %d values, but found %d\n",
-                    context->symbol->ret_airity, arg_count);
-        }
-        if (context->indent == context->cur_token.indent) {
-            context->ended = true;
-        } else {
-            context->has_branched_ret = true;
-            emit_branch(context->symbol->name, STR_FROM("ret"), 0);
-        }
+
     } else if (str_ends_with(token_str, "=>")) {
         str fn_name = (str){token->data, token->end - 2};
         if (!str_empty(&context->deferred_fn_call) && str_empty(&fn_name)) {

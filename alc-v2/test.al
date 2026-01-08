@@ -63,7 +63,7 @@ stack_var: (=> R)
     [X] :: 3 =[]
     ret 0
 
-reg_off: (=> R)
+reg_off: (=>)
     O :: = 2
     [X] ::
         ^X
@@ -74,4 +74,4 @@ reg_off: (=> R)
     [Y, 1]
     [Y, O]
     3 =[Y]
-    ret 0
+    ret
