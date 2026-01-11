@@ -445,7 +445,7 @@ bool expr(parser_context *context) {
         check_unassigned(lhs, context);
     }
 
-    if (token->end[0] != ',' && token->end[0] != '\n' && !streq(token->end + 1, "=[]")) {
+    if (token->end[0] != ',' && token->end[0] != '\n' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>")) {
         binary_op(&lhs, context);
     } else {
         if (lhs.tag == VALUE) {
@@ -731,12 +731,61 @@ target *stmt_assign(parser_context *context) {
     return cur_target;
 }
 
+bool expr_call(parser_context *context) {
+    const token_t *token = &context->cur_token;
+    const str *token_str = &token->id;
+
+    if (!str_eq_lit(token_str, "=>")) {
+        printf("not fn call\n");
+        return false;
+    }
+
+    str fn_name = (str){token->data, token->end - 2};
+    if (!str_empty(&context->deferred_fn_call) && str_empty(&fn_name)) {
+        fn_name = str_move(&context->deferred_fn_call);
+    } else {
+        compile_err(token, "empty function name");
+    }
+    hashentry_symbol_t *entry = hashmap_symbol_t_tryfind(fn_ids, fn_name);
+    if (entry == NULL) {
+        compile_err(token, "trying to call undefined function "), str_printerr(fn_name);
+    } else {
+        symbol_t *s = &entry->value;
+        int arg_counts = context->reg.offset;
+        if (do_airity_check && arg_counts != s->airity) {
+            compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
+        }
+        emit_fn_call(&fn_name);
+
+        if (token_str->end[1] == '=') {
+            target *t = stmt_assign(context);
+            if (do_airity_check && s->ret_airity != 1) {
+                compile_err(&context->cur_token, "function must return single value to be assigned\n");
+            }
+            if (t) {
+                emit_mov_reg(*t->reg, (reg_t){RET, 0});
+            }
+            lex(context);
+            char end = context->cur_token.end[0];
+            if (end != '\n' && end != ';') {
+                compile_err(&context->cur_token, "expected end of line or ';' after function result assignment");
+            }
+        }
+    }
+    context->reg.offset = 0;
+    context->reg.type = SCRATCH;
+    context->calls_fn = true;
+    return true;
+}
+
 void parse(parser_context *context) {
     const token_t *token = &context->cur_token;
-    str *token_str = &(str){.data = token->data, .end = token->end};
+    const str *token_str = &token->id;
     if (directives(context)) {
 
     } else if (stmt(context)) {
+
+    } else if (expr_call(context)) {
 
     } else if (expr_line(context)) {
 
@@ -761,42 +810,6 @@ void parse(parser_context *context) {
         context->reg = *cur_target->reg;
         cur_target->target_assigned = true;
 
-    } else if (str_ends_with(token_str, "=>")) {
-        str fn_name = (str){token->data, token->end - 2};
-        if (!str_empty(&context->deferred_fn_call) && str_empty(&fn_name)) {
-            fn_name = str_move(&context->deferred_fn_call);
-        } else {
-            compile_err(token, "empty function name");
-        }
-        hashentry_symbol_t *entry = hashmap_symbol_t_tryfind(fn_ids, fn_name);
-        if (entry == NULL) {
-            compile_err(token, "trying to call undefined function "), str_printerr(fn_name);
-        } else {
-            symbol_t *s = &entry->value;
-            int arg_counts = context->reg.offset;
-            if (do_airity_check && arg_counts != s->airity) {
-                compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
-            }
-            emit_fn_call(&fn_name);
-
-            if (token_str->end[1] == '=') {
-                target *t = stmt_assign(context);
-                if (do_airity_check && s->ret_airity != 1) {
-                    compile_err(&context->cur_token, "function must return single value to be assigned\n");
-                }
-                if (t) {
-                    emit_mov_reg(*t->reg, (reg_t){RET, 0});
-                }
-                lex(context);
-                char end = context->cur_token.end[0];
-                if (end != '\n' && end != ';') {
-                    compile_err(&context->cur_token, "expected end of line or ';' after function result assignment");
-                }
-            }
-        }
-        context->reg.offset = 0;
-        context->reg.type = SCRATCH;
-        context->calls_fn = true;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         if (streq(token->end - 2, "->")) {
             emit_branch(context->symbol->name, (str){.data = token->data, .end = token->end - 2}, 0);
