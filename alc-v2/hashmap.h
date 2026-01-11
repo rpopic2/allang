@@ -2,9 +2,10 @@
 
 #include "str.h"
 int hashmap_hash(str id) {
-    int index = id.data[0] - 'A';
+    int index = id.data[0];
     int end = id.end[-1];
-    return index^end;
+    int len = (int)str_len(id);
+    return index ^ end ^ len;
 }
 
 #define HASHMAP_GENERIC(T, array_len) \

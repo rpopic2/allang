@@ -960,20 +960,6 @@ void register_fund_types(void) {
         hashmap_type_t_overwrite(types, name, &s);
         printd("reg type "), str_print(&name);
     }
-    // const char *names[2] = {"u%zd", "i%zd"};
-    // for (int i = 0; i < 2; ++i) {
-    //     for (size_t size = 8; size <= 128; size *= 2) {
-    //         char *buf = malloc(5);
-    //         int len = snprintf(buf, 5, names[i], size);
-    //         str name = { .data = buf, .end = buf + len };
-    //         type_t s = {
-    //             .name = name,
-    //             .size = size,
-    //         };
-    //         hashmap_type_t_overwrite(struct_ids, name, &s);
-    //         printd("reg type "), str_print(&name);
-    //     }
-    // }
 }
 
 int main(int argc, const char *argv[]) {
