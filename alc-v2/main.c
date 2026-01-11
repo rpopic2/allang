@@ -25,18 +25,22 @@ bool do_airity_check = true;
 
 // #define array_len ('Z' - 'A' + 1)
 
-DYN_GENERIC(struct_t)
-typedef struct _struct_t {
+
+typedef struct _type_t type_t;
+
+DYN_GENERIC(type_t)
+
+typedef struct _type_t {
     str name;
     size_t size;
     dyn_T members;
-} struct_t;
+} type_t;
 
 HASHMAP_GENERIC(symbol_t, 100)
-HASHMAP_GENERIC(struct_t, 100)
+HASHMAP_GENERIC(type_t, 100)
 
 hashmap_symbol_t fn_ids;
-hashmap_struct_t struct_ids;
+hashmap_type_t types;
 
 
 inline static bool is_id(char c) {
@@ -496,11 +500,11 @@ bool expect(parser_context *context, str expected) {
 }
 
 void stmt_struct(parser_context *context) {
-    struct_t _s = {
+    type_t _s = {
         .name = context->symbol->name,
     };
     printf("struct "),str_print(&context->symbol->name);
-    struct_t *s = hashmap_struct_t_tryadd(struct_ids, _s.name, &_s);
+    type_t *s = hashmap_type_t_tryadd(types, _s.name, &_s);
     if (!s) {
         s = &_s;
         compile_err(&context->cur_token, "struct with same name already exist: "), str_printerr(s->name);
@@ -634,7 +638,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                     symbol.ret_airity += 1;
                 }
             } else if (islower(cur_token->data[0])) {
-                hashentry_struct_t *s = hashmap_struct_t_tryfind(struct_ids, cur_token->id);
+                hashentry_type_t *s = hashmap_type_t_tryfind(types, cur_token->id);
                 if (!s) {
                     compile_err(cur_token, "unknown type "), str_printerr(cur_token->id);
                 }
@@ -949,11 +953,11 @@ void register_fund_types(void) {
     size_t fund_types_count = sizeof fund_type_names / sizeof (char *);
     for (size_t i = 0; i < fund_types_count; ++i) {
         str name = STR_FROM(fund_type_names[i]);
-        struct_t s = {
+        type_t s = {
             .name = name,
             .size = fund_type_sizes[i],
         };
-        hashmap_struct_t_overwrite(struct_ids, name, &s);
+        hashmap_type_t_overwrite(types, name, &s);
         printd("reg type "), str_print(&name);
     }
     // const char *names[2] = {"u%zd", "i%zd"};
@@ -962,11 +966,11 @@ void register_fund_types(void) {
     //         char *buf = malloc(5);
     //         int len = snprintf(buf, 5, names[i], size);
     //         str name = { .data = buf, .end = buf + len };
-    //         struct_t s = {
+    //         type_t s = {
     //             .name = name,
     //             .size = size,
     //         };
-    //         hashmap_struct_t_overwrite(struct_ids, name, &s);
+    //         hashmap_type_t_overwrite(struct_ids, name, &s);
     //         printd("reg type "), str_print(&name);
     //     }
     // }

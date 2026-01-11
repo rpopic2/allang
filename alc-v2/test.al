@@ -36,7 +36,7 @@ I, 3, [I], [J]
 "hi", "ok"
 ret false
 
-foo: (X, Y => A)
+foo: (X i32, Y i32 => A i32)
     ret X + Y
 
 
