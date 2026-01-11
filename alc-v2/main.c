@@ -1,16 +1,17 @@
-#include <inttypes.h>
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "err.h"
-#include "str.h"
+#include "dyn.h"
 #include "emit.h"
-#include "opt.h"
-#include "mini_hashset.h"
+#include "err.h"
 #include "hashmap.h"
+#include "mini_hashset.h"
+#include "opt.h"
+#include "str.h"
 
 void parse_block(parser_context *context);
 
