@@ -551,19 +551,41 @@ void stmt_struct(parser_context *context) {
     printf("sturct size was: %zd\n", s->size);
 }
 
+target *get_current_target(parser_context *context) {
+    const token_t *token = &context->cur_token;
+    target *cur_target = arr_target_top(&context->targets);
+    if (cur_target == NULL || cur_target->reg->type != NREG) {
+        compile_err(token, "nothing to assign\n");
+        return NULL;
+    }
+    return cur_target;
+}
+
+
 bool stmt_stack_store(parser_context *context) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
     if (!str_eq_lit(token_str, "=[]")) {
         return false;
     }
-    printf("store\n");
+
     target *cur_target = arr_target_top(&context->targets);
     if (cur_target == NULL || cur_target->reg->type != STACK) {
         compile_err(token, "nothing to store to\n");
-        return true;
     }
-    emit_str(context->reg, (reg_t){.type = FRAME }, cur_target->reg->offset);
+    if (!cur_target)
+        return true;
+
+    reg_t src = context->reg;
+    src.offset -= 1;
+
+
+    context->stack_size += context->reg.size;
+    int offset = context->stack_size;
+    cur_target->reg->offset = offset;
+    cur_target->reg->size = src.size;
+    cur_target->reg->sign = src.sign;
+    emit_str(src, (reg_t){.type = FRAME }, cur_target->reg->offset);
     cur_target->target_assigned = true;
 
     if (context->cur_token.end[0] == '\n') {
@@ -653,22 +675,24 @@ bool stmt(parser_context *context) {
         if (token->end[0] != ']') {
             compile_err(token, "closing ']' expected(stmt)\n");
         }
+        lex(context);
         bool one_liner = context->cur_token.end[0] != '\n';
+        context->reg.type = SCRATCH;
+        reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){.type = STACK});
         if (one_liner) {
-            context->reg.type = SCRATCH;
-            lex(context);
             lex(context);
             expr_line(context);
-            context->reg.offset -= 1;
             printf("stack expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
-            context->stack_size += context->reg.size;
-            int offset = context->stack_size;
-            reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){.type = STACK, .offset = offset, .typeid = 0});
             arr_target_push(&context->targets, (target){.reg = reg});
             lex(context);
             if (!stmt_stack_store(context)) {
                 compile_err(&context->cur_token, "store statement '=[]' expected\n");
             }
+            arr_target_pop(&context->targets);
+        } else {
+            arr_target_push(&context->targets, (target){.reg = reg});
+            parse_block(context);
+            printf("stack expr size: %d, sign: %d\n", reg->size, reg->sign);
             arr_target_pop(&context->targets);
         }
         return true;
@@ -796,16 +820,6 @@ bool directives(parser_context *context) {
     return true;
 }
 
-target *stmt_assign(parser_context *context) {
-    const token_t *token = &context->cur_token;
-    target *cur_target = arr_target_top(&context->targets);
-    if (cur_target == NULL || cur_target->reg->type != NREG) {
-        compile_err(token, "nothing to assign\n");
-        return NULL;
-    }
-    return cur_target;
-}
-
 bool expr_call(parser_context *context) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
@@ -832,7 +846,7 @@ bool expr_call(parser_context *context) {
         emit_fn_call(&fn_name);
 
         if (token_str->end[1] == '=') {
-            target *t = stmt_assign(context);
+            target *t = get_current_target(context);
             if (do_airity_check && s->ret_airity != 1) {
                 compile_err(&context->cur_token, "function must return single value to be assigned\n");
             }
@@ -866,7 +880,7 @@ void parse(parser_context *context) {
     } else if (stmt_stack_store(context)) {
 
     } else if (str_eq_lit(token_str, "=")) {
-        target *cur_target = stmt_assign(context);
+        target *cur_target = get_current_target(context);
         if (!cur_target)
             return;
         context->reg = *cur_target->reg;
