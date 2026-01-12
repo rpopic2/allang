@@ -163,12 +163,14 @@ void str_printerr(str s) {
 }
 
 
-void literal_string(const parser_context *restrict context, const token_t *restrict token) {
+void literal_string(parser_context *restrict context, const token_t *restrict token) {
     bool escape = emit_need_escaping();
     if (token->end[-1] != '"') {
         compile_err(token, "expected closing \"\n");
     }
     if (!escape) {
+        context->reg.size = sizeof (char *);
+        context->reg.sign = false;
         emit_string_lit(context->reg.type, context->reg.offset, (str *)token);
         return;
     }
@@ -364,17 +366,24 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     regable rhs = read_regable(rhs_token.id, &rhs_token);
 
     context->reg.size = INT_SIZE;
+    context->reg.sign = true;
     if (lhs->tag == VALUE) {
         if (rhs.tag == REG) {
             context->reg.size = rhs.reg.size;
+            context->reg.sign = rhs.reg.sign;
         }
     } else if (lhs->tag == REG) {
         if (rhs.tag == REG) {
             if (rhs.reg.size != lhs->reg.size) {
-                compile_err(&rhs_token, "unmatched register size");
+                compile_err(&rhs_token, "unmatched register size\n");
+            }
+            printf("%d|%d\n", rhs.reg.sign, lhs->reg.sign);
+            if (rhs.reg.sign != lhs->reg.sign) {
+                compile_err(&rhs_token, "unmatched register signedness\n");
             }
         }
         context->reg.size = lhs->reg.size;
+        context->reg.sign = lhs->reg.sign;
     }
 
     if (rhs.tag == NONE) {
@@ -392,9 +401,6 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             emit_add(context->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
             emit_add_reg(context->reg, lhs->reg, rhs.reg);
-            if (lhs->reg.size != rhs.reg.size) {
-                compile_err(&rhs_token, "size was different");
-            }
         } else unreachable;
     } else if (op_token.data[0] == '-') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
@@ -467,11 +473,13 @@ bool expr(parser_context *context) {
         binary_op(&lhs, context);
     } else {
         if (lhs.tag == VALUE) {
-            context->reg.size = 4;
+            context->reg.size = INT_SIZE;
+            context->reg.sign = true;
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
             context->reg.size = nreg->size;
+            context->reg.sign = nreg->sign;
             if (nreg->type == NREG) {
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->type == STACK) {
@@ -604,9 +612,9 @@ bool stmt(parser_context *context) {
             context->reg.offset = context->nreg_count;
             lex(context);
             expr_line(context);
-            printf("size of this expr was: %d\n", context->reg.size);
+            printf("expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
         }
-        reg_t arg = {.type = NREG, .offset = context->nreg_count, .typeid = 0, .size = context->reg.size};
+        reg_t arg = {.type = NREG, .offset = context->nreg_count, .typeid = 0, .size = context->reg.size, .sign = context->reg.sign};
         reg_t *reg = overwrite_id(*local_ids.cur, token, &arg);
         context->nreg_count += 1;
         if (!one_liner) {

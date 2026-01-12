@@ -23,17 +23,19 @@ typedef int32_t i32;
 typedef int64_t i64;
 typedef ptrdiff_t isize;
 
+#define bool _Bool
+
 typedef u16 typeid_t;
 typedef u8 register_dst;
 
 typedef struct {
     register_dst type;
     u8 size;
-    int offset;
     typeid_t typeid;
+    int offset;
+    bool sign;
 } reg_t;
 
 
-#define bool _Bool
 #define unreachable (printf("unreachable %s:%s:%d\n", __FILE__, __func__, __LINE__), abort())
 
