@@ -805,9 +805,16 @@ void stmt_label(parser_context *context) {
         emit_label(outer_name, symbol->name, 0);
     }
 
+    if (arr_reg_t_len(&symbol->params) != symbol->airity) {
+        unreachable;
+    }
     for (int i = 0; i < symbol->airity; ++i) {
         reg_t arg_reg = {.type = PARAM, .offset = i};
-        reg_t r = {.type = NREG, .offset = context->nreg_count++, .typeid = 0}; // TODO type id for the argument
+        reg_t *param = &symbol->params.data[i];
+        reg_t r = {
+            .type = NREG, .offset = context->nreg_count++,
+            .size = param->size, .sign = param->sign,
+        };
         emit_mov_reg(r, arg_reg);
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {

@@ -35,6 +35,11 @@ static inline T *arr_##T##_top(const arr_##T *arr) { \
 static inline bool arr_##T##_is_empty(const arr_##T *arr) { \
     return arr->cur == arr->data; \
 } \
+static inline size_t arr_##T##_len(const arr_##T *arr) { \
+    if (arr->data > arr->cur) \
+        return 0; \
+    return (size_t)(arr->cur - arr->data); \
+} \
 
 
 
