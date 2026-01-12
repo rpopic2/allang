@@ -612,7 +612,6 @@ bool stmt(parser_context *context) {
             lex(context);
             expr_line(context);
             printf("expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
-        } else {
         }
         reg_t arg = {.type = NREG, .offset = context->nreg_count, .typeid = 0, .size = context->reg.size, .sign = context->reg.sign};
         reg_t *reg = overwrite_id(*local_ids.cur, token, &arg);
@@ -621,7 +620,7 @@ bool stmt(parser_context *context) {
             arr_target_push(&context->targets, (target){.reg = reg});
             parse_block(context);
             arr_target_pop(&context->targets);
-            printf("expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
+            printf("expr size: %d, sign: %d\n", reg->size, reg->sign);
         }
         return true;
     } else if (token->data[0] == '[') {
@@ -630,8 +629,15 @@ bool stmt(parser_context *context) {
         if (token->end[0] != ']') {
             compile_err(token, "closing ']' expected(stmt)\n");
         }
-        context->reg.type = SCRATCH;
-        context->stack_size += sizeof (i32);
+        bool one_liner = context->cur_token.end[0] != '\n';
+        if (one_liner) {
+            context->reg.type = SCRATCH;
+            lex(context);
+            lex(context);
+            expr_line(context);
+            printf("stack expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
+            context->stack_size += context->reg.size;
+        }
         int offset = context->stack_size;
         reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){.type = STACK, .offset = offset, .typeid = 0});
         arr_target_push(&context->targets, (target){.reg = reg});
@@ -848,8 +854,11 @@ void parse(parser_context *context) {
         if (!cur_target)
             return;
         context->reg = *cur_target->reg;
+        lex(context);
+        expr_line(context);
         cur_target->target_assigned = true;
-
+        cur_target->reg->size = context->reg.size;
+        cur_target->reg->sign = context->reg.sign;
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         if (streq(token->end - 2, "->")) {
             emit_branch(context->symbol->name, (str){.data = token->data, .end = token->end - 2}, 0);
