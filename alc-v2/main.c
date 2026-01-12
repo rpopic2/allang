@@ -13,6 +13,8 @@
 #include "opt.h"
 #include "str.h"
 
+#define INT_SIZE 4
+
 void parse_block(parser_context *context);
 
 OPT_GENERIC(i64)
@@ -361,6 +363,20 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t rhs_token = context->cur_token;
     regable rhs = read_regable(rhs_token.id, &rhs_token);
 
+    context->reg.size = INT_SIZE;
+    if (lhs->tag == VALUE) {
+        if (rhs.tag == REG) {
+            context->reg.size = rhs.reg.size;
+        }
+    } else if (lhs->tag == REG) {
+        if (rhs.tag == REG) {
+            if (rhs.reg.size != lhs->reg.size) {
+                compile_err(&rhs_token, "unmatched register size");
+            }
+        }
+        context->reg.size = lhs->reg.size;
+    }
+
     if (rhs.tag == NONE) {
         compile_err(&rhs_token, "expected operand, but found "), str_printerr(rhs_token.id);
         return;
@@ -376,6 +392,9 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             emit_add(context->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
             emit_add_reg(context->reg, lhs->reg, rhs.reg);
+            if (lhs->reg.size != rhs.reg.size) {
+                compile_err(&rhs_token, "size was different");
+            }
         } else unreachable;
     } else if (op_token.data[0] == '-') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
