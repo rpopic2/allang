@@ -339,6 +339,19 @@ void load_store_offset(bool store, reg_t target, str s, parser_context *context)
     return;
 }
 
+void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
+    if (rhs.size != lhs.size) {
+        compile_err(token, "unmatched register size\n");
+    }
+    if (rhs.sign != lhs.sign) {
+        if (lhs.sign) {
+            compile_err(token, "expected signed, but found unsigned\n");
+        } else {
+            compile_err(token, "expected unsigned, but found signed\n");
+        }
+    }
+}
+
 void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t lhs_token = context->cur_token;
     lex(context);
@@ -373,12 +386,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         }
     } else if (lhs->tag == REG) {
         if (rhs.tag == REG) {
-            if (rhs.reg.size != lhs->reg.size) {
-                compile_err(&rhs_token, "unmatched register size\n");
-            }
-            if (rhs.reg.sign != lhs->reg.sign) {
-                compile_err(&rhs_token, "unmatched register signedness\n");
-            }
+            reg_typecheck(&rhs_token, lhs->reg, rhs.reg);
         }
         context->reg.size = lhs->reg.size;
         context->reg.sign = lhs->reg.sign;
@@ -916,9 +924,7 @@ void fn_call(parser_context *context) {
         if (!expr(context))
             break;
         if (params_it++ < params->cur) {
-            if (params_it->size != context->reg.size) {
-                compile_err(token, "unmatched param size\n");
-            }
+            reg_typecheck(token, *params_it, context->reg);
         }
         printf("arg size: %d\n", context->reg.size);
 
@@ -1099,6 +1105,7 @@ void register_fund_types(void) {
         type_t s = {
             .name = name,
             .size = fund_type_sizes[i],
+            .sign = name.data[0] == 'u' ? false : true,
         };
         hashmap_type_t_overwrite(types, name, &s);
         printd("reg type "), str_print(&name);
