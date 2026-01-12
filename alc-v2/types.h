@@ -29,6 +29,8 @@ typedef u16 typeid_t;
 typedef u8 register_dst;
 typedef u8 reg_size;
 
+typedef struct _type_t type_t;
+
 typedef struct {
     register_dst type;
     reg_size size;
@@ -41,3 +43,4 @@ typedef struct {
 #define unreachable (printf("unreachable %s:%s:%d\n", __FILE__, __func__, __LINE__), abort())
 
 #define ALIGN_TO(expr, align) ((expr) + align - 1) & ~(align - 1);
+#define MAX_REG_SIZE 16

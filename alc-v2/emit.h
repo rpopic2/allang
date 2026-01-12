@@ -34,11 +34,14 @@ typedef struct {
     bool target_assigned;
 } target;
 
+#define MAX_PARAMS 8
+ARR_GENERIC(reg_t, MAX_PARAMS)
 typedef struct {
     str name;
     u8 airity;
     u8 ret_airity;
     bool is_fn;
+    arr_reg_t params;
 } symbol_t;
 
 #define MAX_BLOCK_DEPTH 10
@@ -56,7 +59,7 @@ typedef struct {
     bool last_line_ret;
     int indent;
     int unnamed_labels;
-    str deferred_fn_call;
+    symbol_t *deferred_fn_call;
     str name;
     token_t cur_token;
     arr_target targets;

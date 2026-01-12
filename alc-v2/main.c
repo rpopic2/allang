@@ -28,14 +28,13 @@ bool do_airity_check = true;
 // #define array_len ('Z' - 'A' + 1)
 
 
-typedef struct _type_t type_t;
-
 DYN_GENERIC(type_t)
 
 typedef struct _type_t {
     str name;
     size_t size;
     dyn_T members;
+    bool sign;
 } type_t;
 
 HASHMAP_GENERIC(symbol_t, 100, hashmap_hash)
@@ -581,7 +580,7 @@ bool stmt_stack_store(parser_context *context) {
 
     context->stack_size += context->reg.size;
     int offset = context->stack_size;
-    offset = ALIGN_TO(offset, context->reg.size);
+    offset = ALIGN_TO(offset, context->reg.size); // TODO not the real way to get align
 
     cur_target->reg->offset = offset;
     cur_target->reg->size = src.size;
@@ -711,6 +710,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
     symbol_t symbol = (symbol_t) {
         .name = label,
     };
+    arr_reg_t_init(&symbol.params);
     if (out_param_names) {
         arr_str_init(out_param_names);
     }
@@ -741,7 +741,16 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 hashentry_type_t *s = hashmap_type_t_tryfind(types, cur_token->id);
                 if (!s) {
                     compile_err(cur_token, "unknown type "), str_printerr(cur_token->id);
+                    continue;
                 }
+                type_t *type = &s->value;
+                reg_size size = (reg_size)type->size;
+                if (type->size > MAX_REG_SIZE) {
+                    compile_err(cur_token, "sizeof the type (%zd) exceeds max register size limit\n", type->size);
+                    size = MAX_REG_SIZE;
+                }
+                reg_t reg = { .size = size, .sign = type->sign, .offset = symbol.airity };
+                arr_reg_t_push(&symbol.params, reg);
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
                 symbol.is_fn = true;
@@ -828,37 +837,32 @@ bool expr_call(parser_context *context) {
     if (!str_eq_lit(token_str, "=>")) {
         return false;
     }
-
-    str fn_name = (str){token->data, token->end - 2};
-    if (!str_empty(&context->deferred_fn_call) && str_empty(&fn_name)) {
-        fn_name = str_move(&context->deferred_fn_call);
-    } else {
-        compile_err(token, "empty function name");
+    symbol_t *s = context->deferred_fn_call;
+    if (!s) {
+        compile_err(token, "nothing to call\n");
+        return true;
     }
-    hashentry_symbol_t *entry = hashmap_symbol_t_tryfind(fn_ids, fn_name);
-    if (entry == NULL) {
-        compile_err(token, "trying to call undefined function "), str_printerr(fn_name);
-    } else {
-        symbol_t *s = &entry->value;
-        int arg_counts = context->reg.offset;
-        if (do_airity_check && arg_counts != s->airity) {
-            compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
-        }
-        emit_fn_call(&fn_name);
 
-        if (token_str->end[1] == '=') {
-            target *t = get_current_target(context);
-            if (do_airity_check && s->ret_airity != 1) {
-                compile_err(&context->cur_token, "function must return single value to be assigned\n");
-            }
-            if (t) {
-                emit_mov_reg(*t->reg, (reg_t){RET, 0, .typeid = 0});// TODO typeid should be the return type of the fn
-            }
-            lex(context);
-            char end = context->cur_token.end[0];
-            if (end != '\n' && end != ';') {
-                compile_err(&context->cur_token, "expected end of line or ';' after function result assignment");
-            }
+    str fn_name = s->name;
+
+    int arg_counts = context->reg.offset;
+    if (do_airity_check && arg_counts != s->airity) {
+        compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
+    }
+    emit_fn_call(&fn_name);
+
+    if (token_str->end[1] == '=') {
+        target *t = get_current_target(context);
+        if (do_airity_check && s->ret_airity != 1) {
+            compile_err(&context->cur_token, "function must return single value to be assigned\n");
+        }
+        if (t) {
+            emit_mov_reg(*t->reg, (reg_t){RET, 0, .typeid = 0});// TODO typeid should be the return type of the fn
+        }
+        lex(context);
+        char end = context->cur_token.end[0];
+        if (end != '\n' && end != ';') {
+            compile_err(&context->cur_token, "expected end of line or ';' after function result assignment");
         }
     }
     context->reg.offset = 0;
@@ -867,47 +871,93 @@ bool expr_call(parser_context *context) {
     return true;
 }
 
-void parse(parser_context *context) {
+bool stmt_reg_assign(parser_context *context) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
+
+    if (!str_eq_lit(token_str, "=")) {
+        return false;
+    }
+    target *cur_target = get_current_target(context);
+    if (!cur_target)
+        return false;
+    context->reg = *cur_target->reg;
+    lex(context);
+    expr_line(context);
+    cur_target->target_assigned = true;
+    cur_target->reg->size = context->reg.size;
+    cur_target->reg->sign = context->reg.sign;
+    return true;
+}
+
+void fn_call(parser_context *context) {
+    const token_t *token = &context->cur_token;
+    const str token_str = token->id;
+    hashentry_symbol_t *target = hashmap_symbol_t_tryfind(fn_ids, token_str);
+    if (!target) {
+        compile_err(token, "trying to use undefined function "), str_printerr(token->id);
+        return;
+    }
+    symbol_t *symbol = &target->value;
+    context->deferred_fn_call = &target->value;
+
+    bool multiline = token_str.end[0] == '\n';
+    if (multiline) {
+        return;
+    }
+    printf("single\n");
+
+    arr_reg_t *params = &symbol->params;
+    reg_t *params_it = params->data;
+    context->reg.type = PARAM;
+    context->reg.offset = 0;
+    do {
+        lex(context);
+        if (!expr(context))
+            break;
+        if (params_it++ < params->cur) {
+            if (params_it->size != context->reg.size) {
+                compile_err(token, "unmatched param size\n");
+            }
+        }
+        printf("arg size: %d\n", context->reg.size);
+
+        context->reg.offset++;
+    } while (token->end[0] == ',' && isspace(token->end[1]));
+
+    printf("found %d args\n", context->reg.offset);
+
+    if (context->reg.offset > 0)
+        lex(context);
+    if (!expr_call(context)) {
+        compile_err(token, "function call '=>' is expected\n");
+    }
+}
+
+void parse(parser_context *context) {
+    const token_t *token = &context->cur_token;
     if (directives(context)) {
 
     } else if (stmt(context)) {
-
-    } else if (expr_call(context)) {
 
     } else if (expr_line(context)) {
 
     } else if (stmt_stack_store(context)) {
 
-    } else if (str_eq_lit(token_str, "=")) {
-        target *cur_target = get_current_target(context);
-        if (!cur_target)
-            return;
-        context->reg = *cur_target->reg;
-        lex(context);
-        expr_line(context);
-        cur_target->target_assigned = true;
-        cur_target->reg->size = context->reg.size;
-        cur_target->reg->sign = context->reg.sign;
+    } else if (stmt_reg_assign(context)) {
+
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         if (streq(token->end - 2, "->")) {
-            emit_branch(context->symbol->name, (str){.data = token->data, .end = token->end - 2}, 0);
+            str label = {.data = token->data, .end = token->end - 2};
+            emit_branch(context->symbol->name, label, 0);
         } else if (streq(token->end - 1, ":")) {
 			stmt_label(context);
-
-            // context->indent = indent;
         } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
-            context->reg.type = PARAM;
-            context->deferred_fn_call = token->id;
-            if (!hashmap_symbol_t_tryfind(fn_ids, token->id)) {
-                goto err;
-            }
+            fn_call(context);
         } else {
-            goto err;
+            compile_err(token, "trying to reference undefined label\n");
         }
     } else {
-err:
         compile_err(token, "unexpected token "), str_printerr(token->id);
     }
 }
@@ -1038,8 +1088,8 @@ const char *fund_type_names[] = {
     "i8", "i16", "i32", "i64", "i128", "isize",
 };
 const size_t fund_type_sizes[] = {
-    8, 16, 32, 64, 128, sizeof (void *),
-    8, 16, 32, 64, 128, sizeof (void *),
+    1, 2, 4, 8, 16, sizeof (void *),
+    1, 2, 4, 8, 16, sizeof (void *),
 };
 
 void register_fund_types(void) {
