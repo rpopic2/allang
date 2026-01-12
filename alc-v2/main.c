@@ -694,6 +694,9 @@ bool stmt(parser_context *context) {
         if (token->end[0] != ']') {
             compile_err(token, "closing ']' expected(stmt)\n");
         }
+        if (!isupper(token->data[0])) {
+            compile_err(token, "name of stack objects must start with uppercase\n");
+        }
         lex(context);
         bool one_liner = context->cur_token.end[0] != '\n';
         context->reg.type = SCRATCH;
