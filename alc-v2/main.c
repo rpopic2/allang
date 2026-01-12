@@ -419,8 +419,8 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             if (context->reg.type == SCRATCH) {
                 tmp_reg_off += 1;
             }
-            emit_mov((reg_t){.type = SCRATCH, .offset = tmp_reg_off, .typeid = 0}, lhs->value);
-            emit_sub_reg(context->reg, (reg_t){.type = SCRATCH, .offset = tmp_reg_off, .typeid = 0}, rhs.reg);
+            emit_mov((reg_t){.type = SCRATCH, .offset = tmp_reg_off}, lhs->value);
+            emit_sub_reg(context->reg, (reg_t){.type = SCRATCH, .offset = tmp_reg_off}, rhs.reg);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
             emit_sub(context->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
@@ -670,7 +670,10 @@ bool stmt(parser_context *context) {
             expr_line(context);
             printf("expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
         }
-        reg_t arg = {.type = NREG, .offset = context->nreg_count, .typeid = 0, .size = context->reg.size, .sign = context->reg.sign};
+        reg_t arg = {
+            .type = NREG, .offset = context->nreg_count,
+            .size = context->reg.size, .sign = context->reg.sign
+        };
         reg_t *reg = overwrite_id(*local_ids.cur, token, &arg);
         context->nreg_count += 1;
         if (!one_liner) {
@@ -885,7 +888,7 @@ bool expr_call(parser_context *context) {
             compile_err(&context->cur_token, "function must return single value to be assigned\n");
         }
         if (t) {
-            emit_mov_reg(*t->reg, (reg_t){RET, 0, .typeid = 0});// TODO typeid should be the return type of the fn
+            emit_mov_reg(*t->reg, (reg_t){.type = RET});
         }
         lex(context);
         char end = context->cur_token.end[0];

@@ -25,7 +25,6 @@ typedef ptrdiff_t isize;
 
 #define bool _Bool
 
-typedef u16 typeid_t;
 typedef u8 register_dst;
 typedef u8 reg_size;
 
@@ -34,9 +33,9 @@ typedef struct _type_t type_t;
 typedef struct {
     register_dst type;
     reg_size size;
-    typeid_t typeid;
     int offset;
     bool sign;
+    u8 addr;
 } reg_t;
 
 
