@@ -245,7 +245,7 @@ typedef struct {
         reg_t reg;
     };
 } regable;
-static const reg_t FP = (reg_t){ .type = FRAME };
+static const reg_t FP = (reg_t){ .type = FRAME, .size = sizeof (void *) };
 
 regable read_regable(str s, const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE};
@@ -477,11 +477,13 @@ bool expr(parser_context *context) {
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
-            context->reg.size = nreg->size;
-            context->reg.sign = nreg->sign;
             if (nreg->type == NREG) {
+                context->reg.size = nreg->size;
+                context->reg.sign = nreg->sign;
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->type == STACK) {
+                context->reg.size = sizeof (void *);
+                context->reg.sign = false;
                 emit_sub(context->reg, FP, nreg->offset);
             } else {
                 unreachable;
@@ -547,6 +549,28 @@ void stmt_struct(parser_context *context) {
         lex(context);
     }
     printf("sturct size was: %zd\n", s->size);
+}
+
+bool stmt_stack_store(parser_context *context) {
+    const token_t *token = &context->cur_token;
+    const str *token_str = &token->id;
+    if (!str_eq_lit(token_str, "=[]")) {
+        return false;
+    }
+    printf("store\n");
+    target *cur_target = arr_target_top(&context->targets);
+    if (cur_target == NULL || cur_target->reg->type != STACK) {
+        compile_err(token, "nothing to store to\n");
+        return true;
+    }
+    emit_str(context->reg, (reg_t){.type = FRAME }, cur_target->reg->offset);
+    cur_target->target_assigned = true;
+
+    if (context->cur_token.end[0] == '\n') {
+        context->reg.offset = 0;
+        context->reg.type = SCRATCH;
+    }
+    return true;
 }
 
 bool stmt(parser_context *context) {
@@ -635,14 +659,18 @@ bool stmt(parser_context *context) {
             lex(context);
             lex(context);
             expr_line(context);
+            context->reg.offset -= 1;
             printf("stack expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
             context->stack_size += context->reg.size;
+            int offset = context->stack_size;
+            reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){.type = STACK, .offset = offset, .typeid = 0});
+            arr_target_push(&context->targets, (target){.reg = reg});
+            lex(context);
+            if (!stmt_stack_store(context)) {
+                compile_err(&context->cur_token, "store statement '=[]' expected\n");
+            }
+            arr_target_pop(&context->targets);
         }
-        int offset = context->stack_size;
-        reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){.type = STACK, .offset = offset, .typeid = 0});
-        arr_target_push(&context->targets, (target){.reg = reg});
-
-        lex(context);
         return true;
     }
     return false;
@@ -835,20 +863,8 @@ void parse(parser_context *context) {
 
     } else if (expr_line(context)) {
 
-    } else if (str_eq_lit(token_str, "=[]")) {
-        target *cur_target = arr_target_top(&context->targets);
-        if (cur_target == NULL || cur_target->reg->type != STACK) {
-            compile_err(token, "nothing to store to\n");
-            return;
-        }
-        reg_t src = (reg_t){.type = context->reg.type, .offset = context->reg.offset};
-        emit_str(src, (reg_t){.type = FRAME }, cur_target->reg->offset);
-        cur_target->target_assigned = true;
+    } else if (stmt_stack_store(context)) {
 
-        if (context->cur_token.end[0] == '\n') {
-            context->reg.offset = 0;
-            context->reg.type = SCRATCH;
-        }
     } else if (str_eq_lit(token_str, "=")) {
         target *cur_target = stmt_assign(context);
         if (!cur_target)

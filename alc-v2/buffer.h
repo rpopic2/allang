@@ -42,11 +42,11 @@ inline static void buf_init(buf *buffer, size_t size) {
     buffer->end = buffer->start + size;
 }
 
-inline static void buf_puts(buf *buffer, const str *s) {
-    size_t len = str_len(*s);
+inline static void buf_puts(buf *buffer, const str s) {
+    size_t len = str_len(s);
     buf_grow(buffer, len);
 
-    memcpy(buffer->cur, s->data, len);
+    memcpy(buffer->cur, s.data, len);
     buffer->cur += len;
 }
 

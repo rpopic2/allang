@@ -12,7 +12,7 @@
 #define DECL_PTR(T, X) T _##X; T *X = &_##X
 
 #define INSTR(s) "\t"s"\n"
-#define STR_FROM_INSTR(s) &STR_FROM(INSTR(s))
+#define STR_FROM_INSTR(s) STR_FROM(INSTR(s))
 #define ALIGN_TO(expr, align) ((expr) + align - 1) & ~(align - 1);
 
 DECL_PTR(static buf, text_buf);
@@ -38,10 +38,10 @@ const char *const cond_str[] = {
 
 void emit_init(void) {
     buf_init(text_buf, INIT_BUFSIZ);
-    buf_puts(text_buf, &STR_FROM(text_section_header));
+    buf_puts(text_buf, STR_FROM(text_section_header));
 
     buf_init(cstr_buf, INIT_BUFSIZ);
-    buf_puts(cstr_buf, &STR_FROM(string_section_header));
+    buf_puts(cstr_buf, STR_FROM(string_section_header));
     cstr_begin = cstr_buf->cur;
 
     emit_reset_fn();
@@ -102,9 +102,21 @@ void emit_mov_reg(reg_t dst, reg_t src) {
     buf_snprintf(fn_buf, format, get_regoff(dst), get_regoff(src));
 }
 
+const char *get_format(reg_size reg_size) {
+    const char *format;
+    if (reg_size <= 4) {
+        format = "w";
+    } else if (reg_size <= 8) {
+        format = "x";
+    } else {
+        unreachable;
+    }
+    return format;
+}
+
 void buf_putreg(buf *buffer, reg_t reg) {
     if (reg.type == STACK) {
-        buf_puts(buffer, &STR_FROM("sp"));
+        buf_puts(buffer, STR_FROM("sp"));
     } else {
         const char *format;
         if (reg.size <= 4) {
@@ -119,31 +131,51 @@ void buf_putreg(buf *buffer, reg_t reg) {
 }
 
 void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
-    buf_puts(fn_buf, &STR_FROM("\tadd "));
+    buf_puts(fn_buf, STR_FROM("\tadd "));
     buf_putreg(fn_buf, dst);
-    buf_puts(fn_buf, &STR_FROM(", "));
+    buf_puts(fn_buf, STR_FROM(", "));
     buf_putreg(fn_buf, lhs);
-    buf_puts(fn_buf, &STR_FROM(", "));
+    buf_puts(fn_buf, STR_FROM(", "));
     buf_snprintf(fn_buf, "#%"PRId64"\n", rhs);
 }
 
 void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    buf_puts(fn_buf, &STR_FROM("\tadd "));
+    buf_puts(fn_buf, STR_FROM("\tadd "));
     buf_putreg(fn_buf, dst);
-    buf_puts(fn_buf, &STR_FROM(", "));
+    buf_puts(fn_buf, STR_FROM(", "));
     buf_putreg(fn_buf, lhs);
-    buf_puts(fn_buf, &STR_FROM(", "));
+    buf_puts(fn_buf, STR_FROM(", "));
     buf_putreg(fn_buf, rhs);
     buf_putc(fn_buf, '\n');
 }
 
+void emit_rrx(str op, reg_t r0, reg_t r1) {
+    buf_putc(fn_buf, '\t');
+    buf_puts(fn_buf, op);
+    buf_putc(fn_buf, ' ');
+    buf_putreg(fn_buf, r0);
+    buf_puts(fn_buf, STR_FROM(", "));
+    buf_putreg(fn_buf, r1);
+    buf_puts(fn_buf, STR_FROM(", "));
+}
+
+void emit_rrr(str op, reg_t r0, reg_t r1, reg_t r2) {
+    emit_rrx(op, r0, r1);
+    buf_putreg(fn_buf, r2);
+    buf_putc(fn_buf, '\n');
+}
+
+void emit_rri(str op, reg_t r0, reg_t r1, i64 i0) {
+    emit_rrx(op, r0, r1);
+    buf_snprintf(fn_buf, "#%"PRId64, i0);
+    buf_putc(fn_buf, '\n');
+}
+
 void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
-    buf_snprintf(fn_buf, INSTR("sub w%d, w%d, #%"PRId64),
-            get_regoff(dst), get_regoff(lhs), rhs);
+    emit_rri(STR_FROM("sub"), dst, lhs, rhs);
 }
 void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    buf_snprintf(fn_buf, INSTR("sub w%d, w%d, w%d"),
-            get_regoff(dst), get_regoff(lhs), get_regoff(rhs));
+    emit_rrr(STR_FROM("sub"), dst, lhs, rhs);
 }
 
 void emit_cmp(reg_t lhs, i64 rhs) {
@@ -168,8 +200,8 @@ void emit_string_lit(reg_t dst, const str *s) {
     buf_snprintf(fn_buf, addrgen_add, regidx, regidx, buffer);
 
     buf_snprintf(cstr_buf, "%s:\n", buffer);
-    buf_puts(cstr_buf, &STR_FROM("\t.asciz "));
-    buf_puts(cstr_buf, s);
+    buf_puts(cstr_buf, STR_FROM("\t.asciz "));
+    buf_puts(cstr_buf, *s);
     buf_putc(cstr_buf, '\n');
 
     free(buffer);
@@ -177,8 +209,8 @@ void emit_string_lit(reg_t dst, const str *s) {
 
 
 void emit_str(reg_t src, reg_t dst, int offset) {
-    buf_snprintf(fn_buf, INSTR("str w%d, [x%d, #%d]"),
-            get_regoff(src), get_regoff(dst), offset);
+    buf_snprintf(fn_buf, INSTR("str %s%d, [x%d, #%d]"),
+            get_format(src.size), get_regoff(src), get_regoff(dst), offset);
 }
 
 void emit_ldr(reg_t dst, reg_t src, int offset) {
@@ -197,36 +229,36 @@ void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
 
 void put_label(str fn_name, str label, int index) {
     buf_putc(fn_buf, '.');
-    buf_puts(fn_buf, &fn_name);
+    buf_puts(fn_buf, fn_name);
     buf_putc(fn_buf, '.');
-    buf_puts(fn_buf, &label);
+    buf_puts(fn_buf, label);
     if (index > 0) {
         buf_snprintf(fn_buf, "%d", index);
     }
 }
 
 void emit_branch(str fn_name, str label, int index) {
-    buf_puts(fn_buf, &STR_FROM("\tb "));
+    buf_puts(fn_buf, STR_FROM("\tb "));
     put_label(fn_name, label, index);
-    buf_puts(fn_buf, &STR_FROM("\n"));
+    buf_puts(fn_buf, STR_FROM("\n"));
 }
 
 bool emit_branch_cond(cond condition, str fn_name, str label, int index) {
-    buf_puts(fn_buf, &STR_FROM("\tb."));
+    buf_puts(fn_buf, STR_FROM("\tb."));
     if (condition >= (sizeof (cond_str) / sizeof cond_str[0])) {
         fprintf(stderr, "unknown condition %d", condition);
         return false;
     }
-    buf_puts(fn_buf, &STR_FROM(cond_str[condition]));
+    buf_puts(fn_buf, STR_FROM(cond_str[condition]));
     buf_putc(fn_buf, ' ');
     put_label(fn_name, label, index);
-    buf_puts(fn_buf, &STR_FROM("\n"));
+    buf_puts(fn_buf, STR_FROM("\n"));
     return true;
 }
 
 void emit_label(str fn_name, str label, int index) {
     put_label(fn_name, label, index);
-    buf_puts(fn_buf, &STR_FROM(":\n"));
+    buf_puts(fn_buf, STR_FROM(":\n"));
 }
 
 void emit_fn_prologue_epilogue(const parser_context *context) {
@@ -294,23 +326,23 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
 }
 
 void emit_fn_call(const str *s) {
-    buf_puts(fn_buf, &STR_FROM("\tbl "));
-    buf_puts(fn_buf, &STR_FROM(fn_prefix));
-    buf_puts(fn_buf, s);
+    buf_puts(fn_buf, STR_FROM("\tbl "));
+    buf_puts(fn_buf, STR_FROM(fn_prefix));
+    buf_puts(fn_buf, *s);
     buf_putc(fn_buf, '\n');
 }
 
 void emit_fn(str fn_name) {
-    buf_puts(fn_header_buf, &STR_FROM("\n\t.globl "));
-    buf_puts(fn_header_buf, &STR_FROM(fn_prefix));
-	buf_puts(fn_header_buf, &fn_name);
-    buf_puts(fn_header_buf, &STR_FROM("\n\t.p2align 2\n"));
+    buf_puts(fn_header_buf, STR_FROM("\n\t.globl "));
+    buf_puts(fn_header_buf, STR_FROM(fn_prefix));
+	buf_puts(fn_header_buf, fn_name);
+    buf_puts(fn_header_buf, STR_FROM("\n\t.p2align 2\n"));
     if (str_eq_lit(&fn_name, "main")) {
-        buf_puts(fn_header_buf, &STR_FROM(mainfn_annotation));
+        buf_puts(fn_header_buf, STR_FROM(mainfn_annotation));
     }
-    buf_puts(fn_header_buf, &STR_FROM(fn_prefix));
-	buf_puts(fn_header_buf, &fn_name);
-    buf_puts(fn_header_buf, &STR_FROM(":\n"));
+    buf_puts(fn_header_buf, STR_FROM(fn_prefix));
+	buf_puts(fn_header_buf, fn_name);
+    buf_puts(fn_header_buf, STR_FROM(":\n"));
 }
 
 void emit_ret(void) {

@@ -27,10 +27,11 @@ typedef ptrdiff_t isize;
 
 typedef u16 typeid_t;
 typedef u8 register_dst;
+typedef u8 reg_size;
 
 typedef struct {
     register_dst type;
-    u8 size;
+    reg_size size;
     typeid_t typeid;
     int offset;
     bool sign;

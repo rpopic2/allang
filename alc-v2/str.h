@@ -21,7 +21,7 @@ static const str str_null = {.data = 0, .end = 0};
 
 inline static size_t str_len(str s) {
     if (s.end - s.data < 0)
-        abort();
+        return 0;
     return (size_t)(s.end - s.data);
 }
 
