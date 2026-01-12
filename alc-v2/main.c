@@ -579,9 +579,10 @@ bool stmt_stack_store(parser_context *context) {
     reg_t src = context->reg;
     src.offset -= 1;
 
-
     context->stack_size += context->reg.size;
     int offset = context->stack_size;
+    offset = ALIGN_TO(offset, context->reg.size);
+
     cur_target->reg->offset = offset;
     cur_target->reg->size = src.size;
     cur_target->reg->sign = src.sign;

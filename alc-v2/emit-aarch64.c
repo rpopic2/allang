@@ -13,7 +13,6 @@
 
 #define INSTR(s) "\t"s"\n"
 #define STR_FROM_INSTR(s) STR_FROM(INSTR(s))
-#define ALIGN_TO(expr, align) ((expr) + align - 1) & ~(align - 1);
 
 DECL_PTR(static buf, text_buf);
 DECL_PTR(static buf, cstr_buf);
