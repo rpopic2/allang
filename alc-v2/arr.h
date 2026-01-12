@@ -40,6 +40,14 @@ static inline size_t arr_##T##_len(const arr_##T *arr) { \
         return 0; \
     return (size_t)(arr->cur - arr->data); \
 } \
+static inline void arr_##T##_dup(arr_##T *dst, const arr_##T *src) { \
+    if (src->data > src->cur) \
+        unreachable; \
+    arr_##T##_init(dst); \
+    size_t size = (size_t)(src->cur - src->data); \
+    memcpy(dst->data, src->data, size); \
+    dst->cur = dst->data + size; \
+} \
 
 
 

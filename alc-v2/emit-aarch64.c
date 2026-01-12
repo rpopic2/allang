@@ -189,6 +189,8 @@ void emit_cmp_reg(reg_t lhs, reg_t rhs) {
 
 void emit_string_lit(reg_t dst, const str *s) {
     char *buffer = malloc(SPRINTF_BUFSIZ);
+    if (!buffer)
+        malloc_failed();
     int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, local_string_prefix, string_lit_counts++);
     if (num_printed >= SPRINTF_BUFSIZ) {
         fputs("buffer overflow in snprintf\n", stderr);

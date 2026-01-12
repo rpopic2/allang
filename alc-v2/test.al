@@ -1,6 +1,6 @@
 #declare add: (Lhs i32, Rhs i32 => Sum i32)
 
-add "hi", 3 =>
+add 2, 3 =>
 
 0
 

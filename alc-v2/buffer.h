@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "str.h"
+#include "types.h"
 
 typedef struct {
     char *start;
@@ -38,6 +39,8 @@ inline static void buf_grow(buf *buffer, size_t adding_size) {
 inline static void buf_init(buf *buffer, size_t size) {
     if (buffer->start == NULL)
         buffer->start = malloc(size);
+    if (buffer->start == NULL)
+        malloc_failed();
     buffer->cur = buffer->start;
     buffer->end = buffer->start + size;
 }

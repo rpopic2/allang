@@ -175,7 +175,10 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
     }
     str token_str = (str){token->data, token->end};
     size_t len = str_len(token_str);
-    iter unescaped = iter_init(malloc(len), len);
+    char *raw = malloc(len);
+    if (!raw)
+        malloc_failed();
+    iter unescaped = iter_init(raw, len);
 
     for (size_t i = 0; i < len; ++i) {
         char c = token->data[i];
@@ -341,7 +344,7 @@ void load_store_offset(bool store, reg_t target, str s, parser_context *context)
 
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (rhs.size != lhs.size) {
-        compile_err(token, "unmatched register size\n");
+        compile_err(token, "register size of %d expected, but was %d\n", lhs.size, rhs.size);
     }
     if (rhs.sign != lhs.sign) {
         if (lhs.sign) {
@@ -758,7 +761,10 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                     size = MAX_REG_SIZE;
                 }
                 reg_t reg = { .size = size, .sign = type->sign, .offset = symbol.airity };
-                arr_reg_t_push(&symbol.params, reg);
+                printf("reg %d, %d\n", size, type->sign);
+                if (parsing_arg) {
+                    arr_reg_t_push(&symbol.params, reg);
+                }
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
                 symbol.is_fn = true;
@@ -772,6 +778,11 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 		}
 	}
 
+    if (arr_reg_t_len(&symbol.params) != symbol.airity) {
+        printf("expected %zd, but %d\n", arr_reg_t_len(&symbol.params), symbol.airity);
+        unreachable;
+    }
+
     hashentry_symbol_t *entry = hashmap_symbol_t_find(fn_ids, label);
     symbol_t *symbol_existing = &entry->value;
 
@@ -783,6 +794,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
     } else {
         entry->key = label;
         entry->value = symbol;
+        arr_reg_t_dup(&entry->value.params, &symbol.params);
     }
 
     return symbol_existing;
@@ -806,6 +818,7 @@ void stmt_label(parser_context *context) {
     }
 
     if (arr_reg_t_len(&symbol->params) != symbol->airity) {
+        printf("expected %zd, but %d\n", arr_reg_t_len(&symbol->params), symbol->airity);
         unreachable;
     }
     for (int i = 0; i < symbol->airity; ++i) {
@@ -920,7 +933,6 @@ void fn_call(parser_context *context) {
     if (multiline) {
         return;
     }
-    printf("single\n");
 
     arr_reg_t *params = &symbol->params;
     reg_t *params_it = params->data;
@@ -930,10 +942,11 @@ void fn_call(parser_context *context) {
         lex(context);
         if (!expr(context))
             break;
-        if (params_it++ < params->cur) {
+        printf("arg %d size: %d\n", context->reg.offset, context->reg.size);
+        if (params_it < params->cur) {
             reg_typecheck(token, *params_it, context->reg);
         }
-        printf("arg size: %d\n", context->reg.size);
+        params_it += 1;
 
         context->reg.offset++;
     } while (token->end[0] == ',' && isspace(token->end[1]));
@@ -1135,11 +1148,10 @@ int main(int argc, const char *argv[]) {
     rewind(source_file);
 
     char *source_start = malloc(source_len);
+    if (!source_start)
+        malloc_failed();
 	memset(source_start, 0, source_len);
-    if (source_start == NULL) {
-        fputs("error: malloc failed\n", stderr);
-        exit(EXIT_FAILURE);
-    }
+
     unsigned long bytes_read = fread(source_start, sizeof (char), source_len, source_file);
     if (bytes_read > source_len) {
 		fprintf(stderr, "error: buffer overflow. expected %ld bytes but read %lu bytes\n", source_len, bytes_read);
@@ -1148,6 +1160,8 @@ int main(int argc, const char *argv[]) {
 
     size_t source_name_len = strlen(source_name);
     char *out_name = malloc(source_name_len + 1);
+    if (!out_name)
+        malloc_failed();
 	memset(out_name, 0, source_name_len + 1);
     strncpy(out_name, source_name, source_name_len - 1);
     out_name[source_name_len - 2] = 's';

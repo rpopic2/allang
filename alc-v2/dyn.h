@@ -18,11 +18,15 @@ void dyn_T_realloc(dyn_T *self) { \
         len = 4; \
         size_t size = len * sizeof (T *); \
         self->begin = malloc(size); \
+        if (self->begin == NULL) \
+            malloc_failed(); \
         self->end = self->begin + size; \
     } else { \
         len *= 2; \
         size_t size = len * sizeof (T *); \
         self->begin = realloc(self->begin, len * sizeof (T *)); \
+        if (self->begin == NULL) \
+            malloc_failed(); \
         self->end = self->begin + size; \
     } \
 } \
