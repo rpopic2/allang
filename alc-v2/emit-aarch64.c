@@ -135,16 +135,14 @@ void emit_cmp_reg(reg_t lhs, reg_t rhs) {
             get_regoff(lhs), get_regoff(rhs));
 }
 
-void emit_string_lit(register_dst reg_dst, int regidx, const str *s) {
-    if (reg_dst == SCRATCH)
-        regidx += 8;
-
+void emit_string_lit(reg_t dst, const str *s) {
     char *buffer = malloc(SPRINTF_BUFSIZ);
     int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, local_string_prefix, string_lit_counts++);
     if (num_printed >= SPRINTF_BUFSIZ) {
         fputs("buffer overflow in snprintf\n", stderr);
         exit(EXIT_FAILURE);
     }
+    int regidx = get_regoff(dst);
     buf_snprintf(fn_buf, addrgen_adrp, regidx, buffer);
     buf_snprintf(fn_buf, addrgen_add, regidx, regidx, buffer);
 

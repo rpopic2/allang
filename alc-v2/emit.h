@@ -93,7 +93,7 @@ void emit_sub(reg_t dst, reg_t lhs, i64 rhs);
 void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs);
 void emit_cmp(reg_t lhs, i64 rhs);
 void emit_cmp_reg(reg_t lhs, reg_t rhs);
-void emit_string_lit(register_dst reg_dst, int regidx, const str *s);
+void emit_string_lit(reg_t dst, const str *s);
 
 void emit_str(reg_t src, reg_t dst, int offset);
 void emit_ldr(reg_t dst, reg_t src, int offset);

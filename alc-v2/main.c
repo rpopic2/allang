@@ -171,7 +171,7 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
     if (!escape) {
         context->reg.size = sizeof (char *);
         context->reg.sign = false;
-        emit_string_lit(context->reg.type, context->reg.offset, (str *)token);
+        emit_string_lit(context->reg, (str *)token);
         return;
     }
     str token_str = (str){token->data, token->end};
@@ -212,7 +212,7 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
     }
 
     str unescaped_s = str_from_iter(&unescaped);
-    emit_string_lit(context->reg.type, context->reg.offset, &unescaped_s);
+    emit_string_lit(context->reg, &unescaped_s);
     free(unescaped.start);
 }
 
@@ -613,12 +613,16 @@ bool stmt(parser_context *context) {
             lex(context);
             expr_line(context);
             printf("expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
+        } else {
         }
         reg_t arg = {.type = NREG, .offset = context->nreg_count, .typeid = 0, .size = context->reg.size, .sign = context->reg.sign};
         reg_t *reg = overwrite_id(*local_ids.cur, token, &arg);
         context->nreg_count += 1;
         if (!one_liner) {
             arr_target_push(&context->targets, (target){.reg = reg});
+            parse_block(context);
+            arr_target_pop(&context->targets);
+            printf("expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
         }
         return true;
     } else if (token->data[0] == '[') {
@@ -884,7 +888,6 @@ void end_of_block(parser_context *context) {
             compile_err(&context->cur_token, "this block must assign\n");
     }
 
-    arr_target_pop(&context->targets);
     arr_mini_hashset_pop(&local_ids);
     arr_int_pop(&context->deferred_unnamed_br);
     printd("end of a block\n\n");
