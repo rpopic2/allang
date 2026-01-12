@@ -8,7 +8,14 @@ int hashmap_hash(str id) {
     return index ^ end ^ len;
 }
 
-#define HASHMAP_GENERIC(T, array_len) \
+int type_hash(str id) {
+    int index = id.data[0];
+    int end = id.end[-1];
+    int len = (int)str_len(id);
+    return (index ^ end ^ len) | 1;
+}
+
+#define HASHMAP_GENERIC(T, array_len, hash_fn) \
  \
 typedef struct { \
     str key; \
@@ -23,7 +30,7 @@ bool hashentry_##T##_valid(const hashentry_##T *entry) { \
 } \
  \
 inline static hashentry_##T *hashmap_##T##_find(hashmap_##T self, const str id) { \
-    int index = hashmap_hash(id) % array_len; \
+    int index = hash_fn(id) % array_len; \
     str_printdnl(&id), printd(" -> hash was: %d\n", index); \
     int start = index; \
  \

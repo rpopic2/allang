@@ -36,8 +36,8 @@ typedef struct _type_t {
     dyn_T members;
 } type_t;
 
-HASHMAP_GENERIC(symbol_t, 100)
-HASHMAP_GENERIC(type_t, 100)
+HASHMAP_GENERIC(symbol_t, 100, hashmap_hash)
+HASHMAP_GENERIC(type_t, 100, type_hash)
 
 hashmap_symbol_t fn_ids;
 hashmap_type_t types;
@@ -218,10 +218,10 @@ opt_i64 lit_numeric(const token_t *token) {
         value = strtoll(token->data, NULL, 0);
     } else if (token->data[0] == '\'') {
         char c = token->data[1];
-	if (token->end[-1] != '\'') {
-	    compile_err(token, "expected closing \'\n");
-	}
-	value = c;
+        if (token->end[-1] != '\'') {
+            compile_err(token, "expected closing \'\n");
+        }
+        value = c;
     } else if (str_eq_lit(&token->id, "true")) {
         value = 1;
     } else if (str_eq_lit(&token->id, "false")) {
@@ -363,6 +363,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 
     if (rhs.tag == NONE) {
         compile_err(&rhs_token, "expected operand, but found "), str_printerr(rhs_token.id);
+        return;
     } else if (rhs.tag == REG && rhs.reg.type == NREG) {
         check_unassigned(rhs, context);
     }
@@ -384,8 +385,8 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             if (context->reg.type == SCRATCH) {
                 tmp_reg_off += 1;
             }
-            emit_mov((reg_t){SCRATCH, tmp_reg_off}, lhs->value);
-            emit_sub_reg(context->reg, (reg_t){SCRATCH, tmp_reg_off}, rhs.reg);
+            emit_mov((reg_t){.type = SCRATCH, .offset = tmp_reg_off, .typeid = 0}, lhs->value);
+            emit_sub_reg(context->reg, (reg_t){.type = SCRATCH, .offset = tmp_reg_off, .typeid = 0}, rhs.reg);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
             emit_sub(context->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
@@ -410,14 +411,12 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             jump_target.end -= 2;
             emit_branch_cond(COND_EQ, context->name, jump_target.id, 0);
         } else if (streq(rhs_token.end + 1, "->")) {
-            // printf("unnamed cond b\n");
             str name = STR_FROM("lbb");
             int index = context->unnamed_labels++;
             emit_branch_cond(COND_EQ, context->name, name, index);
             lex(context);
             parse_block(context);
             emit_label(context->name, name, index);
-            // printf("end unnamed cond b\n");
         }
     } else {
         compile_err(&op_token, "unknown operator "), str_printerr(op_token.id);
@@ -449,9 +448,11 @@ bool expr(parser_context *context) {
         binary_op(&lhs, context);
     } else {
         if (lhs.tag == VALUE) {
+            context->reg.size = 4;
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
+            context->reg.size = nreg->size;
             if (nreg->type == NREG) {
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->type == STACK) {
@@ -459,6 +460,8 @@ bool expr(parser_context *context) {
             } else {
                 unreachable;
             }
+        } else {
+            unreachable;
         }
     }
     return true;
@@ -576,12 +579,20 @@ bool stmt(parser_context *context) {
 
     if (isupper(token->data[0])) {
         lex(context);
-        if (context->cur_token.end[0] != '\n') {
+        bool one_liner = context->cur_token.end[0] != '\n';
+        if (one_liner) {
             context->reg.type = NREG;
+            context->reg.offset = context->nreg_count;
+            lex(context);
+            expr_line(context);
+            printf("size of this expr was: %d\n", context->reg.size);
         }
-        reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){NREG, context->nreg_count});
-        context->reg.offset = context->nreg_count++;
-        arr_target_push(&context->targets, (target){.reg = reg});
+        reg_t arg = {.type = NREG, .offset = context->nreg_count, .typeid = 0, .size = context->reg.size};
+        reg_t *reg = overwrite_id(*local_ids.cur, token, &arg);
+        context->nreg_count += 1;
+        if (!one_liner) {
+            arr_target_push(&context->targets, (target){.reg = reg});
+        }
         return true;
     } else if (token->data[0] == '[') {
         token->data += 1;
@@ -592,7 +603,7 @@ bool stmt(parser_context *context) {
         context->reg.type = SCRATCH;
         context->stack_size += sizeof (i32);
         int offset = context->stack_size;
-        reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){STACK, offset});
+        reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){.type = STACK, .offset = offset, .typeid = 0});
         arr_target_push(&context->targets, (target){.reg = reg});
 
         lex(context);
@@ -690,7 +701,7 @@ void stmt_label(parser_context *context) {
 
     for (int i = 0; i < symbol->airity; ++i) {
         reg_t arg_reg = {.type = PARAM, .offset = i};
-        reg_t r = {NREG, context->nreg_count++};
+        reg_t r = {.type = NREG, .offset = context->nreg_count++, .typeid = 0}; // TODO type id for the argument
         emit_mov_reg(r, arg_reg);
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {
@@ -736,7 +747,6 @@ bool expr_call(parser_context *context) {
     const str *token_str = &token->id;
 
     if (!str_eq_lit(token_str, "=>")) {
-        printf("not fn call\n");
         return false;
     }
 
@@ -763,7 +773,7 @@ bool expr_call(parser_context *context) {
                 compile_err(&context->cur_token, "function must return single value to be assigned\n");
             }
             if (t) {
-                emit_mov_reg(*t->reg, (reg_t){RET, 0});
+                emit_mov_reg(*t->reg, (reg_t){RET, 0, .typeid = 0});// TODO typeid should be the return type of the fn
             }
             lex(context);
             char end = context->cur_token.end[0];
@@ -821,13 +831,14 @@ void parse(parser_context *context) {
             context->reg.type = PARAM;
             context->deferred_fn_call = token->id;
             if (!hashmap_symbol_t_tryfind(fn_ids, token->id)) {
-                compile_err(token, "unknown token "), str_printerr(token->id);
+                goto err;
             }
         } else {
-            compile_err(token, "unknown token "), str_printerr(token->id);
+            goto err;
         }
     } else {
-        compile_err(token, "unknown token "), str_printerr(token->id);
+err:
+        compile_err(token, "unexpected token "), str_printerr(token->id);
     }
 }
 
