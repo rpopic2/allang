@@ -319,6 +319,9 @@ void load_store_offset(bool store, reg_t target, str s, parser_context *context)
         return;
     }
     reg_t reg = regable_target.reg;
+    if (reg.type != STACK && reg.addr <= 0) {
+        compile_err(cur_token, "a register conatining addr is expected\n");
+    }
     if (offset_regable.tag == VALUE) {
         int offset = (i32)offset_regable.value * (signed)sizeof(i32);
         if (reg.type == STACK) {
@@ -492,8 +495,9 @@ bool expr(parser_context *context) {
                 context->reg.sign = nreg->sign;
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->type == STACK) {
-                context->reg.size = sizeof (void *);
-                context->reg.sign = false;
+                context->reg.size = nreg->size;
+                context->reg.sign = nreg->size;
+                context->reg.addr = 1;
                 emit_sub(context->reg, FP, nreg->offset);
             } else {
                 unreachable;
@@ -672,7 +676,8 @@ bool stmt(parser_context *context) {
         }
         reg_t arg = {
             .type = NREG, .offset = context->nreg_count,
-            .size = context->reg.size, .sign = context->reg.sign
+            .size = context->reg.size, .sign = context->reg.sign,
+            .addr = context->reg.addr,
         };
         reg_t *reg = overwrite_id(*local_ids.cur, token, &arg);
         context->nreg_count += 1;
@@ -916,8 +921,10 @@ bool stmt_reg_assign(parser_context *context) {
     lex(context);
     expr_line(context);
     cur_target->target_assigned = true;
-    cur_target->reg->size = context->reg.size;
-    cur_target->reg->sign = context->reg.sign;
+    reg_t *target_reg = cur_target->reg;
+    target_reg->size = context->reg.size;
+    target_reg->sign = context->reg.sign;
+    target_reg->addr = context->reg.addr;
     return true;
 }
 

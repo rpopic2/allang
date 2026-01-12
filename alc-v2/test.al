@@ -1,9 +1,8 @@
 #declare add: (Lhs i32, Rhs i32 => Sum i32)
 
 [I] :: 3 =[]
-J :: 9
-[J]
-add [I], 3 =>
+J :: I
+add [J], 3 =>
 
 
 0

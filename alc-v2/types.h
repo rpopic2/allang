@@ -33,9 +33,9 @@ typedef struct _type_t type_t;
 typedef struct {
     register_dst type;
     reg_size size;
-    int offset;
     bool sign;
     u8 addr;
+    int offset;
 } reg_t;
 
 

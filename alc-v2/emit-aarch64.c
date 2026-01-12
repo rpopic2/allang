@@ -118,7 +118,9 @@ void buf_putreg(buf *buffer, reg_t reg) {
         buf_puts(buffer, STR_FROM("sp"));
     } else {
         const char *format;
-        if (reg.size <= 4) {
+        if (reg.addr) {
+            format = "x%d";
+        } else if (reg.size <= 4) {
             format = "w%d";
         } else if (reg.size <= 8) {
             format = "x%d";
