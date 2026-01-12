@@ -377,7 +377,6 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             if (rhs.reg.size != lhs->reg.size) {
                 compile_err(&rhs_token, "unmatched register size\n");
             }
-            printf("%d|%d\n", rhs.reg.sign, lhs->reg.sign);
             if (rhs.reg.sign != lhs->reg.sign) {
                 compile_err(&rhs_token, "unmatched register signedness\n");
             }

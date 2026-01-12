@@ -91,29 +91,50 @@ void emit_mov(reg_t dst, i64 value) {
 }
 
 void emit_mov_reg(reg_t dst, reg_t src) {
-    buf_snprintf(fn_buf, INSTR("mov w%d, w%d"), get_regoff(dst), get_regoff(src));
+    const char *format;
+    if (dst.size <= 4) {
+        format = INSTR("mov w%d, w%d");
+    } else if (dst.size <= 8) {
+        format = INSTR("mov x%d, x%d");
+    } else {
+        unreachable;
+    }
+    buf_snprintf(fn_buf, format, get_regoff(dst), get_regoff(src));
 }
 
-void put_reg(buf *buffer, reg_t reg) {
+void buf_putreg(buf *buffer, reg_t reg) {
     if (reg.type == STACK) {
         buf_puts(buffer, &STR_FROM("sp"));
     } else {
-        buf_snprintf(buffer, "x%d", get_regoff(reg));
+        const char *format;
+        if (reg.size <= 4) {
+            format = "w%d";
+        } else if (reg.size <= 8) {
+            format = "x%d";
+        } else {
+            unreachable;
+        }
+        buf_snprintf(buffer, format, get_regoff(reg));
     }
 }
 
 void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
     buf_puts(fn_buf, &STR_FROM("\tadd "));
-    put_reg(fn_buf, dst);
+    buf_putreg(fn_buf, dst);
     buf_puts(fn_buf, &STR_FROM(", "));
-    put_reg(fn_buf, lhs);
+    buf_putreg(fn_buf, lhs);
     buf_puts(fn_buf, &STR_FROM(", "));
     buf_snprintf(fn_buf, "#%"PRId64"\n", rhs);
 }
 
 void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    buf_snprintf(fn_buf, INSTR("add w%d, w%d, w%d"),
-            get_regoff(dst), get_regoff(lhs), get_regoff(rhs));
+    buf_puts(fn_buf, &STR_FROM("\tadd "));
+    buf_putreg(fn_buf, dst);
+    buf_puts(fn_buf, &STR_FROM(", "));
+    buf_putreg(fn_buf, lhs);
+    buf_puts(fn_buf, &STR_FROM(", "));
+    buf_putreg(fn_buf, rhs);
+    buf_putc(fn_buf, '\n');
 }
 
 void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
