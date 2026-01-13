@@ -72,7 +72,7 @@ bool emit_need_escaping(void) {
     return false;
 }
 
-int get_regoff(reg_t e) {
+static int get_regoff(reg_t e) {
     if (e.type == SCRATCH)
         e.offset += 8;
     else if (e.type == NREG)
@@ -82,6 +82,59 @@ int get_regoff(reg_t e) {
     else if (e.type == STACK)
         e.offset = 31;
     return e.offset;
+}
+
+static const char *get_wx(reg_size reg_size) {
+    const char *format;
+    if (reg_size <= 4) {
+        format = "w";
+    } else if (reg_size <= 8) {
+        format = "x";
+    } else {
+        printf("cannot load size bigger than 8 to regisetr");
+        format = "x";
+    }
+    return format;
+}
+
+static void buf_putreg(buf *buffer, reg_t reg) {
+    if (reg.type == STACK) {
+        buf_puts(buffer, STR_FROM("sp"));
+    } else {
+        const char *format;
+        if (reg.addr) {
+            format = "x%d";
+        } else if (reg.size <= 4) {
+            format = "w%d";
+        } else if (reg.size <= 8) {
+            format = "x%d";
+        } else {
+            printf("cannot load size bigger than 8 to regisetr");
+        }
+        buf_snprintf(buffer, format, get_regoff(reg));
+    }
+}
+
+static void emit_rrx(str op, reg_t r0, reg_t r1) {
+    buf_putc(fn_buf, '\t');
+    buf_puts(fn_buf, op);
+    buf_putc(fn_buf, ' ');
+    buf_putreg(fn_buf, r0);
+    buf_puts(fn_buf, STR_FROM(", "));
+    buf_putreg(fn_buf, r1);
+    buf_puts(fn_buf, STR_FROM(", "));
+}
+
+static void emit_rrr(str op, reg_t r0, reg_t r1, reg_t r2) {
+    emit_rrx(op, r0, r1);
+    buf_putreg(fn_buf, r2);
+    buf_putc(fn_buf, '\n');
+}
+
+static void emit_rri(str op, reg_t r0, reg_t r1, i64 i0) {
+    emit_rrx(op, r0, r1);
+    buf_snprintf(fn_buf, "#%"PRId64, i0);
+    buf_putc(fn_buf, '\n');
 }
 
 void emit_mov(reg_t dst, i64 value) {
@@ -101,36 +154,6 @@ void emit_mov_reg(reg_t dst, reg_t src) {
     buf_snprintf(fn_buf, format, get_regoff(dst), get_regoff(src));
 }
 
-const char *get_format(reg_size reg_size) {
-    const char *format;
-    if (reg_size <= 4) {
-        format = "w";
-    } else if (reg_size <= 8) {
-        format = "x";
-    } else {
-        unreachable;
-    }
-    return format;
-}
-
-void buf_putreg(buf *buffer, reg_t reg) {
-    if (reg.type == STACK) {
-        buf_puts(buffer, STR_FROM("sp"));
-    } else {
-        const char *format;
-        if (reg.addr) {
-            format = "x%d";
-        } else if (reg.size <= 4) {
-            format = "w%d";
-        } else if (reg.size <= 8) {
-            format = "x%d";
-        } else {
-            unreachable;
-        }
-        buf_snprintf(buffer, format, get_regoff(reg));
-    }
-}
-
 void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
     buf_puts(fn_buf, STR_FROM("\tadd "));
     buf_putreg(fn_buf, dst);
@@ -147,28 +170,6 @@ void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
     buf_putreg(fn_buf, lhs);
     buf_puts(fn_buf, STR_FROM(", "));
     buf_putreg(fn_buf, rhs);
-    buf_putc(fn_buf, '\n');
-}
-
-void emit_rrx(str op, reg_t r0, reg_t r1) {
-    buf_putc(fn_buf, '\t');
-    buf_puts(fn_buf, op);
-    buf_putc(fn_buf, ' ');
-    buf_putreg(fn_buf, r0);
-    buf_puts(fn_buf, STR_FROM(", "));
-    buf_putreg(fn_buf, r1);
-    buf_puts(fn_buf, STR_FROM(", "));
-}
-
-void emit_rrr(str op, reg_t r0, reg_t r1, reg_t r2) {
-    emit_rrx(op, r0, r1);
-    buf_putreg(fn_buf, r2);
-    buf_putc(fn_buf, '\n');
-}
-
-void emit_rri(str op, reg_t r0, reg_t r1, i64 i0) {
-    emit_rrx(op, r0, r1);
-    buf_snprintf(fn_buf, "#%"PRId64, i0);
     buf_putc(fn_buf, '\n');
 }
 
@@ -211,26 +212,40 @@ void emit_string_lit(reg_t dst, const str *s) {
 }
 
 
+static void load_store_x(const char *op, reg_t r0, reg_t r1) {
+    const char *suffix = "";
+    if (r0.size <= 0) {
+        compile_err(NULL, "cannot %s size of zero\n", op);
+    } else if (r0.size <= 1) {
+        suffix = "b";
+    } else if (r0.size <= 2) {
+        suffix = "h";
+    }
+    buf_snprintf(fn_buf, ("\t%s%s %s%d, [x%d, "),
+            op, suffix, get_wx(r0.size), get_regoff(r0), get_regoff(r1));
+}
+
 void emit_str(reg_t src, reg_t dst, int offset) {
-    buf_snprintf(fn_buf, INSTR("str %s%d, [x%d, #%d]"),
-            get_format(src.size), get_regoff(src), get_regoff(dst), offset);
+    load_store_x("str", src, dst);
+    buf_snprintf(fn_buf, ("#%d]\n"), offset);
 }
 
 void emit_ldr(reg_t dst, reg_t src, int offset) {
-    buf_snprintf(fn_buf, INSTR("ldr w%d, [x%d, #%d]"),
-            get_regoff(dst), get_regoff(src), offset);
+    load_store_x("ldr", dst, src);
+    buf_snprintf(fn_buf, ("#%d]\n"), offset);
 }
 
 void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
-    buf_snprintf(fn_buf, INSTR("str w%d, [x%d, x%d]"),
-            get_regoff(src), get_regoff(dst), get_regoff(offset));
-}
-void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
-    buf_snprintf(fn_buf, INSTR("ldr w%d, [x%d, x%d]"),
-            get_regoff(dst), get_regoff(src), get_regoff(offset));
+    load_store_x("str", src, dst);
+    buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
 }
 
-void put_label(str fn_name, str label, int index) {
+void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
+    load_store_x("ldr", dst, src);
+    buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
+}
+
+static void put_label(str fn_name, str label, int index) {
     buf_putc(fn_buf, '.');
     buf_puts(fn_buf, fn_name);
     buf_putc(fn_buf, '.');

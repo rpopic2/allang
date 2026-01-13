@@ -132,7 +132,9 @@ __attribute__((format(printf, 2, 3)))
 void compile_err(const token_t *token, const char *format, ...) {
     has_compile_err = true;
     fputs(CSC_RED, stderr);
-    fprintf(stderr, "error in line %d: ", token->lineno);
+    if (token) {
+        fprintf(stderr, "error in line %d: ", token->lineno);
+    }
 
     va_list args;
     va_start(args, format);
@@ -168,8 +170,9 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
         compile_err(token, "expected closing \"\n");
     }
     if (!escape) {
-        context->reg.size = sizeof (char *);
+        context->reg.size = sizeof (char);
         context->reg.sign = false;
+        context->reg.addr = 1;
         emit_string_lit(context->reg, (str *)token);
         return;
     }
