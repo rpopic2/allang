@@ -603,7 +603,7 @@ bool stmt_stack_store(parser_context *context) {
     cur_target->reg->offset = offset;
     cur_target->reg->size = src.size;
     cur_target->reg->sign = src.sign;
-    emit_str(src, (reg_t){.type = FRAME }, cur_target->reg->offset);
+    emit_str(src, (reg_t){.type = FRAME }, -cur_target->reg->offset);
     cur_target->target_assigned = true;
 
     if (context->cur_token.end[0] == '\n') {

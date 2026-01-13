@@ -281,65 +281,101 @@ void emit_label(str fn_name, str label, int index) {
 
 void emit_fn_prologue_epilogue(const parser_context *context) {
     prologue_buf->cur = prologue_buf->start;
-    if (!context->calls_fn && context->nreg_count == 0) {
+    if (!context->calls_fn
+            && context->nreg_count == 0
+            && context->stack_size == 0)
         return;
-    }
 
     int regs_to_save = context->nreg_count;
     if (regs_to_save + CALLEE_START >= 28) {
         compile_err(&context->cur_token, "used up all callee-saved registers");
         return;
     }
-
-    int stack_size = regs_to_save * (signed)sizeof (uint64_t) + context->stack_size;
-    if (context->calls_fn) {
-        stack_size += 16;
+    bool calls_fn = context->calls_fn;
+    if (calls_fn) {
+        regs_to_save += 2;
     }
-    stack_size = ALIGN_TO(stack_size, 16);
 
-    int cur_stackoff = 0;
-    int frame_stackoff = context->stack_size;// + stack variable size;
-    const int pair_size = 2 * (signed)sizeof (u64);
-    if (context->calls_fn) {
-        if (frame_stackoff == 0) {
-            buf_snprintf(prologue_buf, INSTR("stp x29, x30, [sp, #-%d]!"), stack_size);
-        } else {
-            buf_snprintf(prologue_buf, INSTR("sub sp, sp, #%d"), stack_size);
-            buf_snprintf(prologue_buf, INSTR("stp x29, x30, [sp, #%d]"), stack_size - pair_size);
+    int stack_size =
+        ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16)
+        + ALIGN_TO(context->stack_size, 16);
+    putc('\n', stdout);
+    str_print(&context->name);
+    printf("regs to save: %d, stack size: %d\n", regs_to_save, context->stack_size);
+    printf("aligned regs: %d, aligned stack: %d\n",
+            ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16),
+            ALIGN_TO(context->stack_size, 16));
+    printf("result stack: %d\n", stack_size);
+
+    int cur_stackoff = ALIGN_TO(context->stack_size, 16);
+    const int stack_objs_size = cur_stackoff;
+    if (stack_objs_size > 0) {
+        buf_snprintf(prologue_buf, INSTR("sub sp, sp, #%d"), stack_size);
+    }
+
+    int remaining = regs_to_save;
+    bool defer_ldp = false;
+
+    if (remaining > 1) {
+        int reg0 = CALLEE_START + remaining - 1;
+        int reg1 = reg0 - 1;
+        int off = cur_stackoff;
+        if (calls_fn) {
+            reg0 = 29, reg1 = 30;
         }
-        cur_stackoff += pair_size;
-
-    }
-    int tmp = regs_to_save;
-
-    if (tmp % 2 == 1) {
-        tmp -= 1;
-        buf_snprintf(prologue_buf, INSTR("str x%d, [sp, #%d]"),
-                CALLEE_START + tmp, cur_stackoff);
-        buf_snprintf(fn_buf, INSTR("ldr x%d, [sp, #%d]"),
-                CALLEE_START + tmp, cur_stackoff);
+        const char *stp_format = INSTR("stp x%d, x%d, [sp, #%d]");
+        const char *ldp_format = INSTR("ldp x%d, x%d, [sp, #%d]");
+        if (cur_stackoff == 0) {
+            stp_format = INSTR("stp x%d, x%d, [sp, #%d]!");
+            defer_ldp = true;
+            off = stack_size;
+        }
+        buf_snprintf(prologue_buf, stp_format, reg0, reg1, off);
+        if (!defer_ldp)
+            buf_snprintf(fn_buf, ldp_format, reg0, reg1, off);
+        remaining -= 2;
         cur_stackoff += 16;
     }
-    while (tmp > 0) {
+    while (remaining > 1) {
+        int reg0 = CALLEE_START + remaining - 1;
+        int reg1 = reg0 - 1;
         buf_snprintf(prologue_buf, INSTR("stp x%d, x%d, [sp, #%d]"),
-                CALLEE_START + tmp - 1, CALLEE_START + tmp - 2, cur_stackoff);
+                reg0, reg1, cur_stackoff);
         buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [sp, #%d]"),
-                CALLEE_START + tmp - 1, CALLEE_START + tmp - 2, cur_stackoff);
-        tmp -= 2;
+                reg0, reg1, cur_stackoff);
+        remaining -= 2;
+        cur_stackoff += 16;
+    }
+    if (remaining == 1) {
+        remaining -= 1;
+        const char *stp_format = INSTR("str x%d, [sp, #%d]");
+        const char *ldp_format = INSTR("ldr x%d, [sp, #%d]");
+        int off = cur_stackoff;
+        if (cur_stackoff == 0) {
+            stp_format = INSTR("str x%d, [sp, #%d]!");
+            ldp_format = INSTR("ldr x%d, [sp], #%d");
+            off = stack_size;
+        }
+        int reg0 = CALLEE_START + remaining;
+        buf_snprintf(prologue_buf, stp_format,
+                reg0, off);
+        buf_snprintf(fn_buf, ldp_format,
+                reg0, off);
         cur_stackoff += 16;
     }
 
-    if (context->calls_fn) {
-        if (frame_stackoff == 0) {
-            buf_puts(prologue_buf, STR_FROM_INSTR("mov x29, sp"));
-            buf_snprintf(fn_buf, INSTR("stp x29, x30, [sp], #%d"), stack_size);
-        } else {
+    if (stack_objs_size == 0) {
+        buf_puts(prologue_buf, STR_FROM_INSTR("mov x29, sp"));
+    } else {
+        buf_snprintf(prologue_buf, INSTR("add x29, sp, #%d"), stack_objs_size);
+    }
 
-            int fp_diff = ALIGN_TO(context->stack_size, 16); // align up to 16 bytes boundary
-            buf_snprintf(prologue_buf, INSTR("add x29, sp, #%d"), fp_diff);
-            buf_snprintf(fn_buf, INSTR("ldp x29, x30, [sp, #%d]"), stack_size - pair_size);
-            buf_snprintf(fn_buf, INSTR("add sp, sp, #%d"), stack_size);
-        }
+    if (defer_ldp) {
+        const char *ldp_format = INSTR("ldp x29, x30, [sp], #%d");
+        buf_snprintf(fn_buf, ldp_format, stack_size);
+    }
+    if (stack_objs_size > 0) {
+        buf_snprintf(fn_buf, INSTR("add sp, sp, #%d"), stack_size);
     }
 }
 
