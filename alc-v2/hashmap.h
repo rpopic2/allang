@@ -49,10 +49,10 @@ inline static hashentry_##T *hashmap_##T##_find(hashmap_##T self, const str id) 
     return &self[index]; \
 } \
  \
-inline static hashentry_##T *hashmap_##T##_tryfind(hashmap_##T self, const str s) { \
+inline static T *hashmap_##T##_tryfind(hashmap_##T self, const str s) { \
     hashentry_##T *entry = hashmap_##T##_find(self, s); \
     if (hashentry_##T##_valid(entry)) \
-        return entry; \
+        return &entry->value; \
     else \
         return NULL; \
 } \

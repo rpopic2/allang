@@ -5,7 +5,7 @@ void compile_err(const token_t *token, const char *format, ...);
 void compile_warning(const char *format, ...);
 
 inline void dummy(void) {}
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG
 #define printd(...) printf(__VA_ARGS__)

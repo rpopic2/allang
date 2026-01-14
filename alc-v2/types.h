@@ -30,12 +30,18 @@ typedef u8 reg_size;
 
 typedef struct _type_t type_t;
 
+enum sign_t {
+    S_UNSIGNED, S_SIGNED, S_NOSIGN
+};
+typedef u8 sign_t;
+
 typedef struct {
-    register_dst type;
-    reg_size size;
-    bool sign;
-    u8 addr;
     int offset;
+    register_dst reg_type;
+    reg_size size;
+    sign_t sign;
+    u8 addr;
+    type_t *type;
 } reg_t;
 
 

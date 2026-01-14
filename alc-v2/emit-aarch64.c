@@ -73,13 +73,13 @@ bool emit_need_escaping(void) {
 }
 
 static int get_regoff(reg_t e) {
-    if (e.type == SCRATCH)
+    if (e.reg_type == SCRATCH)
         e.offset += 8;
-    else if (e.type == NREG)
+    else if (e.reg_type == NREG)
         e.offset += 19;
-    else if (e.type == FRAME)
+    else if (e.reg_type == FRAME)
         e.offset = 29;
-    else if (e.type == STACK)
+    else if (e.reg_type == STACK)
         e.offset = 31;
     return e.offset;
 }
@@ -98,13 +98,11 @@ static const char *get_wx(reg_size reg_size) {
 }
 
 static void buf_putreg(buf *buffer, reg_t reg) {
-    if (reg.type == STACK) {
+    if (reg.reg_type == STACK) {
         buf_puts(buffer, STR_FROM("sp"));
     } else {
         const char *format;
-        if (reg.addr) {
-            format = "x%d";
-        } else if (reg.size <= 4) {
+        if (reg.size <= 4) {
             format = "w%d";
         } else if (reg.size <= 8) {
             format = "x%d";
@@ -216,6 +214,7 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     const char *suffix = "";
     if (r0.size <= 0) {
         compile_err(NULL, "cannot %s size of zero\n", op);
+        printd("dump r0 | size: %d, sign: %d, reg_type: %d, offset: %d\n", r0.size, r0.sign, r0.reg_type, r0.offset);
     } else if (r0.size <= 1) {
         suffix = "b";
     } else if (r0.size <= 2) {
