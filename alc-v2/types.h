@@ -35,6 +35,7 @@ enum sign_t {
 };
 typedef u8 sign_t;
 
+#define REG_SIZE_ANY 255
 typedef struct {
     int offset;
     register_dst reg_type;

@@ -30,6 +30,8 @@ bool do_airity_check = true;
 
 DYN_GENERIC(type_t)
 
+type_t *type_i32;
+
 enum type_kind {
     TK_NONE, TK_FUND, TK_ARRAY, TK_STRUCT, TK_UNION,
 };
@@ -632,7 +634,8 @@ bool stmt_stack_store(parser_context *context) {
     }
 
     target *cur_target = arr_target_top(&context->targets);
-    if (cur_target == NULL || cur_target->reg->reg_type != STACK) {
+    reg_t *target_reg = cur_target->reg;
+    if (cur_target == NULL || target_reg->reg_type != STACK) {
         compile_err(token, "nothing to store to\n");
     }
     if (!cur_target)
@@ -645,10 +648,13 @@ bool stmt_stack_store(parser_context *context) {
     int offset = context->stack_size;
     offset = ALIGN_TO(offset, context->reg.size); // TODO not the real way to get align
 
-    cur_target->reg->offset = offset;
-    cur_target->reg->size = src.size;
-    cur_target->reg->sign = src.sign;
-    emit_str(src, (reg_t){.reg_type = FRAME }, -cur_target->reg->offset);
+    target_reg->offset = offset;
+    target_reg->size = src.size;
+    target_reg->sign = src.sign;
+    if (src.size == REG_SIZE_ANY) {
+        src.type = type_i32;
+    }
+    emit_str(src, (reg_t){.reg_type = FRAME }, -target_reg->offset);
     cur_target->target_assigned = true;
 
     if (context->cur_token.end[0] == '\n') {
@@ -658,9 +664,81 @@ bool stmt_stack_store(parser_context *context) {
     return true;
 }
 
+bool decl_vars(parser_context *context) {
+    const token_t *token = &context->cur_token;
+    if (!streq(token->end, " ::")) {
+        return false;
+    }
+
+    if (isupper(token->data[0])) {
+        str name = token->id;
+        lex(context);
+        bool one_liner = context->cur_token.end[0] != '\n';
+        if (one_liner) {
+            context->reg.reg_type = NREG;
+            context->reg.offset = context->nreg_count;
+            lex(context);
+            expr_line(context);
+            printf("expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
+        }
+        reg_t arg = {
+            .reg_type = NREG, .offset = context->nreg_count,
+            .size = context->reg.size, .sign = context->reg.sign,
+            .addr = context->reg.addr,
+        };
+        reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
+        context->nreg_count += 1;
+        if (!one_liner) {
+            target *t = arr_target_push(&context->targets, (target){.reg = reg});
+            printf("parse block start\n");
+            parse_block(context);
+            if (!t->target_assigned) {
+                compile_err(&context->cur_token, "this block must assign\n");
+            }
+            arr_target_pop(&context->targets);
+            printf("expr size: %d, sign: %d\n", reg->size, reg->sign);
+        }
+        return true;
+    } else if (token->data[0] == '[') {
+        str name = token->id;
+        name.data += 1;
+        name.end -= 1;
+        if (name.end[0] != ']') {
+            compile_err(token, "closing ']' expected(stmt)\n");
+        }
+        if (!isupper(name.data[0])) {
+            compile_err(token, "name of stack objects must start with uppercase\n");
+        }
+        lex(context);
+        bool one_liner = context->cur_token.end[0] != '\n';
+        context->reg.reg_type = SCRATCH;
+        reg_t *reg = overwrite_id(*local_ids.cur, name, &(reg_t){.reg_type = STACK});
+        if (one_liner) {
+            lex(context);
+            expr_line(context);
+            printf("stack expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
+            arr_target_push(&context->targets, (target){.reg = reg});
+            lex(context);
+            if (!stmt_stack_store(context)) {
+                compile_err(&context->cur_token, "store statement '=[]' expected\n");
+            }
+            arr_target_pop(&context->targets);
+        } else {
+            target *t = arr_target_push(&context->targets, (target){.reg = reg});
+            parse_block(context);
+            printf("stack expr size: %d, sign: %d\n", reg->size, reg->sign);
+            if (!t->target_assigned) {
+                compile_err(&context->cur_token, "this block must store\n");
+            }
+            arr_target_pop(&context->targets);
+        }
+        return true;
+    }
+    return false;
+}
+
 bool stmt(parser_context *context) {
-    token_t _token = context->cur_token;
-    token_t *token = &_token;
+    const token_t *token = &context->cur_token;
 
     if (str_eq_lit(&token->id, "struct")) {
         stmt_struct(context);
@@ -708,73 +786,7 @@ bool stmt(parser_context *context) {
         return true;
     }
 
-    if (!streq(token->end, " ::")) {
-        return false;
-    }
-
-    if (isupper(token->data[0])) {
-        lex(context);
-        bool one_liner = context->cur_token.end[0] != '\n';
-        if (one_liner) {
-            context->reg.reg_type = NREG;
-            context->reg.offset = context->nreg_count;
-            lex(context);
-            expr_line(context);
-            printf("expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
-        }
-        reg_t arg = {
-            .reg_type = NREG, .offset = context->nreg_count,
-            .size = context->reg.size, .sign = context->reg.sign,
-            .addr = context->reg.addr,
-        };
-        reg_t *reg = overwrite_id(*local_ids.cur, token, &arg);
-        context->nreg_count += 1;
-        if (!one_liner) {
-            target *t = arr_target_push(&context->targets, (target){.reg = reg});
-            printf("parse block start\n");
-            parse_block(context);
-            if (!t->target_assigned) {
-                compile_err(&context->cur_token, "this block must assign\n");
-            }
-            arr_target_pop(&context->targets);
-            printf("expr size: %d, sign: %d\n", reg->size, reg->sign);
-        }
-        return true;
-    } else if (token->data[0] == '[') {
-        token->data += 1;
-        token->end -= 1;
-        if (token->end[0] != ']') {
-            compile_err(token, "closing ']' expected(stmt)\n");
-        }
-        if (!isupper(token->data[0])) {
-            compile_err(token, "name of stack objects must start with uppercase\n");
-        }
-        lex(context);
-        bool one_liner = context->cur_token.end[0] != '\n';
-        context->reg.reg_type = SCRATCH;
-        reg_t *reg = overwrite_id(*local_ids.cur, token, &(reg_t){.reg_type = STACK});
-        if (one_liner) {
-            lex(context);
-            expr_line(context);
-            printf("stack expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
-            arr_target_push(&context->targets, (target){.reg = reg});
-            lex(context);
-            if (!stmt_stack_store(context)) {
-                compile_err(&context->cur_token, "store statement '=[]' expected\n");
-            }
-            arr_target_pop(&context->targets);
-        } else {
-            target *t = arr_target_push(&context->targets, (target){.reg = reg});
-            parse_block(context);
-            printf("stack expr size: %d, sign: %d\n", reg->size, reg->sign);
-            if (!t->target_assigned) {
-                compile_err(&context->cur_token, "this block must store\n");
-            }
-            arr_target_pop(&context->targets);
-        }
-        return true;
-    }
-    return false;
+    return decl_vars(context);
 }
 
 // out_param_names: set to NULL if not needed
@@ -1189,7 +1201,10 @@ void register_fund_types(void) {
             .tag = TK_FUND,
             .align = (u8)fund_type_sizes[i],
         };
-        hashmap_type_t_overwrite(types, name, &s);
+        type_t *t = hashmap_type_t_overwrite(types, name, &s);
+        if (str_eq_lit(&name, "i32")) {
+            type_i32 = t;
+        }
         printd("reg type "), str_print(&name);
     }
 }

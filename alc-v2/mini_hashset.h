@@ -55,9 +55,9 @@ inline static bool has_entry(mini_hashset self, const str *s) {
     return hash_entry_valid(entry);
 }
 
-inline static reg_t *overwrite_id(mini_hashset self, const token_t *id, const reg_t *value) {
-    hash_entry *entry = find_entry(self, id->id);
-    entry->key = id->id, entry->value = *value;
+inline static reg_t *overwrite_id(mini_hashset self, str id, const reg_t *value) {
+    hash_entry *entry = find_entry(self, id);
+    entry->key = id, entry->value = *value;
     return &entry->value;
 }
 
