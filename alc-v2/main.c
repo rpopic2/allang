@@ -138,15 +138,16 @@ retry:;
     }
 }
 
-#define CSC_RED "\x1b[31m"
-#define CSC_RESET "\x1b[0m"
+#define CSI_RED "\x1b[31m"
+#define CSI_GREEN "\x1b[32m"
+#define CSI_RESET "\x1b[0m"
 
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((format(printf, 2, 3)))
 #endif
 void compile_err(const token_t *token, const char *format, ...) {
     has_compile_err = true;
-    fputs(CSC_RED, stderr);
+    fputs(CSI_RED, stderr);
     if (token) {
         fprintf(stderr, "error in line %d: ", token->lineno);
     }
@@ -155,27 +156,27 @@ void compile_err(const token_t *token, const char *format, ...) {
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
-    fputs(CSC_RESET, stderr);
+    fputs(CSI_RESET, stderr);
 }
 
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((format(printf, 1, 2)))
 #endif
 void compile_warning(const char *format, ...) {
-    fputs(CSC_RED, stderr);
+    fputs(CSI_RED, stderr);
     fprintf(stderr, "warning in line %d: ", lineno);
 
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
-    fputs(CSC_RESET, stderr);
+    fputs(CSI_RESET, stderr);
 }
 
 void str_printerr(str s) {
-    fputs(CSC_RED, stderr);
+    fputs(CSI_RED, stderr);
     str_fprint(&s, stderr);
-    fputs(CSC_RESET, stderr);
+    fputs(CSI_RESET, stderr);
 }
 
 
@@ -793,7 +794,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 
 	if (streq(token->end, " (")) {
         indent += 4;
-        arr_mini_hashset_push(&local_ids); // TODO maybe move this to stmt_label
+        arr_mini_hashset_push(&local_ids);
 
         lex(context);
         _token = context->cur_token;
@@ -950,22 +951,17 @@ bool expr_call(parser_context *context) {
     emit_fn_call(&fn_name);
 
     if (token_str->end[1] == '=') {
-        target *t = get_current_target(context);
-        if (do_airity_check && s->ret_airity != 1) {
-            compile_err(&context->cur_token, "function must return single value to be assigned\n");
-        }
-        if (t) {
-            emit_mov_reg(*t->reg, (reg_t){.reg_type = RET});
-        }
-        lex(context);
-        char end = context->cur_token.end[0];
-        if (end != '\n' && end != ';') {
-            compile_err(&context->cur_token, "expected end of line or ';' after function result assignment");
-        }
     }
     context->reg.offset = 0;
     context->reg.reg_type = SCRATCH;
     context->calls_fn = true;
+    if (token_str->end[1] == '=') {
+        context->reg.reg_type = RET;
+        // target *t = get_current_target(context);
+        if (do_airity_check && s->ret_airity != 1) {
+            compile_err(&context->cur_token, "function must return single value to be assigned\n");
+        }
+    }
     return true;
 }
 
@@ -979,9 +975,6 @@ bool stmt_reg_assign(parser_context *context) {
     target *cur_target = get_current_target(context);
     if (!cur_target)
         return false;
-    context->reg = *cur_target->reg;
-    // lex(context);
-    // expr_line(context);
     cur_target->target_assigned = true;
     reg_t *target_reg = cur_target->reg;
     target_reg->size = context->reg.size;
@@ -1113,7 +1106,6 @@ void parse_block(parser_context *context) {
 }
 
 void function(iter *src, FILE *object_file) {
-    printd("\nstart of fn\n");
     emit_reset_fn();
     arr_mini_hashset_init(&local_ids);
 
@@ -1145,6 +1137,9 @@ void function(iter *src, FILE *object_file) {
         stmt_label(context);
     }
     context->indent = context->cur_token.indent;
+    printd(CSI_GREEN"\n--- start of label: ");
+    str_printd(&context->name);
+    printd(CSI_RESET);
 
     while (src->cur < src->end) {
         lex(context);
@@ -1166,7 +1161,6 @@ void function(iter *src, FILE *object_file) {
         }
     }
 
-    printf("pre end of fn\n");
     if (str_len(context->name) == 0) {
         return;
     }
@@ -1260,7 +1254,7 @@ int main(int argc, const char *argv[]) {
     emit_cstr(object_file);
 
     if (has_compile_err)
-        fprintf(stderr, CSC_RED"compilation failed\n"CSC_RESET);
+        fprintf(stderr, CSI_RED"compilation failed\n"CSI_RESET);
     return has_compile_err;
 }
 
