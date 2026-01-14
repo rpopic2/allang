@@ -929,42 +929,6 @@ bool directives(parser_context *context) {
     return true;
 }
 
-bool expr_call(parser_context *context) {
-    const token_t *token = &context->cur_token;
-    const str *token_str = &token->id;
-
-    if (!str_eq_lit(token_str, "=>")) {
-        return false;
-    }
-    symbol_t *s = context->deferred_fn_call;
-    if (!s) {
-        compile_err(token, "nothing to call\n");
-        return true;
-    }
-
-    str fn_name = s->name;
-
-    int arg_counts = context->reg.offset;
-    if (do_airity_check && arg_counts != s->airity) {
-        compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
-    }
-    emit_fn_call(&fn_name);
-
-    if (token_str->end[1] == '=') {
-    }
-    context->reg.offset = 0;
-    context->reg.reg_type = SCRATCH;
-    context->calls_fn = true;
-    if (token_str->end[1] == '=') {
-        context->reg.reg_type = RET;
-        // target *t = get_current_target(context);
-        if (do_airity_check && s->ret_airity != 1) {
-            compile_err(&context->cur_token, "function must return single value to be assigned\n");
-        }
-    }
-    return true;
-}
-
 bool stmt_reg_assign(parser_context *context) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
@@ -1021,8 +985,35 @@ void fn_call(parser_context *context) {
 
     if (context->reg.offset > 0)
         lex(context);
-    if (!expr_call(context)) {
+
+    const str *cur_token_str = &token->id;
+
+    if (!str_eq_lit(cur_token_str, "=>")) {
         compile_err(token, "function call '=>' is expected\n");
+    }
+    symbol_t *s = context->deferred_fn_call;
+    if (!s) {
+        compile_err(token, "nothing to call\n");
+        return;
+    }
+
+    str fn_name = s->name;
+
+    int arg_counts = context->reg.offset;
+    if (do_airity_check && arg_counts != s->airity) {
+        compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
+    }
+    emit_fn_call(&fn_name);
+
+    context->reg.offset = 0;
+    context->reg.reg_type = SCRATCH;
+    context->calls_fn = true;
+    if (cur_token_str->end[1] == '=') {
+        context->reg.reg_type = RET;
+        // target *t = get_current_target(context);
+        if (do_airity_check && s->ret_airity != 1) {
+            compile_err(&context->cur_token, "function must return single value to be assigned\n");
+        }
     }
 }
 
