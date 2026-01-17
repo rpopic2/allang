@@ -91,7 +91,7 @@ static const char *get_wx(reg_size reg_size) {
     } else if (reg_size <= 8) {
         format = "x";
     } else {
-        printf("cannot load size bigger than 8 to regisetr");
+        printf(CSI_RED"cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg_size);
         format = "x";
     }
     return format;
@@ -401,4 +401,3 @@ void emit_fn(str fn_name) {
 void emit_ret(void) {
     buf_puts(fn_buf, STR_FROM_INSTR("ret"));
 }
-

@@ -35,7 +35,6 @@ enum sign_t {
 };
 typedef u8 sign_t;
 
-#define REG_SIZE_ANY 255
 typedef struct {
     int offset;
     register_dst reg_type;
@@ -51,3 +50,7 @@ typedef struct {
 
 #define ALIGN_TO(expr, align) (((expr) + (align) - 1) & ~((align) - 1))
 #define MAX_REG_SIZE 16
+
+#define CSI_RED "\x1b[31m"
+#define CSI_GREEN "\x1b[32m"
+#define CSI_RESET "\x1b[0m"

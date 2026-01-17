@@ -1,12 +1,31 @@
 # allang: alvin's assembly like language
 by rpopic2
 
+why allang?
+
+- if you know how modern computer works, then you know how to code in allang. stop learning languages.
+- compiles fast, runs fast. write optimized code without optimizers.
+- explicit but not verbose.
+
+other features:
+
+- compatibility with c
+- safety features are opt-out, footguns are opt-in
+- metaprogramming in the same syntax
+
+
+hello.al
+```
+std:print "Hello World!"\n =>
+```
+
+
 ex) dead simple todo list interoperrating with c standard library
 
 ```
-#import stdio
-#import stdlib
-#import string
+#import stdio.h
+#import stdlib.h
+#import string.h
 
 main: (i32 Argc, addr addr c8 Argv =>Error?)
 
@@ -118,4 +137,3 @@ buffer:
         Self isnt pointing -> "malloc failed", Error panic
 
 ```
-

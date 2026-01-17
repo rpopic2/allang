@@ -12,6 +12,7 @@
 #include "mini_hashset.h"
 #include "opt.h"
 #include "str.h"
+#include "types.h"
 
 #define INT_SIZE 4
 
@@ -139,10 +140,6 @@ retry:;
         }
     }
 }
-
-#define CSI_RED "\x1b[31m"
-#define CSI_GREEN "\x1b[32m"
-#define CSI_RESET "\x1b[0m"
 
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((format(printf, 2, 3)))
@@ -347,7 +344,8 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     if (offset_regable.tag == VALUE) {
         size_t stride;
         if (reg.type == NULL) {
-            compile_err(cur_token, "compiler bug: reg type was NULL\n");
+            // compile_err(cur_token, "compiler bug: reg type was NULL\n");
+            // printf("reg type: %d", reg.reg_type);
             stride = sizeof (i32);
         } else {
             stride = reg.type->size;
@@ -536,7 +534,8 @@ bool expr(parser_context *context) {
         binary_op(&lhs, context);
     } else {
         if (lhs.tag == VALUE) {
-            context->reg.size = INT_SIZE;
+            context->reg.size = 0;
+            context->reg.type = NULL;
             context->reg.sign = true;
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
@@ -544,11 +543,13 @@ bool expr(parser_context *context) {
             if (nreg->reg_type == NREG) {
                 context->reg.size = nreg->size;
                 context->reg.sign = nreg->sign;
+                context->reg.type = nreg->type;
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->reg_type == STACK) {
-                context->reg.size = nreg->size;
-                context->reg.sign = nreg->size;
+                context->reg.size = sizeof (void *);
+                context->reg.sign = S_UNSIGNED;
                 context->reg.addr = 1;
+                context->reg.type = nreg->type;
                 emit_sub(context->reg, FP, nreg->offset);
             } else {
                 unreachable;
@@ -651,7 +652,7 @@ bool stmt_stack_store(parser_context *context) {
     target_reg->offset = offset;
     target_reg->size = src.size;
     target_reg->sign = src.sign;
-    if (src.size == REG_SIZE_ANY) {
+    if (src.type == NULL) {
         src.type = type_i32;
     }
     emit_str(src, (reg_t){.reg_type = FRAME }, -target_reg->offset);
@@ -1263,4 +1264,3 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, CSI_RED"compilation failed\n"CSI_RESET);
     return has_compile_err;
 }
-
