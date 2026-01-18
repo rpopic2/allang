@@ -787,10 +787,30 @@ bool stmt(parser_context *context) {
     }
     if (str_eq_lit(&token->id, "ret")) {
         context->reg.reg_type = RET;
+        arr_reg_t *rets = &context->symbol->rets;
+        reg_t *rets_it = rets->data;
+
         int arg_count = 0;
         if (context->cur_token.end[0] != '\n') {
-            lex(context);
-            arg_count = expr_line(context);
+            do {
+                lex(context);
+                if (!expr(context))
+                    break;
+                if (rets_it < rets->cur) {
+                    if (context->reg.type == type_comptime_int
+                            && rets_it->type->tag == TK_FUND) {
+                        printf("same\n");
+                        context->reg.type = rets_it->type;
+                    }
+                    printf("arg %d size: %d, sign %d", context->reg.offset, context->reg.size, context->reg.sign);
+                    printf("expected size: %d, sign %d\n", rets_it->size, rets_it->sign);
+                    reg_typecheck(&context->cur_token, *rets_it, context->reg);
+                }
+                rets_it += 1;
+
+                context->reg.offset++;
+            } while (token->end[0] == ',' && isspace(token->end[1]));
+            arg_count = context->reg.offset;
         }
         if (do_airity_check && arg_count != context->symbol->ret_airity) {
             compile_err(token, "expected to return %d values, but found %d\n",
@@ -841,6 +861,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
         .name = label,
     };
     arr_reg_t_init(&symbol.params);
+    arr_reg_t_init(&symbol.rets);
     if (out_param_names) {
         arr_str_init(out_param_names);
     }
@@ -893,6 +914,8 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 printf("reg %d, %d\n", regsize, type->sign);
                 if (parsing_arg) {
                     arr_reg_t_push(&symbol.params, reg);
+                } else {
+                    arr_reg_t_push(&symbol.rets, reg);
                 }
 			} else if (streq(token->data, "=>")) {
                 parsing_arg = false;
@@ -926,6 +949,7 @@ next:
         entry->key = label;
         entry->value = symbol;
         arr_reg_t_dup(&entry->value.params, &symbol.params);
+        arr_reg_t_dup(&entry->value.rets, &symbol.rets);
     }
 
     return symbol_existing;
@@ -1079,15 +1103,13 @@ void fn_call(parser_context *context) {
     emit_fn_call(&fn_name);
 
     context->reg.offset = 0;
-    context->reg.reg_type = SCRATCH;
+    context->reg.reg_type = RET;
+    type_t *return_type = s->rets.data[0].type;
+    context->reg.type = return_type;
+    context->reg.addr = return_type->addr;
+    context->reg.size = (reg_size)return_type->size;
+    context->reg.sign = return_type->sign;
     context->calls_fn = true;
-    if (cur_token_str->end[1] == '=') {
-        context->reg.reg_type = RET;
-        // target *t = get_current_target(context);
-        if (do_airity_check && s->ret_airity != 1) {
-            compile_err(&context->cur_token, "function must return single value to be assigned\n");
-        }
-    }
 }
 
 void parse(parser_context *context) {

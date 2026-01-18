@@ -42,13 +42,13 @@ foo K, [J] =>
 
 ret false
 
-fn_assign: (=> R)
+fn_assign: (=> R i32)
     Num_Printed ::
         printf "hello" => =
-    Test :: = 3
+    Test :: 3
     ret Num_Printed
 
-stack_var: (=> R)
+stack_var: (=> R i32)
     [X] :: 3 =[]
     ret 0
 
@@ -63,7 +63,7 @@ reg_off: (=>)
     3 =[Y]
 
 foo: (X i32, Y i32 => A i32)
-    ret "HI"
+    ret X + Y
 
 copy: (=>)
     [X] :: 3 =[]

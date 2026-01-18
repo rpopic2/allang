@@ -42,6 +42,7 @@ typedef struct {
     u8 ret_airity;
     bool is_fn;
     arr_reg_t params;
+    arr_reg_t rets;
 } symbol_t;
 
 #define MAX_BLOCK_DEPTH 10
