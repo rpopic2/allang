@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <ctype.h>
 #include <inttypes.h>
 #include <stdarg.h>
@@ -31,8 +32,6 @@ bool do_airity_check = true;
 
 DYN_GENERIC(type_t)
 
-type_t *type_i32;
-
 enum type_kind {
     TK_NONE, TK_FUND, TK_ARRAY, TK_STRUCT, TK_UNION,
 };
@@ -54,6 +53,9 @@ typedef struct _type_t {
         } struct_t;
     };
 } type_t;
+
+type_t *type_i32;
+type_t *type_comptime_int = &(type_t){.align = 4, .sign = S_SIGNED, .size = 0, .tag = TK_NONE};
 
 HASHMAP_GENERIC(symbol_t, 100, hashmap_hash)
 HASHMAP_GENERIC(type_t, 70, type_hash)
@@ -344,8 +346,8 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     if (offset_regable.tag == VALUE) {
         size_t stride;
         if (reg.type == NULL) {
-            // compile_err(cur_token, "compiler bug: reg type was NULL\n");
-            // printf("reg type: %d", reg.reg_type);
+            compile_err(cur_token, "compiler bug: reg type was NULL\n");
+            printf("reg type: %d", reg.reg_type);
             stride = sizeof (i32);
         } else {
             stride = reg.type->size;
@@ -355,15 +357,16 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         if (reg.reg_type == STACK) {
             offset_regable.value += reg.offset;
             offset_regable.value = -offset_regable.value;
-            reg = FP;
+            reg = (reg_t){
+                .reg_type = FP.reg_type, .size = FP.size,
+                .type = reg.type, .sign = FP.sign,
+            };
         }
     } else if (offset_regable.tag == REG) {
         if (reg.reg_type == STACK) {
             compile_err(&context->cur_token, "offset of stack variable by register is not allowed\n");
         }
-    } else {
-        unreachable;
-    }
+    } else unreachable;
     *out_offset = offset_regable;
     *out_reg = reg;
     return;
@@ -405,17 +408,21 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
                 .size = rhs.size, .sign = rhs.sign,
             };
             emit_mov(reg_to_store, lhs->value);
+            if (rhs.type == NULL) {
+                rhs.type = type_i32;
+            }
         } else if (lhs->tag == REG) {
             reg_to_store = lhs->reg;
+            rhs.type = lhs->reg.type;
         } else {
             unreachable;
         }
 
         printd("binary_op:store\n");
-        if (offset.tag == VALUE) {
-            emit_str(reg_to_store, rhs, (int)offset.value);
-        } else {
+        if (offset.tag == REG) {
             emit_str_reg(reg_to_store, rhs, offset.reg);
+        } else {
+            emit_str(reg_to_store, rhs, (int)offset.value);
         }
         return;
     }
@@ -426,10 +433,14 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 
     context->reg.size = INT_SIZE;
     context->reg.sign = true;
+    context->reg.type = NULL;
     if (lhs->tag == VALUE) {
         if (rhs.tag == REG) {
             context->reg.size = rhs.reg.size;
             context->reg.sign = rhs.reg.sign;
+            context->reg.type = rhs.reg.type;
+        } else if (rhs.tag == VALUE) {
+            context->reg.type = type_comptime_int;
         }
     } else if (lhs->tag == REG) {
         if (rhs.tag == REG) {
@@ -437,6 +448,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         }
         context->reg.size = lhs->reg.size;
         context->reg.sign = lhs->reg.sign;
+        context->reg.type = rhs.reg.type;
     }
 
     if (rhs.tag == NONE) {
@@ -514,8 +526,15 @@ bool expr(parser_context *context) {
         reg_t rhs;
         regable offset;
         read_load_store_offset(context, token->id, &rhs, &offset);
-        lhs->size = rhs.size;
-        lhs->sign = rhs.sign;
+        if (!rhs.type) {
+            compile_err(token, "compiler bug: type you are trying to load is null\n");
+            return true;
+        }
+        if (rhs.type->size > MAX_REG_SIZE) {
+            compile_err(&context->cur_token, "cannot load object of size bigger than 16 bytes to register\n");
+        }
+        lhs->size = (reg_size)rhs.type->size;
+        lhs->sign = rhs.type->sign;
         lhs->type = rhs.type;
         if (offset.tag == VALUE) {
             emit_ldr(*lhs, rhs, (int)offset.value);
@@ -539,7 +558,7 @@ bool expr(parser_context *context) {
     } else {
         if (lhs.tag == VALUE) {
             context->reg.size = 0;
-            context->reg.type = NULL;
+            context->reg.type = type_comptime_int;
             context->reg.sign = true;
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
@@ -548,11 +567,15 @@ bool expr(parser_context *context) {
                 context->reg.size = nreg->size;
                 context->reg.sign = nreg->sign;
                 context->reg.type = nreg->type;
+                assert(nreg->type);
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->reg_type == STACK) {
                 context->reg.size = sizeof (void *);
                 context->reg.sign = S_UNSIGNED;
                 context->reg.addr = 1;
+                if (nreg->type == NULL) {
+                    compile_err(token, "taking address of stack object with unknown type\n");
+                }
                 context->reg.type = nreg->type;
                 emit_sub(context->reg, FP, nreg->offset);
             } else {
@@ -657,7 +680,7 @@ bool stmt_stack_store(parser_context *context) {
     target_reg->size = src.size;
     target_reg->sign = src.sign;
     if (target_reg->type == NULL) {
-        if (src.type == NULL) {
+        if (src.type == type_comptime_int) {
             src.type = type_i32;
             src.size = (reg_size)type_i32->size;
             src.sign = type_i32->sign;
@@ -695,7 +718,7 @@ bool decl_vars(parser_context *context) {
         reg_t arg = {
             .reg_type = NREG, .offset = context->nreg_count,
             .size = context->reg.size, .sign = context->reg.sign,
-            .addr = context->reg.addr,
+            .addr = context->reg.addr, .type = context->reg.type,
         };
         reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
         context->nreg_count += 1;
@@ -972,6 +995,7 @@ bool stmt_reg_assign(parser_context *context) {
     target_reg->size = context->reg.size;
     target_reg->sign = context->reg.sign;
     target_reg->addr = context->reg.addr;
+    target_reg->type = context->reg.type;
     emit_mov_reg(*target_reg, context->reg);
     printd("stmt:reg_assign\n");
     return true;
