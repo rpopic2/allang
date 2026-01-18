@@ -519,6 +519,7 @@ bool expr(parser_context *context) {
         } else {
             emit_ldr_reg(*lhs, rhs, offset.reg);
         }
+        context->reg.type = rhs.type;
         return true;
     }
 
@@ -652,8 +653,11 @@ bool stmt_stack_store(parser_context *context) {
     target_reg->offset = offset;
     target_reg->size = src.size;
     target_reg->sign = src.sign;
-    if (src.type == NULL) {
-        src.type = type_i32;
+    if (target_reg->type == NULL) {
+        if (src.type == NULL) {
+            src.type = type_i32;
+        }
+        target_reg->type = src.type;
     }
     emit_str(src, (reg_t){.reg_type = FRAME }, -target_reg->offset);
     cur_target->target_assigned = true;
@@ -662,6 +666,7 @@ bool stmt_stack_store(parser_context *context) {
         context->reg.offset = 0;
         context->reg.reg_type = SCRATCH;
     }
+
     return true;
 }
 
@@ -897,8 +902,13 @@ void stmt_label(parser_context *context) {
             outer_name = context->symbol->name;
         } else {
             context->symbol = symbol;
+            outer_name = context->symbol->name;
         }
-        emit_label(outer_name, symbol->name, 0);
+        if (!str_empty(&symbol->name)) {
+            puts("ohh");
+            str_print(&outer_name);
+            emit_label(outer_name, symbol->name, 0);
+        }
     }
 
     if (arr_reg_t_len(&symbol->params) != symbol->airity) {
