@@ -514,6 +514,9 @@ bool expr(parser_context *context) {
         reg_t rhs;
         regable offset;
         read_load_store_offset(context, token->id, &rhs, &offset);
+        lhs->size = rhs.size;
+        lhs->sign = rhs.sign;
+        lhs->type = rhs.type;
         if (offset.tag == VALUE) {
             emit_ldr(*lhs, rhs, (int)offset.value);
         } else {
@@ -656,6 +659,8 @@ bool stmt_stack_store(parser_context *context) {
     if (target_reg->type == NULL) {
         if (src.type == NULL) {
             src.type = type_i32;
+            src.size = (reg_size)type_i32->size;
+            src.sign = type_i32->sign;
         }
         target_reg->type = src.type;
     }

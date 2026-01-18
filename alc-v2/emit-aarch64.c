@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <inttypes.h>
+#include <execinfo.h>
+#include <unistd.h>
 
 #include "buffer.h"
 #include "emit.h"
@@ -214,7 +216,13 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     const char *suffix = "";
     if (r0.size <= 0) {
         compile_err(NULL, "cannot %s size of zero\n", op);
+
+        int size = 0x100;
+        void *array[size];
+        size = backtrace(array, size);
         printd("dump r0 | size: %d, sign: %d, reg_type: %d, offset: %d\n", r0.size, r0.sign, r0.reg_type, r0.offset);
+        fprintf(stderr, "Error: Stack trace (most recent call first):\n");
+        backtrace_symbols_fd(array, size, STDERR_FILENO);
     } else if (r0.size <= 1) {
         suffix = "b";
     } else if (r0.size <= 2) {
