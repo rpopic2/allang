@@ -778,20 +778,10 @@ bool decl_vars(parser_context *context) {
     return false;
 }
 
-bool stmt(parser_context *context) {
+void read_and_check_types(parser_context *context, arr_reg_t *rets) {
     const token_t *token = &context->cur_token;
-
-    if (str_eq_lit(&token->id, "struct")) {
-        stmt_struct(context);
-        return true;
-    }
-    if (str_eq_lit(&token->id, "ret")) {
-        context->reg.reg_type = RET;
-        arr_reg_t *rets = &context->symbol->rets;
         reg_t *rets_it = rets->data;
 
-        int arg_count = 0;
-        if (context->cur_token.end[0] != '\n') {
             do {
                 lex(context);
                 if (!expr(context))
@@ -810,6 +800,21 @@ bool stmt(parser_context *context) {
 
                 context->reg.offset++;
             } while (token->end[0] == ',' && isspace(token->end[1]));
+}
+
+bool stmt(parser_context *context) {
+    const token_t *token = &context->cur_token;
+
+    if (str_eq_lit(&token->id, "struct")) {
+        stmt_struct(context);
+        return true;
+    }
+    if (str_eq_lit(&token->id, "ret")) {
+        context->reg.reg_type = RET;
+
+        int arg_count = 0;
+        if (context->cur_token.end[0] != '\n') {
+            read_and_check_types(context, &context->symbol->rets);
             arg_count = context->reg.offset;
         }
         if (do_airity_check && arg_count != context->symbol->ret_airity) {
@@ -1056,27 +1061,9 @@ void fn_call(parser_context *context) {
     }
 
     arr_reg_t *params = &symbol->params;
-    reg_t *params_it = params->data;
     context->reg.reg_type = PARAM;
     context->reg.offset = 0;
-    do {
-        lex(context);
-        if (!expr(context))
-            break;
-        if (params_it < params->cur) {
-            if (context->reg.type == type_comptime_int
-                    && params_it->type->tag == TK_FUND) {
-                printf("same\n");
-                context->reg.type = params_it->type;
-            }
-        printf("arg %d size: %d, sign %d", context->reg.offset, context->reg.size, context->reg.sign);
-        printf("expected size: %d, sign %d\n", params_it->size, params_it->sign);
-            reg_typecheck(token, *params_it, context->reg);
-        }
-        params_it += 1;
-
-        context->reg.offset++;
-    } while (token->end[0] == ',' && isspace(token->end[1]));
+    read_and_check_types(context, params);
 
     printf("found %d args\n", context->reg.offset);
 
