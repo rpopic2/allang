@@ -1,5 +1,5 @@
 #declare foo: (X i32, Y i32 => A i32)
-#declare printf: (Format u64 => Num_Printed i32)
+#declare printf: (Format addr u8 => Num_Printed i32)
 
 printf "Hello World\n" =>
 
