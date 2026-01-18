@@ -87,6 +87,7 @@ retry:;
                 c = *(++src->cur);
             } while (c != '"' && c != '\n');
             cur_token->end = ++src->cur;
+            ++src->cur;
             break;
         }
         if (c == '/' && src->cur[1] == '/') {

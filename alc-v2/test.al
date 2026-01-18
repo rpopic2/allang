@@ -3,6 +3,10 @@
 
 printf "Hello World\n" =>
 
+V ::
+    3 + 2 =
+[Q] :: V =[]
+
 [I] ::
     4 + 9
     2 + 1 =[]
@@ -38,9 +42,6 @@ foo K, [J] =>
 
 ret false
 
-foo: (X i32, Y i32 => A i32)
-    ret X + Y
-
 fn_assign: (=> R)
     Num_Printed ::
         printf "hello" => =
@@ -60,6 +61,9 @@ reg_off: (=>)
     [Y, 1]
     [Y, O]
     3 =[Y]
+
+foo: (X i32, Y i32 => A i32)
+    ret "HI"
 
 copy: (=>)
     [X] :: 3 =[]
