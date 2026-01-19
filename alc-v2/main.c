@@ -189,7 +189,6 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
     }
     if (!escape) {
         context->reg.size = sizeof (char *);
-        context->reg.sign = S_UNSIGNED;
         context->reg.addr = 1;
         context->reg.type = hashmap_type_t_tryfind(types, STR_FROM("u8"));
         emit_string_lit(context->reg, (str *)token);
@@ -360,7 +359,7 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             offset_regable.value = -offset_regable.value;
             reg = (reg_t){
                 .reg_type = FP.reg_type, .size = FP.size,
-                .type = reg.type, .sign = FP.sign,
+                .type = reg.type,
             };
         }
     } else if (offset_regable.tag == REG) {
@@ -374,23 +373,27 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
 }
 
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
-    size_t lsize = lhs.type->size;
-    size_t rsize = rhs.type->size;
+    if (lhs.type == rhs.type)
+        return;
+    compile_err(token, "type checker:\n");
+
+    size_t lsize = lhs.size;
+    size_t rsize = rhs.size;
     if (lhs.addr != rhs.addr) {
         if (rhs.addr) {
-            compile_err(token, "address of %d indirection(s) expected, but found %d indirection(s)\n", lhs.addr, rhs.addr);
+            compile_err(token, "\t- address of %d indirection(s) expected, but found %d indirection(s)\n", lhs.addr, rhs.addr);
         }
     }
     if (lsize != rsize) {
-        compile_err(token, "register of size %zd expected, but was %zd\n", lsize, rsize);
+        compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
     }
-    bool lsign = lhs.sign;
-    bool rsign = rhs.sign;
+    bool lsign = lhs.type->sign;
+    bool rsign = rhs.type->sign;
     if (lsign != rsign) {
         if (lsign) {
-            compile_err(token, "expected signed, but found unsigned\n");
+            compile_err(token, "\t- expected signed, but found unsigned\n");
         } else {
-            compile_err(token, "expected unsigned, but found signed\n");
+            compile_err(token, "\t- expected unsigned, but found signed\n");
         }
     }
 }
@@ -411,7 +414,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         if (lhs->tag == VALUE) {
             reg_to_store = (reg_t){
                 .reg_type = SCRATCH, .offset = context->reg.offset,
-                .size = rhs.size, .sign = rhs.sign,
+                .size = rhs.size
             };
             emit_mov(reg_to_store, lhs->value);
             if (rhs.type == NULL) {
@@ -438,12 +441,10 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     regable rhs = read_regable(rhs_token.id, &rhs_token);
 
     context->reg.size = INT_SIZE;
-    context->reg.sign = true;
     context->reg.type = NULL;
     if (lhs->tag == VALUE) {
         if (rhs.tag == REG) {
             context->reg.size = rhs.reg.size;
-            context->reg.sign = rhs.reg.sign;
             context->reg.type = rhs.reg.type;
         } else if (rhs.tag == VALUE) {
             context->reg.type = type_comptime_int;
@@ -453,7 +454,6 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             reg_typecheck(&rhs_token, lhs->reg, rhs.reg);
         }
         context->reg.size = lhs->reg.size;
-        context->reg.sign = lhs->reg.sign;
         context->reg.type = rhs.reg.type;
     }
 
@@ -540,7 +540,6 @@ bool expr(parser_context *context) {
             compile_err(&context->cur_token, "cannot load object of size bigger than 16 bytes to register\n");
         }
         lhs->size = (reg_size)rhs.type->size;
-        lhs->sign = rhs.type->sign;
         lhs->type = rhs.type;
         if (offset.tag == VALUE) {
             emit_ldr(*lhs, rhs, (int)offset.value);
@@ -565,20 +564,17 @@ bool expr(parser_context *context) {
         if (lhs.tag == VALUE) {
             context->reg.size = 0;
             context->reg.type = type_comptime_int;
-            context->reg.sign = true;
             context->reg.addr = 0;
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
             if (nreg->reg_type == NREG) {
                 context->reg.size = nreg->size;
-                context->reg.sign = nreg->sign;
                 context->reg.type = nreg->type;
                 assert(nreg->type);
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->reg_type == STACK) {
                 context->reg.size = sizeof (void *);
-                context->reg.sign = S_UNSIGNED;
                 context->reg.addr = 1;
                 if (nreg->type == NULL) {
                     compile_err(token, "taking address of stack object with unknown type\n");
@@ -685,12 +681,10 @@ bool stmt_stack_store(parser_context *context) {
 
     target_reg->offset = offset;
     target_reg->size = src.size;
-    target_reg->sign = src.sign;
     if (target_reg->type == NULL) {
         if (src.type == type_comptime_int) {
             src.type = type_i32;
             src.size = (reg_size)type_i32->size;
-            src.sign = type_i32->sign;
         }
         target_reg->type = src.type;
     }
@@ -720,11 +714,10 @@ bool decl_vars(parser_context *context) {
             context->reg.offset = context->nreg_count;
             lex(context);
             expr_line(context);
-            printf("expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
         }
         reg_t arg = {
             .reg_type = NREG, .offset = context->nreg_count,
-            .size = context->reg.size, .sign = context->reg.sign,
+            .size = context->reg.size,
             .addr = context->reg.addr, .type = context->reg.type,
         };
         reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
@@ -737,7 +730,6 @@ bool decl_vars(parser_context *context) {
                 compile_err(&context->cur_token, "this block must assign\n");
             }
             arr_target_pop(&context->targets);
-            printf("expr size: %d, sign: %d\n", reg->size, reg->sign);
         }
         return true;
     } else if (token->data[0] == '[') {
@@ -757,7 +749,6 @@ bool decl_vars(parser_context *context) {
         if (one_liner) {
             lex(context);
             expr_line(context);
-            printf("stack expr size: %d, sign: %d\n", context->reg.size, context->reg.sign);
             arr_target_push(&context->targets, (target){.reg = reg});
             lex(context);
             if (!stmt_stack_store(context)) {
@@ -767,7 +758,6 @@ bool decl_vars(parser_context *context) {
         } else {
             target *t = arr_target_push(&context->targets, (target){.reg = reg});
             parse_block(context);
-            printf("stack expr size: %d, sign: %d\n", reg->size, reg->sign);
             if (!t->target_assigned) {
                 compile_err(&context->cur_token, "this block must store\n");
             }
@@ -782,24 +772,21 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
     const token_t *token = &context->cur_token;
         reg_t *rets_it = rets->data;
 
-            do {
-                lex(context);
-                if (!expr(context))
-                    break;
-                if (rets_it < rets->cur) {
-                    if (context->reg.type == type_comptime_int
-                            && rets_it->type->tag == TK_FUND) {
-                        printf("same\n");
-                        context->reg.type = rets_it->type;
-                    }
-                    printf("arg %d size: %d, sign %d", context->reg.offset, context->reg.size, context->reg.sign);
-                    printf("expected size: %d, sign %d\n", rets_it->size, rets_it->sign);
-                    reg_typecheck(&context->cur_token, *rets_it, context->reg);
+        do {
+            lex(context);
+            if (!expr(context))
+                break;
+            if (rets_it < rets->cur) {
+                if (context->reg.type == type_comptime_int
+                        && rets_it->type->tag == TK_FUND) {
+                    context->reg.type = rets_it->type;
                 }
-                rets_it += 1;
+                reg_typecheck(&context->cur_token, *rets_it, context->reg);
+            }
+            rets_it += 1;
 
-                context->reg.offset++;
-            } while (token->end[0] == ',' && isspace(token->end[1]));
+            context->reg.offset++;
+        } while (token->end[0] == ',' && isspace(token->end[1]));
 }
 
 bool stmt(parser_context *context) {
@@ -911,7 +898,6 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 }
                 reg_t reg = {
                     .size = regsize,
-                    .sign = type->sign,
                     .offset = symbol.airity,
                     .type = type,
                     .addr = addr,
@@ -991,7 +977,7 @@ void stmt_label(parser_context *context) {
         reg_t *param = &symbol->params.data[i];
         reg_t r = {
             .reg_type = NREG, .offset = context->nreg_count++,
-            .size = param->size, .sign = param->sign,
+            .size = param->size,
             .type = param->type,
         };
         emit_mov_reg(r, arg_reg);
@@ -1037,7 +1023,6 @@ bool stmt_reg_assign(parser_context *context) {
     cur_target->target_assigned = true;
     reg_t *target_reg = cur_target->reg;
     target_reg->size = context->reg.size;
-    target_reg->sign = context->reg.sign;
     target_reg->addr = context->reg.addr;
     target_reg->type = context->reg.type;
     emit_mov_reg(*target_reg, context->reg);
@@ -1095,7 +1080,6 @@ void fn_call(parser_context *context) {
     context->reg.type = return_type;
     context->reg.addr = return_type->addr;
     context->reg.size = (reg_size)return_type->size;
-    context->reg.sign = return_type->sign;
     context->calls_fn = true;
 }
 

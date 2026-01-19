@@ -50,7 +50,7 @@ fn_assign: (=> R i32)
 
 stack_var: (=> R i32)
     [X] :: 3 =[]
-    ret 0
+    ret "HI"
 
 reg_off: (=>)
     O :: = 2
