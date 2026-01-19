@@ -81,6 +81,7 @@ u64 hash_fnv_1a(str id) {
     }
     return hash;
 }
+
 HASHMAP_GENERIC(symbol_t, 64, hashmap_hash)
 HASHMAP_GENERIC(type_t, 128, type_hash)
 
@@ -90,6 +91,11 @@ hashmap_type_t types;
 
 inline static bool is_id(char c) {
     return isalnum(c) || c == '_';
+}
+
+u32 next_pow2(u32 n) {
+    if (n <= 1) return 1;
+    return 1 << (32 - __builtin_clz(n - 1));
 }
 
 void lex(parser_context *context) {
@@ -700,12 +706,6 @@ bool stmt_stack_store(parser_context *context) {
 
     reg_t src = context->reg;
     src.offset -= 1;
-
-    context->stack_size += context->reg.size;
-    int offset = context->stack_size;
-    offset = ALIGN_TO(offset, context->reg.size); // TODO not the real way to get align
-
-    target_reg->offset = offset;
     target_reg->size = src.size;
     if (target_reg->type == NULL) {
         if (src.type == type_comptime_int) {
@@ -714,7 +714,22 @@ bool stmt_stack_store(parser_context *context) {
         }
         target_reg->type = src.type;
     }
-    emit_str(src, (reg_t){.reg_type = FRAME }, -target_reg->offset);
+
+    int offset;
+    if (!cur_target->target_assigned) {
+        assert(src.type);
+        assert(src.type->size);
+
+        size_t size = next_pow2(src.size);
+        context->stack_size += size;
+        offset = context->stack_size;
+    } else {
+        offset = target_reg->offset;
+    }
+
+    target_reg->offset = offset;
+
+    emit_str(src, (reg_t){.reg_type = FRAME }, -offset);
     cur_target->target_assigned = true;
 
     if (context->cur_token.end[0] == '\n') {
@@ -1081,6 +1096,9 @@ bool stmt_reg_assign(parser_context *context) {
     reg_t *target_reg = cur_target->reg;
     target_reg->size = context->reg.size;
     target_reg->addr = context->reg.addr;
+    if (context->reg.type == type_comptime_int) {
+        context->reg.type = type_i32;
+    }
     target_reg->type = context->reg.type;
     emit_mov_reg(*target_reg, context->reg);
     printd("stmt:reg_assign\n");

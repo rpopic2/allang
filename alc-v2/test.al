@@ -48,6 +48,16 @@ Hi :: get_hi =>
 
 ret false
 
+foo: (X i32, Y i32 => A i32)
+    ret X + Y
+
+get_hi: (=> Hi addr u8)
+    ret "HI"
+
+store_char: (=>)
+    Hi :: get_hi =>
+    [C] :: [Hi] =[]
+
 fn_assign: (=> R i32)
     Num_Printed ::
         printf "hello" => =
@@ -57,9 +67,6 @@ fn_assign: (=> R i32)
 stack_var: (=> R i32)
     [X] :: 3 =[]
     ret [X]
-
-get_hi: (=> Hi addr u8)
-    ret "HI"
 
 get_hi_redirected: (=> Hi addr u8)
     ret get_hi =>
@@ -74,9 +81,6 @@ reg_off: (=>)
     [Y, 1]
     [Y, O]
     3 =[Y]
-
-foo: (X i32, Y i32 => A i32)
-    ret X + Y
 
 copy: (=>)
     [X] :: 3 =[]
