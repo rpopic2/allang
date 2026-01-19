@@ -1,20 +1,5 @@
 #pragma once
 
-#include "str.h"
-int hashmap_hash(str id) {
-    int index = id.data[0];
-    int end = id.end[-1];
-    int len = (int)str_len(id);
-    return index ^ end ^ len;
-}
-
-int type_hash(str id) {
-    int index = id.data[0];
-    int end = id.end[-1];
-    int len = (int)str_len(id);
-    return (index ^ end ^ len) | 1;
-}
-
 #define HASHMAP_GENERIC(T, array_len, hash_fn) \
  \
 typedef struct { \
@@ -30,9 +15,10 @@ bool hashentry_##T##_valid(const hashentry_##T *entry) { \
 } \
  \
 inline static hashentry_##T *hashmap_##T##_find(hashmap_##T self, const str id) { \
-    int index = hash_fn(id) % array_len; \
-    str_printdnl(&id), printd(" -> hash was: %d\n", index); \
-    int start = index; \
+    u64 real_hash = hash_fn(id); \
+    u64 index = real_hash % array_len; \
+    str_printdnl(&id), printd(" -> hash was: %llu(from %llu)\n", index, real_hash); \
+    u64 start = index; \
  \
     while (hashentry_##T##_valid(&self[index])) { \
         if (str_eq(self[index].key, id)) { \

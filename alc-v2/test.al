@@ -44,6 +44,7 @@ foo 2, 2 =>
 foo K, [J] =>
 
 Hi :: get_hi =>
+[Hi_Stack] :: get_hi => =[]
 
 ret false
 
@@ -67,7 +68,7 @@ get_hi_redirected: (=> Hi addr u8)
 reg_off: (=>)
     O :: 2
     [X] ::
-        4 =[]
+        3 + 2, 4 =[]
     [X, 2]
     Y :: X
     [Y, 1]
@@ -86,4 +87,7 @@ cool:
     struct {
         X i32, Y i32
     }
+
+stack_store: (=>)
+    [X] :: 3 =[]
 
