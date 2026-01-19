@@ -1,5 +1,6 @@
 #declare foo: (X i32, Y i32 => A i32)
 #declare printf: (Format addr u8 => Num_Printed i32)
+#declare get_hi: (=> Hi addr u8)
 
 printf "Hello World\n" =>
 
@@ -42,6 +43,8 @@ Ko, "ok"
 foo 2, 2 =>
 foo K, [J] =>
 
+Hi :: get_hi =>
+
 ret false
 
 fn_assign: (=> R i32)
@@ -62,7 +65,7 @@ get_hi_redirected: (=> Hi addr u8)
 
 
 reg_off: (=>)
-    O :: = 2
+    O :: 2
     [X] ::
         4 =[]
     [X, 2]

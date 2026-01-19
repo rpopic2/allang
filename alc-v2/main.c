@@ -713,10 +713,24 @@ bool decl_vars(parser_context *context) {
         lex(context);
         bool one_liner = context->cur_token.end[0] != '\n';
         if (one_liner) {
-            context->reg.reg_type = NREG;
-            context->reg.offset = context->nreg_count;
+            reg_t nreg = {.reg_type = NREG, .offset = context->nreg_count};
+            context->reg = nreg;
             lex(context);
-            expr_line(context);
+            if (expr_line(context)) { }
+            else {
+                symbol_t *fn = fn_call(context);
+                if (fn) {
+                    if (fn->ret_airity != 1) {
+                        compile_err(&context->cur_token, "this function does not return exactly one value\n");
+                    }
+                    printf("!!size was %d, addr %d\n", context->reg.size, context->reg.addr);
+                    nreg.size = context->reg.size;
+                    nreg.addr = context->reg.addr;
+                    nreg.type = context->reg.type;
+                    emit_mov_reg(nreg, context->reg);
+                }
+                printf("function call\n");
+            }
         }
         reg_t arg = {
             .reg_type = NREG, .offset = context->nreg_count,
@@ -913,7 +927,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                     .type = type,
                     .addr = addr,
                 };
-                printf("reg %d, %d\n", regsize, type->sign);
+                printf("reg %d, %d, %d\n", regsize, type->sign, reg.addr);
                 if (parsing_arg) {
                     arr_reg_t_push(&symbol.params, reg);
                 } else {
@@ -1082,10 +1096,14 @@ symbol_t *fn_call(parser_context *context) {
 
     context->reg.offset = 0;
     context->reg.reg_type = RET;
-    type_t *return_type = symbol->rets.data[0].type;
-    context->reg.type = return_type;
-    context->reg.addr = return_type->addr;
-    context->reg.size = (reg_size)return_type->size;
+    reg_t *return_reg = &symbol->rets.data[0];
+    type_t *return_type = return_reg->type;
+    context->reg.type = return_reg->type;
+    context->reg.addr = return_reg->addr;
+    if (return_reg->addr)
+        context->reg.size = sizeof (void *);
+    else
+        context->reg.size = (reg_size)return_type->size;
     context->calls_fn = true;
     return symbol;
 }
