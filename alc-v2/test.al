@@ -34,9 +34,11 @@ K is 3 ->
 K is 2 ->
     ret true
 
-I, 3, [I], [J]
-"hi", "ok"
+I, 3, [I] [J]
+Ko ::
+    "hi" =
 
+Ko, "ok"
 foo 2, 2 =>
 foo K, [J] =>
 

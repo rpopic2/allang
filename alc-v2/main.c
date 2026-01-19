@@ -87,6 +87,8 @@ retry:;
                 c = *(++src->cur);
             } while (c != '"' && c != '\n');
             cur_token->end = ++src->cur;
+            if (src->cur[0] == '\n')
+                ++lineno;
             ++src->cur;
             break;
         }
