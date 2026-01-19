@@ -95,3 +95,6 @@ cool:
 stack_store: (=>)
     [X] :: 3 =[]
 
+short_lit:
+    K :: u64(3)
+

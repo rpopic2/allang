@@ -108,7 +108,8 @@ retry:;
 
     while (true) {
         if (src->cur > src->end) {
-            *cur_token = (token_t){0};
+            *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno};
+            eof = true;
             return;
         }
         char c = *src->cur;
@@ -132,7 +133,8 @@ retry:;
         if (src->cur[0] == '\n') {
             ++lineno;
         }
-        if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';') {
+        if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';'
+                || c == ')' || c == '(') {
             cur_token->end = src->cur++;
             if (c == ',' || c == ';')
                 src->cur++;
@@ -141,7 +143,7 @@ retry:;
         ++src->cur;
     }
     if (cur_token->end > src->end) {
-        *cur_token = (token_t){0};
+        *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno};
         eof = true;
         return;
     }
@@ -932,13 +934,12 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 
         lex(context);
         _token = context->cur_token;
-        token->data += 1;
+        // token->data += 1;
         bool parsing_arg = true;
 		while (token->end < context->src->end) {
             bool break_out = false;
-            if (token->end[-1] == ')') {
+            if (token->end[0] == ')') {
                 break_out = true;
-                token->end -= 1;
             }
 			if (isupper(token->data[0])) {
                 if (parsing_arg) {
@@ -953,9 +954,8 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 while (str_eq_lit(&cur_token->id, "addr")) {
                     addr += 1;
                     lex(context);
-                    if (token->end[-1] == ')') {
+                    if (token->end[0] == ')') {
                         break_out = true;
-                        token->end -= 1;
                     }
                 }
                 type_t *type = hashmap_type_t_tryfind(types, cur_token->id);
