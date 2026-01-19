@@ -44,6 +44,7 @@ typedef struct _type_t {
     u8 addr;
     type_kind tag;
     sign_t sign;
+    str name;
     union {
         struct {
             usize len;
@@ -56,7 +57,7 @@ typedef struct _type_t {
 } type_t;
 
 type_t *type_i32;
-type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE};
+type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR_FROM("comptime int")};
 
 
 u64 hashmap_hash(str id) {
@@ -88,6 +89,7 @@ HASHMAP_GENERIC(type_t, 128, type_hash)
 hashmap_symbol_t fn_ids;
 hashmap_type_t types;
 
+#define E_TOO_BIG_FOR_REG "cannot load object of size bigger than 16 bytes to register\n"
 
 inline static bool is_id(char c) {
     return isalnum(c) || c == '_';
@@ -474,14 +476,13 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t rhs_token = context->cur_token;
     regable rhs = read_regable(rhs_token.id, &rhs_token);
 
-    context->reg.size = INT_SIZE;
-    context->reg.type = NULL;
     if (lhs->tag == VALUE) {
         if (rhs.tag == REG) {
             context->reg.size = rhs.reg.size;
             context->reg.type = rhs.reg.type;
         } else if (rhs.tag == VALUE) {
             context->reg.type = type_comptime_int;
+            printf("set cmptimint\n");
         }
     } else if (lhs->tag == REG) {
         if (rhs.tag == REG) {
@@ -551,9 +552,26 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     } else {
         compile_err(&op_token, "unknown operator "), str_printerr(op_token.id);
     }
+    printd("binary_op\n");
 }
 
 bool expr(parser_context *context) {
+    bool explicit_type = context->cur_token.end[0] == '(';
+    if (explicit_type) {
+        str id = context->cur_token.id;
+        type_t *type = hashmap_type_t_tryfind(types, id);
+        if (type == NULL) {
+            compile_err(&context->cur_token, "unknown type "), str_printerr(id);
+        }
+        context->reg.type = type;
+        context->reg.addr = 0;
+        if (type->size > MAX_REG_SIZE) {
+            compile_err(&context->cur_token, E_TOO_BIG_FOR_REG);
+        }
+        context->reg.size = (reg_size)type->size;
+        lex(context);
+    }
+
     token_t _token = context->cur_token;
     token_t *token = &_token;
 
@@ -571,7 +589,7 @@ bool expr(parser_context *context) {
             return true;
         }
         if (rhs.type->size > MAX_REG_SIZE) {
-            compile_err(&context->cur_token, "cannot load object of size bigger than 16 bytes to register\n");
+            compile_err(&context->cur_token, E_TOO_BIG_FOR_REG);
         }
         lhs->size = (reg_size)rhs.type->size;
         lhs->type = rhs.type;
@@ -583,7 +601,6 @@ bool expr(parser_context *context) {
         context->reg.type = rhs.type;
         return true;
     }
-
     regable lhs = read_regable(token->id, token);
     if (lhs.tag == NONE) {
         return false;
@@ -592,13 +609,16 @@ bool expr(parser_context *context) {
         check_unassigned(lhs, context);
     }
 
-    if (token->end[0] != ',' && token->end[0] != '\n' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>")) {
+    if (!explicit_type) {
+        context->reg.size = 0;
+        context->reg.type = type_comptime_int;
+        context->reg.addr = 0;
+    }
+    char token_end = token->end[0];
+    if (token_end != ',' && token_end != '\n' && token_end != ')' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>")) {
         binary_op(&lhs, context);
     } else {
         if (lhs.tag == VALUE) {
-            context->reg.size = 0;
-            context->reg.type = type_comptime_int;
-            context->reg.addr = 0;
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
@@ -709,11 +729,13 @@ bool stmt_stack_store(parser_context *context) {
     reg_t src = context->reg;
     src.offset -= 1;
     target_reg->size = src.size;
+
+    printf("!!%d\n", src.size);
+    if (src.type == type_comptime_int || src.type == NULL) {
+        src.type = type_i32;
+        src.size = (reg_size)type_i32->size;
+    }
     if (target_reg->type == NULL) {
-        if (src.type == type_comptime_int) {
-            src.type = type_i32;
-            src.size = (reg_size)type_i32->size;
-        }
         target_reg->type = src.type;
     }
 
@@ -731,6 +753,7 @@ bool stmt_stack_store(parser_context *context) {
 
     target_reg->offset = offset;
 
+    assert(src.size);
     emit_str(src, (reg_t){.reg_type = FRAME }, -offset);
     cur_target->target_assigned = true;
 
@@ -1034,8 +1057,6 @@ void stmt_label(parser_context *context) {
             outer_name = context->symbol->name;
         }
         if (!str_empty(&symbol->name)) {
-            puts("ohh");
-            str_print(&outer_name);
             emit_label(outer_name, symbol->name, 0);
         }
     }
@@ -1092,16 +1113,22 @@ bool stmt_reg_assign(parser_context *context) {
     target *cur_target = get_current_target(context);
     if (!cur_target)
         return false;
-    cur_target->target_assigned = true;
     reg_t *target_reg = cur_target->reg;
     target_reg->size = context->reg.size;
     target_reg->addr = context->reg.addr;
-    if (context->reg.type == type_comptime_int) {
-        context->reg.type = type_i32;
+    printf("before assign: "), str_print(&context->reg.type->name);
+    if (!cur_target->target_assigned) {
+        if (context->reg.type == type_comptime_int) {
+            printf("was comptime int\n");
+            context->reg.type = type_i32;
+            context->reg.size = (reg_size)type_i32->size;
+        }
+        target_reg->size = context->reg.size;
+        target_reg->type = context->reg.type;
     }
-    target_reg->type = context->reg.type;
     emit_mov_reg(*target_reg, context->reg);
-    printd("stmt:reg_assign\n");
+    printd("stmt:reg_assign, size %d\n", target_reg->size);
+    cur_target->target_assigned = true;
     return true;
 }
 
@@ -1329,6 +1356,7 @@ void register_fund_types(void) {
             .sign = name.data[0] == 'u' ? false : true,
             .tag = TK_FUND,
             .align = (u8)fund_type_sizes[i],
+            .name = name,
         };
         type_t *t = hashmap_type_t_overwrite(types, name, &s);
         if (str_eq_lit(&name, "i32")) {

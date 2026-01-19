@@ -87,14 +87,9 @@ copy: (=>)
     [Y] :: [X] =[]
     ret
 
-cool:
-    struct {
-        X i32, Y i32
-    }
-
 stack_store: (=>)
     [X] :: 3 =[]
 
-short_lit:
-    K :: u64(3)
+short_lit: (=>)
+    K :: u64(3 + 4)
 

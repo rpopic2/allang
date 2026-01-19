@@ -139,7 +139,7 @@ static void emit_rri(str op, reg_t r0, reg_t r1, i64 i0) {
 
 void emit_mov(reg_t dst, i64 value) {
     int regidx = get_regoff(dst);
-    buf_snprintf(fn_buf, INSTR("mov w%d, #%"PRId64), regidx, value);
+    buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId64), get_wx(dst.size), regidx, value);
 }
 
 void emit_mov_reg(reg_t dst, reg_t src) {
