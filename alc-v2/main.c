@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <time.h>
 #include <ctype.h>
 #include <inttypes.h>
 #include <stdarg.h>
@@ -217,6 +218,18 @@ void str_printerr(str s) {
     fputs(CSI_RESET, stderr);
 }
 
+void str_printerrnl(str s) {
+    fputs(CSI_RED, stderr);
+    str_fprintnl(&s, stderr);
+    fputs(CSI_RESET, stderr);
+}
+
+void puterr(const char *s) {
+    fputs(CSI_RED, stderr);
+    fputs(s, stderr);
+    fputs(CSI_RESET, stderr);
+}
+
 
 void literal_string(parser_context *restrict context, const token_t *restrict token) {
     bool escape = emit_need_escaping();
@@ -383,7 +396,6 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         size_t stride;
         if (reg.type == NULL) {
             compile_err(cur_token, "compiler bug: reg type was NULL\n");
-            printf("reg type: %d", reg.reg_type);
             stride = sizeof (i32);
         } else {
             stride = reg.type->size;
@@ -411,7 +423,7 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (lhs.type == rhs.type)
         return;
-    compile_err(token, "type checker:\n");
+    compile_err(token, "type checker: expected type "), str_printerrnl(lhs.type->name), puterr(", but found "), str_printerr(rhs.type->name);
 
     size_t lsize = lhs.size;
     size_t rsize = rhs.size;
@@ -481,8 +493,6 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             context->reg.size = rhs.reg.size;
             context->reg.type = rhs.reg.type;
         } else if (rhs.tag == VALUE) {
-            context->reg.type = type_comptime_int;
-            printf("set cmptimint\n");
         }
     } else if (lhs->tag == REG) {
         if (rhs.tag == REG) {
@@ -550,7 +560,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             emit_label(context->name, name, index);
         }
     } else {
-        compile_err(&op_token, "unknown operator "), str_printerr(op_token.id);
+        compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
     }
     printd("binary_op\n");
 }
@@ -682,7 +692,7 @@ bool expect(parser_context *context, str expected) {
 
 void stmt_struct(parser_context *context) {
     type_t _s = {0};
-    printf("struct "),str_print(&context->symbol->name);
+    printd("struct "),str_printd(&context->symbol->name);
     str *type_name = &context->symbol->name;
     type_t *s = hashmap_type_t_tryadd(types, *type_name, &_s);
     if (!s) {
@@ -697,7 +707,6 @@ void stmt_struct(parser_context *context) {
         s->size += sizeof (i32);
         lex(context);
     }
-    printf("sturct size was: %zd\n", s->size);
 }
 
 target *get_current_target(parser_context *context) {
@@ -730,7 +739,6 @@ bool stmt_stack_store(parser_context *context) {
     src.offset -= 1;
     target_reg->size = src.size;
 
-    printf("!!%d\n", src.size);
     if (src.type == type_comptime_int || src.type == NULL) {
         src.type = type_i32;
         src.size = (reg_size)type_i32->size;
@@ -786,13 +794,11 @@ bool decl_vars(parser_context *context) {
                     if (fn->ret_airity != 1) {
                         compile_err(&context->cur_token, "this function does not return exactly one value\n");
                     }
-                    printf("!!size was %d, addr %d\n", context->reg.size, context->reg.addr);
                     nreg.size = context->reg.size;
                     nreg.addr = context->reg.addr;
                     nreg.type = context->reg.type;
                     emit_mov_reg(nreg, context->reg);
                 }
-                printf("function call\n");
             }
         }
         reg_t arg = {
@@ -804,7 +810,6 @@ bool decl_vars(parser_context *context) {
         context->nreg_count += 1;
         if (!one_liner) {
             target *t = arr_target_push(&context->targets, (target){.reg = reg});
-            printf("parse block start\n");
             parse_block(context);
             if (!t->target_assigned) {
                 compile_err(&context->cur_token, "this block must assign\n");
@@ -997,7 +1002,6 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                     .type = type,
                     .addr = addr,
                 };
-                printf("reg %d, %d, %d\n", regsize, type->sign, reg.addr);
                 if (parsing_arg) {
                     arr_reg_t_push(&symbol.params, reg);
                 } else {
@@ -1116,16 +1120,21 @@ bool stmt_reg_assign(parser_context *context) {
     reg_t *target_reg = cur_target->reg;
     target_reg->size = context->reg.size;
     target_reg->addr = context->reg.addr;
-    printf("before assign: "), str_print(&context->reg.type->name);
     if (!cur_target->target_assigned) {
         if (context->reg.type == type_comptime_int) {
-            printf("was comptime int\n");
             context->reg.type = type_i32;
             context->reg.size = (reg_size)type_i32->size;
         }
         target_reg->size = context->reg.size;
         target_reg->type = context->reg.type;
+    } else {
+        if (context->reg.type == type_comptime_int
+                && target_reg->type->tag == TK_FUND) {
+            context->reg.type = target_reg->type;
+            context->reg.size = target_reg->size;
+        }
     }
+    reg_typecheck(token, *target_reg, context->reg);
     emit_mov_reg(*target_reg, context->reg);
     printd("stmt:reg_assign, size %d\n", target_reg->size);
     cur_target->target_assigned = true;
@@ -1152,7 +1161,7 @@ symbol_t *fn_call(parser_context *context) {
     context->reg.offset = 0;
     read_and_check_types(context, params);
 
-    printf("found %d args\n", context->reg.offset);
+    printd("found %d args\n", context->reg.offset);
 
     if (context->reg.offset > 0)
         lex(context);
@@ -1299,7 +1308,9 @@ void function(iter *src, FILE *object_file) {
     printd(CSI_GREEN"\n--- start of label: ");
     str_printd(&context->name);
     printd(CSI_RESET);
+    TIMER_LABEL_STR(&context->name);
 
+    TIMER_START(parse_while);
     while (src->cur < src->end) {
         lex(context);
         token_t *cur_token = &context->cur_token;
@@ -1315,11 +1326,13 @@ void function(iter *src, FILE *object_file) {
         }
 
         if (context->ended) {
-            printf("end detected\n");
+            printd("end detected\n");
             break;
         }
     }
+    TIMER_END(parse_while);
 
+    TIMER_START(parse_emit);
     if (str_len(context->name) == 0) {
         return;
     }
@@ -1336,6 +1349,7 @@ void function(iter *src, FILE *object_file) {
     emit_ret();
     emit_fnbuf(object_file);
     printd("end of fn\n");
+    TIMER_END(parse_emit);
 }
 
 const char *fund_type_names[] = {
@@ -1362,11 +1376,11 @@ void register_fund_types(void) {
         if (str_eq_lit(&name, "i32")) {
             type_i32 = t;
         }
-        printd("reg type "), str_print(&name);
     }
 }
 
 int main(int argc, const char *argv[]) {
+    TIMER_START(clock_runtime);
     if (argc == 1) {
         fprintf(stderr, "usage: alc [filename]\n");
         exit(EXIT_FAILURE);
@@ -1408,15 +1422,20 @@ int main(int argc, const char *argv[]) {
 
     iter src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
 
+    TIMER_START(clock_zero);
+    TIMER_END(clock_zero);
     emit_init();
     register_fund_types();
+    TIMER_START(clock_parse);
     while (src.cur < src.end) {
         function(&src, object_file);
     }
 
     emit_cstr(object_file);
+    TIMER_END(clock_parse);
 
     if (has_compile_err)
         fprintf(stderr, CSI_RED"compilation failed\n"CSI_RESET);
+    TIMER_END(clock_runtime);
     return has_compile_err;
 }
