@@ -885,6 +885,10 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 while (str_eq_lit(&cur_token->id, "addr")) {
                     addr += 1;
                     lex(context);
+                    if (token->end[-1] == ')') {
+                        break_out = true;
+                        token->end -= 1;
+                    }
                 }
                 type_t *type = hashmap_type_t_tryfind(types, cur_token->id);
                 if (!type) {

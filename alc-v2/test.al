@@ -50,6 +50,9 @@ fn_assign: (=> R i32)
 
 stack_var: (=> R i32)
     [X] :: 3 =[]
+    ret [X]
+
+get_hi: (=> Hi addr u8)
     ret "HI"
 
 reg_off: (=>)
