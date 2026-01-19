@@ -60,7 +60,7 @@ typedef struct {
     bool last_line_ret;
     u8 indent;
     u16 unnamed_labels;
-    symbol_t *deferred_fn_call;
+    symbol_t *last_fn_call;
     str name;
     token_t cur_token;
     arr_target targets;

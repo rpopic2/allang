@@ -18,6 +18,7 @@
 #define INT_SIZE 4
 
 void parse_block(parser_context *context);
+symbol_t *fn_call(parser_context *context);
 
 OPT_GENERIC(i64)
 
@@ -807,8 +808,12 @@ bool stmt(parser_context *context) {
             arg_count = context->reg.offset;
         }
         if (do_airity_check && arg_count != context->symbol->ret_airity) {
-            compile_err(token, "expected to return %d values, but found %d\n",
+            symbol_t *fn = fn_call(context);
+            arg_count = fn->ret_airity;
+            if (arg_count != context->symbol->ret_airity) {
+                compile_err(token, "expected to return %d values, but found %d\n",
                     context->symbol->ret_airity, arg_count);
+            }
         }
         if (context->cur_token.data == NULL
                 || context->indent == context->cur_token.indent) {
@@ -1036,19 +1041,19 @@ bool stmt_reg_assign(parser_context *context) {
     return true;
 }
 
-void fn_call(parser_context *context) {
+symbol_t *fn_call(parser_context *context) {
     const token_t *token = &context->cur_token;
     const str token_str = token->id;
     symbol_t *symbol = hashmap_symbol_t_tryfind(fn_ids, token_str);
     if (!symbol) {
         compile_err(token, "trying to use undefined function "), str_printerr(token->id);
-        return;
+        return symbol;
     }
-    context->deferred_fn_call = symbol;
+    context->last_fn_call = symbol;
 
     bool multiline = token_str.end[0] == '\n';
     if (multiline) {
-        return;
+        return NULL;
     }
 
     arr_reg_t *params = &symbol->params;
@@ -1066,27 +1071,23 @@ void fn_call(parser_context *context) {
     if (!str_eq_lit(cur_token_str, "=>")) {
         compile_err(token, "function call '=>' is expected\n");
     }
-    symbol_t *s = context->deferred_fn_call;
-    if (!s) {
-        compile_err(token, "nothing to call\n");
-        return;
-    }
 
-    str fn_name = s->name;
+    str fn_name = symbol->name;
 
     int arg_counts = context->reg.offset;
-    if (do_airity_check && arg_counts != s->airity) {
-        compile_err(token, "expected argument count %d, but found %d\n", s->airity, arg_counts);
+    if (do_airity_check && arg_counts != symbol->airity) {
+        compile_err(token, "expected argument count %d, but found %d\n", symbol->airity, arg_counts);
     }
     emit_fn_call(&fn_name);
 
     context->reg.offset = 0;
     context->reg.reg_type = RET;
-    type_t *return_type = s->rets.data[0].type;
+    type_t *return_type = symbol->rets.data[0].type;
     context->reg.type = return_type;
     context->reg.addr = return_type->addr;
     context->reg.size = (reg_size)return_type->size;
     context->calls_fn = true;
+    return symbol;
 }
 
 void parse(parser_context *context) {

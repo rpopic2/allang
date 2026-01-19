@@ -57,6 +57,10 @@ stack_var: (=> R i32)
 get_hi: (=> Hi addr u8)
     ret "HI"
 
+get_hi_redirected: (=> Hi addr u8)
+    ret get_hi =>
+
+
 reg_off: (=>)
     O :: = 2
     [X] ::
