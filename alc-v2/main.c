@@ -1,3 +1,5 @@
+#define DEBUG_TIMER 1
+
 #include <assert.h>
 #include <time.h>
 #include <ctype.h>
@@ -1385,6 +1387,7 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, "usage: alc [filename]\n");
         exit(EXIT_FAILURE);
     }
+    TIMER_START(clock_read_source);
     const char *source_name = argv[1];
     FILE *source_file = fopen(argv[1], "r");
     if (source_file == NULL) {
@@ -1405,7 +1408,10 @@ int main(int argc, const char *argv[]) {
 		fprintf(stderr, "error: buffer overflow. expected %ld bytes but read %lu bytes\n", source_len, bytes_read);
         exit(EXIT_FAILURE);
     }
+    TIMER_END(clock_read_source);
 
+    TIMER_START(clock_make_output);
+    TIMER_START(clock_make_output_name);
     size_t source_name_len = strlen(source_name);
     char *out_name = malloc(source_name_len + 1);
     if (!out_name)
@@ -1414,11 +1420,15 @@ int main(int argc, const char *argv[]) {
     strncpy(out_name, source_name, source_name_len - 1);
     out_name[source_name_len - 2] = 's';
 
+    TIMER_END(clock_make_output_name);
+    TIMER_START(clock_make_output_fopen);
     FILE *object_file = fopen(out_name, "w");
     if (object_file == NULL) {
         fprintf(stderr, "error: failed to create file\n");
         exit(EXIT_FAILURE);
     }
+    TIMER_END(clock_make_output_fopen);
+    TIMER_END(clock_make_output);
 
     iter src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
 
