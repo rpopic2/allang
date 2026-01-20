@@ -16,13 +16,9 @@ void compile_warning(const char *format, ...);
 #endif
 
 #if DEBUG_TIMER
-#define TIMER_START(name) struct timespec name; \
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &name);
-#define TIMER_END(name) struct timespec name##_time; \
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &name##_time); \
-    time_t name##_sec = (name##_time.tv_sec - name.tv_sec); \
-    long name##_nsec = (name##_time.tv_nsec - name.tv_nsec); \
-    printf(#name": %lds %ldns\n", name##_sec, name##_nsec);
+#define TIMER_START(name) clock_t name = clock();
+#define TIMER_END(name) clock_t name##_time = (clock() - name); \
+    printf(#name": %.3lfms(%luμs) elapsed\n", name##_time / (double)(CLOCKS_PER_SEC / 1000), name##_time);
 #define TIMER_LABEL(s) printf(s);
 #define TIMER_LABEL_STR(str) str_print(str);
 
