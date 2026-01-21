@@ -17,7 +17,7 @@ bool hashentry_##T##_valid(const hashentry_##T *entry) { \
 inline static hashentry_##T *hashmap_##T##_find(hashmap_##T self, const str id) { \
     u64 real_hash = hash_fn(id); \
     u64 index = real_hash % array_len; \
-    str_printdnl(&id), printd(" -> hash was: "PRIu64"(from "PRIu64")\n", index, real_hash); \
+    str_printdnl(&id), printd(" -> hash was: %"PRIu64"(from %"PRIu64")\n", index, real_hash); \
     u64 start = index; \
  \
     while (hashentry_##T##_valid(&self[index])) { \
