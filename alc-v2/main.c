@@ -176,11 +176,13 @@ retry:;
 
         if (new_indent < indent) {
             context->cur_token.eob = EOB;
+            printf("eob\n"), str_print(&context->cur_token.id);
         }
         indent = new_indent;
 
         if (context->indent > indent) {
             context->ended = true;
+            printf("end of fn\n");
         }
     }
 }
@@ -1153,7 +1155,6 @@ bool stmt_reg_assign(parser_context *context) {
 
     char next = token_str->data[1];
     if (!streq(token_str->data, "=") || !(isupper(next) || isspace(next))) {
-        printf("not assign\n");
         return false;
     }
     target *cur_target;
@@ -1380,7 +1381,7 @@ void function(iter *src, FILE *object_file) {
         }
 
         if (context->ended) {
-            printd("end detected\n");
+            printd("end of fn\n");
             break;
         }
     }

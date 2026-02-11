@@ -20,7 +20,7 @@ void compile_warning(const char *format, ...);
 #define TIMER_END(name) clock_t name##_time = (clock() - name); \
     printf(#name": %.3lfms(%luμs) elapsed\n", name##_time / ((double)CLOCKS_PER_SEC / 1000), name##_time);
 #define TIMER_LABEL(s) printf(s);
-#define TIMER_LABEL_STR(str) printf("label "), str_print(str);
+#define TIMER_LABEL_STR(str) printf(CSI_GREEN"\nlabel "), str_print(str), printf("-----\n"CSI_RESET);
 
 #else
 

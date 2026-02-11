@@ -306,13 +306,13 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     int stack_size =
         ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16)
         + ALIGN_TO(context->stack_size, 16);
-    printd("\n");
+    printd("\nstack report for: ");
     str_printd(&context->name);
-    printd("regs to save: %d, stack size: %d\n", regs_to_save, context->stack_size);
-    printd("aligned regs: %d, aligned stack: %d\n",
+    printd("\t- regs to save: %d, stack size: %d\n", regs_to_save, context->stack_size);
+    printd("\t- aligned regs: %d, aligned stack: %d\n",
             ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16),
             ALIGN_TO(context->stack_size, 16));
-    printd("result stack: %d\n", stack_size);
+    printd("\t- result stack: %d\n", stack_size);
 
     int cur_stackoff = ALIGN_TO(context->stack_size, 16);
     const int stack_objs_size = cur_stackoff;
