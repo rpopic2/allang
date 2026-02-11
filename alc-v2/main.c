@@ -1,5 +1,4 @@
 #define DEBUG_TIMER 1
-#define NDEBUG 1
 
 #include <assert.h>
 #include <time.h>
@@ -163,12 +162,15 @@ retry:;
 
     if (src->cur[-1] == '\n') {
         unsigned char new_indent = 0;
+        while (src->cur[0] == '\n') {
+            src->cur++;
+        }
         while (src->cur[0] == ' ') {
             src->cur++;
             ++new_indent;
         }
         if (indent % 4 != 0) {
-            compile_err(cur_token, "indentation should be in mutliple of 4\n");
+            compile_err(cur_token, "an indentation should be 4 spaces\n");
         }
         if (new_indent > indent) {
             context->cur_token.eob = SOB;
@@ -176,13 +178,11 @@ retry:;
 
         if (new_indent < indent) {
             context->cur_token.eob = EOB;
-            printf("eob\n"), str_print(&context->cur_token.id);
         }
         indent = new_indent;
 
-        if (context->indent > indent) {
+        if (context->indent > cur_token->indent) {
             context->ended = true;
-            printf("end of fn\n");
         }
     }
 }
