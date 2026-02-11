@@ -1,4 +1,5 @@
 #define DEBUG_TIMER 1
+#define NDEBUG 1
 
 #include <assert.h>
 #include <time.h>
@@ -22,6 +23,7 @@
 
 void parse_block(parser_context *context);
 symbol_t *fn_call(parser_context *context);
+bool stmt_reg_assign(parser_context *context);
 
 OPT_GENERIC(i64)
 
@@ -425,7 +427,11 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (lhs.type == rhs.type)
         return;
-    compile_err(token, "type checker: expected type "), str_printerrnl(lhs.type->name), puterr(", but found "), str_printerr(rhs.type->name);
+    type_t *ltype = lhs.type;
+    type_t *rtype = rhs.type;
+    compile_err(token, "type checker: expected type "), str_printerrnl(ltype ? ltype->name : STR_FROM("NULL")), puterr(", but found "), str_printerr(rtype ? rtype->name : STR_FROM("NULL"));
+    if (!ltype || !rtype)
+        return;
 
     size_t lsize = lhs.size;
     size_t rsize = rhs.size;
@@ -437,8 +443,8 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (lsize != rsize) {
         compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
     }
-    bool lsign = lhs.type->sign;
-    bool rsign = rhs.type->sign;
+    bool lsign = ltype->sign;
+    bool rsign = rtype->sign;
     if (lsign != rsign) {
         if (lsign) {
             compile_err(token, "\t- expected signed, but found unsigned\n");
@@ -448,43 +454,50 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     }
 }
 
+bool binary_op_store(const regable *restrict lhs, parser_context *restrict context) {
+    const token_t *op_token = &context->cur_token;
+    if (!streq(op_token->end + 1, "=["))
+        return false;
+    if (op_token->end[3] == ']')    // =[]. TODO need to merge this with stmt_stack_store?
+        return false;
+
+    lex(context);
+    str s = op_token->id;
+    s.data += 1;
+    reg_t rhs;
+    regable offset;
+    read_load_store_offset(context, s, &rhs, &offset);
+
+    reg_t reg_to_store;
+    if (lhs->tag == VALUE) {
+        reg_to_store = (reg_t){
+            .reg_type = SCRATCH, .offset = context->reg.offset,
+            .size = rhs.size
+        };
+        emit_mov(reg_to_store, lhs->value);
+        if (rhs.type == NULL) {
+            rhs.type = type_i32;
+        }
+    } else if (lhs->tag == REG) {
+        reg_to_store = lhs->reg;
+        rhs.type = lhs->reg.type;
+    } else {
+        unreachable;
+    }
+
+    printd("binary_op:store\n");
+    if (offset.tag == REG) {
+        emit_str_reg(reg_to_store, rhs, offset.reg);
+    } else {
+        emit_str(reg_to_store, rhs, (int)offset.value);
+    }
+    return true;
+}
+
 void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t lhs_token = context->cur_token;
     lex(context);
     token_t op_token = context->cur_token;
-
-    if (streq(op_token.data, "=[")) {
-        str s = op_token.id;
-        s.data += 1;
-        reg_t rhs;
-        regable offset;
-        read_load_store_offset(context, s, &rhs, &offset);
-
-        reg_t reg_to_store;
-        if (lhs->tag == VALUE) {
-            reg_to_store = (reg_t){
-                .reg_type = SCRATCH, .offset = context->reg.offset,
-                .size = rhs.size
-            };
-            emit_mov(reg_to_store, lhs->value);
-            if (rhs.type == NULL) {
-                rhs.type = type_i32;
-            }
-        } else if (lhs->tag == REG) {
-            reg_to_store = lhs->reg;
-            rhs.type = lhs->reg.type;
-        } else {
-            unreachable;
-        }
-
-        printd("binary_op:store\n");
-        if (offset.tag == REG) {
-            emit_str_reg(reg_to_store, rhs, offset.reg);
-        } else {
-            emit_str(reg_to_store, rhs, (int)offset.value);
-        }
-        return;
-    }
 
     lex(context);
     token_t rhs_token = context->cur_token;
@@ -506,6 +519,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 
     if (rhs.tag == NONE) {
         compile_err(&rhs_token, "expected operand, but found "), str_printerr(rhs_token.id);
+        compile_err(&lhs_token, "lhs was: "), str_printerr(lhs_token.id);
         return;
     } else if (rhs.tag == REG && rhs.reg.reg_type == NREG) {
         check_unassigned(rhs, context);
@@ -627,7 +641,10 @@ bool expr(parser_context *context) {
         context->reg.addr = 0;
     }
     char token_end = token->end[0];
-    if (token_end != ',' && token_end != '\n' && token_end != ')' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>")) {
+    if (binary_op_store(&lhs, context)) {
+        return true;
+    }
+    if (token_end != ',' && token_end != '\n' && token_end != ')' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>") && !streq(token->end + 1, "=")) {
         binary_op(&lhs, context);
     } else {
         if (lhs.tag == VALUE) {
@@ -725,17 +742,38 @@ target *get_current_target(parser_context *context) {
 bool stmt_stack_store(parser_context *context) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
-    if (!str_eq_lit(token_str, "=[]")) {
+    regable reg = {.tag = VALUE};
+    reg.reg = context->reg;
+
+    if (!streq(token_str->data, "=[")) {
         return false;
     }
 
-    target *cur_target = arr_target_top(&context->targets);
-    reg_t *target_reg = cur_target->reg;
-    if (cur_target == NULL || target_reg->reg_type != STACK) {
-        compile_err(token, "nothing to store to\n");
-    }
-    if (!cur_target)
+    char next = token_str->data[2];
+    target *cur_target;
+    if (next == ']') {
+        cur_target = arr_target_top(&context->targets);
+        if (cur_target == NULL || cur_target->reg->reg_type != STACK) {
+            compile_err(token, "nothing to store to\n");
+        }
+        // if (!cur_target)
+        //     return true;
+    } else if (isupper(next)) {
+        str name = *token_str;
+        name.data += 2;
+        name.end -= 1;
+
+        reg_t *t;
+        if (!find_id(&local_ids, name, token, &t, 0)) {
+            compile_err(token, "could not find identifier "), str_printerr(name);
+        }
+        cur_target = &(target){.target_assigned = true, .reg = t};
+
+    } else {
+        compile_err(token, "store target expected\n");
         return true;
+    }
+    reg_t *target_reg = cur_target->reg;
 
     reg_t src = context->reg;
     src.offset -= 1;
@@ -1113,20 +1151,34 @@ bool stmt_reg_assign(parser_context *context) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
 
-    if (!str_eq_lit(token_str, "=")) {
+    char next = token_str->data[1];
+    if (!streq(token_str->data, "=") || !(isupper(next) || isspace(next))) {
+        printf("not assign\n");
         return false;
     }
-    target *cur_target = get_current_target(context);
+    target *cur_target;
+    if (isspace(next)) {
+        cur_target = get_current_target(context);
+    } else {
+        str name = *token_str;
+        name.data += 1;
+        reg_t *t;
+        if (!find_id(&local_ids, name, token, &t, 0)) {
+            compile_err(token, "could not find identifier "), str_printerr(name);
+        }
+        cur_target = &(target){.target_assigned = true, .reg = t};
+    }
     if (!cur_target)
         return false;
     reg_t *target_reg = cur_target->reg;
-    target_reg->size = context->reg.size;
-    target_reg->addr = context->reg.addr;
     if (!cur_target->target_assigned) {
-        if (context->reg.type == type_comptime_int) {
+        if (context->reg.type == NULL) {
+            compile_err(token, "compiler bug: reg type shouldn't be null\n");
+        } else if (context->reg.type == type_comptime_int) {
             context->reg.type = type_i32;
             context->reg.size = (reg_size)type_i32->size;
         }
+        target_reg->addr = context->reg.addr;
         target_reg->size = context->reg.size;
         target_reg->type = context->reg.type;
     } else {
@@ -1382,7 +1434,7 @@ void register_fund_types(void) {
 }
 
 int main(int argc, const char *argv[]) {
-    TIMER_START(clock_runtime);
+    TIMER_START(clock_full);
     if (argc == 1) {
         fprintf(stderr, "usage: alc [filename]\n");
         exit(EXIT_FAILURE);
@@ -1436,16 +1488,16 @@ int main(int argc, const char *argv[]) {
     TIMER_END(clock_zero);
     emit_init();
     register_fund_types();
-    TIMER_START(clock_parse);
+    TIMER_START(clock_parse_all);
     while (src.cur < src.end) {
         function(&src, object_file);
     }
 
     emit_cstr(object_file);
-    TIMER_END(clock_parse);
+    TIMER_END(clock_parse_all);
 
     if (has_compile_err)
         fprintf(stderr, CSI_RED"compilation failed\n"CSI_RESET);
-    TIMER_END(clock_runtime);
+    TIMER_END(clock_full);
     return has_compile_err;
 }

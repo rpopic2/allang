@@ -31,6 +31,7 @@ K is 3 ->
     ret false
 
 7 =[J]
+1 + 3 =[J]
 
 K is 2 ->
     ret true
@@ -93,6 +94,16 @@ stack_store: (=>)
 short_lit: (=>)
     K ::
         u64(3 + 4) =
-        u64(2 + 3) =
-    K
+        2 =
+    [S] ::
+        u64(3 + 4) =[]
+        ^K =[]
+    2 =K
+    u64(3 + 4) =K
+    K =K
+    // point{A, 4} =K
+    // point(3, 4) =K
+    2 =[S]
+    u64(3 + 4) =[S]
+    K =[S]
 

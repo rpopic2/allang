@@ -25,7 +25,7 @@ may be assembled to xor self, self.
 
 ```
 arithmetic/literal ::= literal/numeric op/binary literal/numeric[, %]
-op/binary ::= '+' | '-' | '*' | '/' | 'lsl' | 'ror' | 'asr' | 'addc' | 'adds' | '?' | 'mul' | 'div'
+op/binary ::= '+' | '-' | '*' | '/' | ...
 ```
 
 ### examples
@@ -35,20 +35,35 @@ op/binary ::= '+' | '-' | '*' | '/' | 'lsl' | 'ror' | 'asr' | 'addc' | 'adds' | 
 1 / 4           // result is in integer like c
 1.0 / 0.3       // result is in float
 
-1 lsl 3         // shifts are available
-2 ror 4
-3 asr 5
-2 addc 4        // add with carry and set flags are available
-3 adds 5
+1 SHL 3         // shifts are available
+3 SHR 5         // arithmetic if signed, logical if unsigned
+2 ROR 4         // rotate right
+3 ROL 3         // rotate left
+2 ADC 4         // add with carry and set flags are available
+3 ADD K ? 0     // add with set flags, select 0 on overflow
+3 ADD K ?c eret // add with set carry flags, return error on carry
+3 ADDS K        // just set flags
+3 AND 4
+2 XOR 5
+9 ORR 8
 
-3 mul 8         // disables constant multiplication optimizations
-4 div 2
+3 MUL 8         // disables constant multiplication optimizations
+4 DIV 2
 
 ### assembles to
 
 arithetic operations. division and multiplication with literals will be optimised
 unless 'mul' and 'div' operators are used.
 
+## unary arithmetics
+
+### examples
+
+- I             // moves minus I
+NEG I           // equivalant to - I
+NOT I           // bitwise not I
+CLZ I           // count leading zeros of I
+CTZ I           // count trailing zeros of I
 
 ## named register declaration
 
@@ -90,24 +105,31 @@ expressions on the right hand side will be assmebled.
 
 ```
 arithmetic/nreg ::=
-    | id/nreg((literal/numeric))
-    | id/nreg((arithmetic/literal))
-    | id/nreg((op/binary= literal/numeric))
+    | id/nreg := literal/numeric
+    | id/nreg := arithmetic/literal
+    | id/nreg := op/binary= literal/numeric
+    | id/nreg op/binary= literal/numeric
 ```
 
-I(4)            // moves 4 to register i
-I(3 + 4)        // all data processing expressions are allowed
-I :: "hi"       // you can also redeclare named register with same name
+I :: 0          // declare I
+I := 4          // moves 4 to register I
+I := 3 + 4      // all data processing expressions are allowed
 
-I(i + 4)
-I(+= 4)         // can be abbriviated like this
-I(LSL= 4)
-I(-4)           // moves -4
-I(-= 4)         // moves i - 4
-// I(- 4)       // this is invalid syntax
+I := I + 4
+I += 4          // can be abbriviated like this
+I SHL= 4        // same with other operators
+I := - I        // moves -I
+// I := -I      // invalid syntax
+I -= 4          // moves i - 4
 
-I :: 4          // or just redefine it. redefinition of scratch register is allowed in only same scope
+I :: 4          // redeclare it. redefinition of scratch register is allowed in only same scope
 I :: "hi"       // type can be changed on redefinition
+
+I := foo =>     // should we allow this?
+
+// do we need this second way?
+4 =I            // moves 4 to scratch, move the scratch to I
+foo => =I       // used when saving function result to a reg
 
 ### assembles to
 
@@ -148,13 +170,13 @@ I < 4 ? J : P + 4   // error! no operators can be involved!
 // there is no operator precedence.
 
 1 + 4 * 2
-print=>             // prints 10
+print =>             // prints 10
 
-1 + (4 * 2)
-print=>             // prints 9
+1, 4 * 2
++ print =>           // prints 9
 
 4 * 2 + 1
-print=>             // prints 9
+print =>             // prints 9
 
 
 ## loading addresses of aggregates
@@ -201,10 +223,5 @@ mov/param ::=
 ### examples
 
 ```
-3, 4 add=>
-
-3, 4
-add=>
-
-add 3, 4=>
+add 3, 4 =>
 ```
