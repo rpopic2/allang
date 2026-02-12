@@ -926,6 +926,43 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
         } while (token->end[0] == ',' && isspace(token->end[1]));
 }
 
+bool stmt_ret(parser_context *context) {
+    const token_t *token = &context->cur_token;
+
+    if (!str_eq_lit(&token->id, "ret"))
+        return false;
+
+    context->reg.reg_type = RET;
+
+    int arg_count = 0;
+    if (context->cur_token.end[0] != '\n') {
+        read_and_check_types(context, &context->symbol->rets);
+        arg_count = context->reg.offset;
+    }
+    int expected = context->symbol->ret_airity;
+    if (do_airity_check && arg_count != expected) {
+        if (islower(token->id.data[0])) {
+            symbol_t *fn = fn_call(context);
+            arg_count = fn->ret_airity;
+            if (arg_count != context->symbol->ret_airity) {
+                compile_err(token, "redirected function: expected to return %d values, but found %d\n",
+                        context->symbol->ret_airity, arg_count);
+            }
+        } else {
+            compile_err(token, "expected to return %d values (found %d)\n", expected, arg_count);
+        }
+    }
+    if (context->cur_token.data == NULL
+            || context->indent == context->cur_token.indent) {
+        context->ended = true;
+        context->last_line_ret = true;
+        return true;
+    }
+    context->has_branched_ret = true;
+    emit_branch(context->symbol->name, STR_FROM("ret"), 0);
+    return true;
+}
+
 bool stmt(parser_context *context) {
     const token_t *token = &context->cur_token;
 
@@ -933,30 +970,7 @@ bool stmt(parser_context *context) {
         stmt_struct(context);
         return true;
     }
-    if (str_eq_lit(&token->id, "ret")) {
-        context->reg.reg_type = RET;
-
-        int arg_count = 0;
-        if (context->cur_token.end[0] != '\n') {
-            read_and_check_types(context, &context->symbol->rets);
-            arg_count = context->reg.offset;
-        }
-        if (do_airity_check && arg_count != context->symbol->ret_airity) {
-            symbol_t *fn = fn_call(context);
-            arg_count = fn->ret_airity;
-            if (arg_count != context->symbol->ret_airity) {
-                compile_err(token, "expected to return %d values, but found %d\n",
-                    context->symbol->ret_airity, arg_count);
-            }
-        }
-        if (context->cur_token.data == NULL
-                || context->indent == context->cur_token.indent) {
-            context->ended = true;
-            context->last_line_ret = true;
-            return true;
-        }
-        context->has_branched_ret = true;
-        emit_branch(context->symbol->name, STR_FROM("ret"), 0);
+    if (stmt_ret(context)) {
         return true;
     } else if (streq(token->data, ">>")) {
         u16 index = context->unnamed_labels++;
