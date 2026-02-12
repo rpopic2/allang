@@ -1,6 +1,7 @@
 #declare foo: (X i32, Y i32 => A i32)
 #declare printf: (Format addr u8 => Num_Printed i32)
 #declare get_hi: (=> Hi addr u8)
+#declare get_hi_redirected: (=> Hi addr u8)
 
 printf "Hello World\n" =>
 
@@ -47,7 +48,9 @@ foo K, [J] =>
 Hi :: get_hi =>
 [Hi_Stack] :: get_hi => =[]
 
-ret false
+get_hi_redirected =>
+
+ret 0
 
 foo: (X i32, Y i32 => A i32)
     ret X + Y
@@ -110,6 +113,6 @@ short_lit: (=>)
     K =[S]
     ret
 
-mov_test: (=> I i32)
+ret_int: (=> I i32)
     ret 1
 

@@ -1157,6 +1157,7 @@ bool directives(parser_context *context) {
     if (str_eq_lit(&token_str, "declare")) {
         lex(context);
         symbol_t *symbol = label_meta(context, NULL);
+        arr_mini_hashset_pop(&local_ids);
         if (symbol == NULL) {
             return true;
         }
@@ -1478,7 +1479,6 @@ int main(int argc, const char *argv[]) {
     }
     TIMER_END(clock_read_source);
 
-    TIMER_START(clock_make_output);
     TIMER_START(clock_make_output_name);
     size_t source_name_len = strlen(source_name);
     char *out_name = malloc(source_name_len + 1);
@@ -1496,7 +1496,6 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
     TIMER_END(clock_make_output_fopen);
-    TIMER_END(clock_make_output);
 
     iter src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
 
