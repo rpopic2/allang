@@ -120,10 +120,18 @@ assign_vals: (=>)
     I :: 1
     3 =I
 
+    I2 :: I
+    I =I2
+
     J ::
         2 =
         4 =This
         5 =^J
+
+    J2 ::
+        ^J =
+        ^J =This
+
     ret
 
 store_vals: (=>)
@@ -134,4 +142,10 @@ store_vals: (=>)
         3 =[]
         4 =[^J]
         5 =[This]
+    ret
 
+fund_types: (=>)
+    I8 :: i8(4)
+    I16 :: i16(3)
+    I32 :: i32(1)
+    I64 :: i64(2)

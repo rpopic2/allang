@@ -93,7 +93,7 @@ static const char *get_wx(reg_size reg_size) {
     } else if (reg_size <= 8) {
         format = "x";
     } else {
-        printf(CSI_RED"cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg_size);
+        printf(CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg_size);
         format = "x";
     }
     return format;

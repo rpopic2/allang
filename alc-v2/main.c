@@ -775,9 +775,8 @@ bool stmt_stack_store(parser_context *context) {
         cur_target = arr_target_top(&context->targets);
         if (cur_target == NULL || cur_target->reg->reg_type != STACK) {
             compile_err(token, "nothing to store to\n");
+            return true;
         }
-        // if (!cur_target)
-        //     return true;
     } else if (isupper(next)) {
         str name = *token_str;
         name.data += 2;
