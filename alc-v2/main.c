@@ -141,7 +141,7 @@ retry:;
             ++lineno;
         }
         if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';'
-                || c == ')' || c == '(') {
+                || c == ')' || c == '(' || c == '{') {
             cur_token->end = src->cur++;
             if (c == ',' || c == ';')
                 src->cur++;
@@ -381,7 +381,9 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         str offset_str = cur_token->id;
         offset_str.end -= 1;
         offset_regable = read_regable(offset_str, cur_token);
-        if (offset_regable.tag == VALUE) {
+        if (offset_regable.tag == NONE) {
+            return false;
+        } else if (offset_regable.tag == VALUE) {
 
         } else if (offset_regable.tag == REG && offset_regable.reg.reg_type == NREG) {
 
@@ -606,7 +608,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 }
 
 bool expr(parser_context *context) {
-    bool explicit_type = context->cur_token.end[0] == '(';
+    bool explicit_type = context->cur_token.end[0] == '{';
     if (explicit_type) {
         str id = context->cur_token.id;
         type_t *type = hashmap_type_t_tryfind(types, id);
@@ -778,8 +780,11 @@ bool stmt_stack_store(parser_context *context) {
     target *cur_target;
     if (next == ']') {
         cur_target = arr_target_top(&context->targets);
-        if (cur_target == NULL || cur_target->reg->reg_type != STACK) {
+        if (cur_target == NULL) {
             compile_err(token, "nothing to store to\n");
+            return true;
+        } else if (cur_target->reg->reg_type != STACK) {
+            compile_err(token, "target is not a stack variable\n");
             return true;
         }
     } else if (isupper(next)) {
