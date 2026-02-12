@@ -183,7 +183,7 @@ retry:;
         }
         indent = new_indent;
 
-        if (context->indent > cur_token->indent) {
+        if (context->indent > cur_token->indent || context->indent > new_indent) {
             context->ended = true;
         }
     }
