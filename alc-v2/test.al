@@ -3,7 +3,11 @@
 #declare get_hi: (=> Hi addr u8)
 #declare get_hi_redirected: (=> Hi addr u8)
 
-printf "Hello World\n" =>
+printf "Hellow World\n" =>
+
+Redirect :: get_hi_redirected =>
+
+printf Redirect =>
 
 V ::
     3 + 2 =
@@ -48,15 +52,13 @@ foo K, [J] =>
 Hi :: get_hi =>
 [Hi_Stack] :: get_hi => =[]
 
-get_hi_redirected =>
-
 ret 0
 
 foo: (X i32, Y i32 => A i32)
     ret X + Y
 
 get_hi: (=> Hi addr u8)
-    ret "HI"
+    ret "HI\n"
 
 store_char: (=>)
     Hi :: get_hi =>

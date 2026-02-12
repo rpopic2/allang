@@ -333,7 +333,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
         const char *stp_format = INSTR("stp x%d, x%d, [sp, #%d]");
         const char *ldp_format = INSTR("ldp x%d, x%d, [sp, #%d]");
         if (cur_stackoff == 0) {
-            stp_format = INSTR("stp x%d, x%d, [sp, #%d]!");
+            stp_format = INSTR("stp x%d, x%d, [sp, #-%d]!");
             defer_ldp = true;
             off = stack_size;
         }
