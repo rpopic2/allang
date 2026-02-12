@@ -345,8 +345,8 @@ regable read_regable(str s, const token_t *token) {
             || e->reg_type == RD_NONE) {
             compile_err(token, "unknown id "), str_printerr(s);
         } else {
-            result.tag = REG;
             result.reg = *e;
+            result.tag = REG;
         }
     } else {
         if_opt(i64, value, = lit_numeric(token)) {
@@ -370,7 +370,7 @@ void check_unassigned(regable lhs, const parser_context *context) {
     }
 }
 
-void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, regable *out_offset) {
+bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, regable *out_offset) {
     const token_t *cur_token = &context->cur_token;
     regable offset_regable = {.tag = VALUE, .value = 0};
     s.data += 1;
@@ -400,17 +400,20 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         target *t = arr_target_top(&context->targets);
         if (!t) {
             compile_err(cur_token, "nothing to assign\n");
-            return;
+            return false;
         }
         regable_target = (regable){.tag = REG, .reg = *t->reg};
     } else {
         regable_target = read_regable(s, cur_token);
     }
+    if (regable_target.tag == NONE) {
+        return false;
+    }
     if (s.data[-2] != '=')
         check_unassigned(regable_target, context);
     if (regable_target.tag != REG) {
         compile_err(cur_token, "register expected\n");
-        return;
+        return false;
     }
     reg_t reg = regable_target.reg;
     if (reg.reg_type != STACK && reg.addr <= 0) {
@@ -441,7 +444,7 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     } else unreachable;
     *out_offset = offset_regable;
     *out_reg = reg;
-    return;
+    return true;
 }
 
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
@@ -486,7 +489,8 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     s.data += 1;
     reg_t rhs;
     regable offset;
-    read_load_store_offset(context, s, &rhs, &offset);
+    if (!read_load_store_offset(context, s, &rhs, &offset))
+        return true;
 
     reg_t reg_to_store;
     if (lhs->tag == VALUE) {
@@ -629,7 +633,8 @@ bool expr(parser_context *context) {
         reg_t *lhs = &context->reg;
         reg_t rhs;
         regable offset;
-        read_load_store_offset(context, token->id, &rhs, &offset);
+        if (!read_load_store_offset(context, token->id, &rhs, &offset))
+            return true;
         if (!rhs.type) {
             compile_err(token, "compiler bug: type you are trying to load is null\n");
             return true;
