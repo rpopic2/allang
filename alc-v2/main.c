@@ -298,7 +298,7 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
 
 opt_i64 lit_numeric(const token_t *token) {
     i64 value = 0;
-    if (isdigit(token->data[0])) {
+    if (isdigit(token->data[0]) || token->data[0] == '-') {
         value = strtoll(token->data, NULL, 0);
     } else if (token->data[0] == '\'') {
         char c = token->data[1];
@@ -339,6 +339,8 @@ int extrat_scope_up(str *s) {
 regable read_regable(str s, const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE};
     if (isupper(s.data[0]) || s.data[0] == '^') {
+        if (s.end[-1] == '}')
+            s.end--;
         int scope_up = extrat_scope_up(&s);
         reg_t *e;
         if (!find_id(&local_ids, s, token, &e, scope_up)
@@ -679,8 +681,6 @@ bool expr(parser_context *context) {
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
             if (nreg->reg_type == NREG) {
-                context->reg.size = nreg->size;
-                context->reg.type = nreg->type;
                 assert(nreg->type);
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->reg_type == STACK) {

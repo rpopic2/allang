@@ -167,4 +167,13 @@ fund_types: (=>)
     I32 =[I32_Stack]
     I64 =[I64_Stack]
 
+    [I8_Stack] =I8
+
+    comptime_int:
+    5 =I8
+
+casting: (=>)
+    I8 :: i8{-3}
+    I16 :: i64{I8}
+
 
