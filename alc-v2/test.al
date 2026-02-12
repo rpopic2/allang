@@ -110,3 +110,6 @@ short_lit: (=>)
     K =[S]
     ret
 
+mov_test: (=>)
+    ret 1
+

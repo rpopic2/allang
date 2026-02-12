@@ -163,6 +163,7 @@ retry:;
     if (src->cur[-1] == '\n') {
         unsigned char new_indent = 0;
         while (src->cur[0] == '\n') {
+            ++lineno;
             src->cur++;
         }
         while (src->cur[0] == ' ') {
