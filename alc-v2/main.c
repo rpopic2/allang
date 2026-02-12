@@ -452,7 +452,8 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
 }
 
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
-    if (lhs.type == rhs.type)
+    if (lhs.type == rhs.type && lhs.addr == rhs.addr)
+            // && lhs.size == rhs.size)
         return;
     type_t *ltype = lhs.type;
     type_t *rtype = rhs.type;
@@ -460,13 +461,11 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (!ltype || !rtype)
         return;
 
+    if (lhs.addr != rhs.addr) {
+        compile_err(token, "\t- address of %d indirection(s) expected, but found %d indirection(s)\n", lhs.addr, rhs.addr);
+    }
     size_t lsize = lhs.size;
     size_t rsize = rhs.size;
-    if (lhs.addr != rhs.addr) {
-        if (rhs.addr) {
-            compile_err(token, "\t- address of %d indirection(s) expected, but found %d indirection(s)\n", lhs.addr, rhs.addr);
-        }
-    }
     if (lsize != rsize) {
         compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
     }
@@ -676,11 +675,19 @@ bool expr(parser_context *context) {
     if (token_end != ',' && token_end != '\n' && token_end != ')' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>") && !streq(token->end + 1, "=")) {
         binary_op(&lhs, context);
     } else {
+        printd("nullary op\n");
         if (lhs.tag == VALUE) {
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
+            printf("lhs tag reg\n");
             const reg_t *nreg = &lhs.reg;
+            if (context->reg.reg_type == PARAM) {
+                context->reg.type = nreg->type;
+                context->reg.addr = nreg->addr;
+                context->reg.size = nreg->size;
+            }
             if (nreg->reg_type == NREG) {
+                printf("lhs tag nreg\n");
                 assert(nreg->type);
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->reg_type == STACK) {
@@ -860,12 +867,19 @@ bool decl_vars(parser_context *context) {
             else {
                 symbol_t *fn = fn_call(context);
                 if (fn) {
+                    printf("fn calls "), str_print(&fn->name);
                     if (fn->ret_airity != 1) {
                         compile_err(&context->cur_token, "this function does not return exactly one value\n");
                     }
-                    nreg.size = context->reg.size;
-                    nreg.addr = context->reg.addr;
-                    nreg.type = context->reg.type;
+                    reg_t ret_reg = fn->rets.data[0];
+                    // context->reg.size = nreg.size = ret_reg.size;
+                    // context->reg.addr = nreg.addr = ret_reg.addr;
+                    // context->reg.type = nreg.type = ret_reg.type;
+
+                    nreg.size = ret_reg.size;
+                    nreg.addr = ret_reg.addr;
+                    nreg.type = ret_reg.type;
+                    printf("addr %d, size %d, type.size %zd, type.addr %d\n", nreg.addr, nreg.size, nreg.type->size, nreg.type->addr);
                     emit_mov_reg(nreg, context->reg);
                 }
             }
@@ -885,6 +899,8 @@ bool decl_vars(parser_context *context) {
             }
             arr_target_pop(&context->targets);
         }
+        str_printdnl(&name);
+        printf(": decl addr %d, size %d, type.size %zd, type.addr %d\n", reg->addr, reg->size, reg->type->size, reg->type->addr);
         return true;
     } else if (token->data[0] == '[') {
         str name = token->id;
@@ -943,6 +959,7 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
                 if (context->reg.type == type_comptime_int
                         && rets_it->type->tag == TK_FUND) {
                     context->reg.type = rets_it->type;
+                    context->reg.size = rets_it->size;
                 }
                 reg_typecheck(&context->cur_token, *rets_it, context->reg);
             }

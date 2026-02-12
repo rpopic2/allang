@@ -5,6 +5,7 @@
 
 printf "Hellow World\n" =>
 
+redirect:
 Redirect :: get_hi_redirected =>
 printf Redirect =>
 

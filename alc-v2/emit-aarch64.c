@@ -144,6 +144,9 @@ void emit_mov(reg_t dst, i64 value) {
 
 void emit_mov_reg(reg_t dst, reg_t src) {
     const char *format;
+    if (dst.addr) {
+        dst.size = 8;
+    }
     if (dst.size <= 4) {
         format = INSTR("mov w%d, w%d");
     } else if (dst.size <= 8) {
