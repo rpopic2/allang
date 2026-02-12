@@ -23,6 +23,7 @@
 void parse_block(parser_context *context);
 symbol_t *fn_call(parser_context *context);
 bool stmt_reg_assign(parser_context *context);
+target *get_current_target(parser_context *context);
 
 OPT_GENERIC(i64)
 
@@ -326,18 +327,23 @@ typedef struct {
 } regable;
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .size = sizeof (void *) };
 
+int extrat_scope_up(str *s) {
+    int scope_up = 0;
+    while (s->data[0] == '^') {
+        scope_up += 1;
+        ++s->data;
+    }
+    return scope_up;
+}
+
 regable read_regable(str s, const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE};
     if (isupper(s.data[0]) || s.data[0] == '^') {
-        int scope_up = 0;
-        while (s.data[0] == '^') {
-            scope_up += 1;
-            ++s.data;
-        }
+        int scope_up = extrat_scope_up(&s);
         reg_t *e;
         if (!find_id(&local_ids, s, token, &e, scope_up)
             || e->reg_type == RD_NONE) {
-            compile_err(token, "unknown id "), str_fprint((str *)token, stderr);
+            compile_err(token, "unknown id "), str_printerr(s);
         } else {
             result.tag = REG;
             result.reg = *e;
@@ -388,7 +394,18 @@ void read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     } else if (s.end[-1] != ']') {
         compile_err(cur_token, "closing ']' expected\n");
     }
-    regable regable_target = read_regable(s, cur_token);
+
+    regable regable_target;
+    if (str_eq_lit(&s, "This")) {
+        target *t = arr_target_top(&context->targets);
+        if (!t) {
+            compile_err(cur_token, "nothing to assign\n");
+            return;
+        }
+        regable_target = (regable){.tag = REG, .reg = *t->reg};
+    } else {
+        regable_target = read_regable(s, cur_token);
+    }
     if (s.data[-2] != '=')
         check_unassigned(regable_target, context);
     if (regable_target.tag != REG) {
@@ -852,7 +869,7 @@ bool decl_vars(parser_context *context) {
         reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
         context->nreg_count += 1;
         if (!one_liner) {
-            target *t = arr_target_push(&context->targets, (target){.reg = reg});
+            target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
             parse_block(context);
             if (!t->target_assigned) {
                 compile_err(&context->cur_token, "this block must assign\n");
@@ -886,14 +903,14 @@ bool decl_vars(parser_context *context) {
                     context->reg.offset += 1;
                 }
             }
-            arr_target_push(&context->targets, (target){.reg = reg});
+            arr_target_push(&context->targets, (target){.reg = reg, .name = name});
             lex(context);
             if (!stmt_stack_store(context)) {
                 compile_err(&context->cur_token, "store statement '=[]' expected\n");
             }
             arr_target_pop(&context->targets);
         } else {
-            target *t = arr_target_push(&context->targets, (target){.reg = reg});
+            target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
             parse_block(context);
             if (!t->target_assigned) {
                 compile_err(&context->cur_token, "this block must store\n");
@@ -1170,43 +1187,48 @@ bool stmt_reg_assign(parser_context *context) {
     const str *token_str = &token->id;
 
     char next = token_str->data[1];
-    if (!streq(token_str->data, "=") || !(isupper(next) || isspace(next))) {
+    if (!streq(token_str->data, "=") || !(isupper(next) || isspace(next) || next == '^')) {
         return false;
     }
     target *cur_target;
-    if (isspace(next)) {
+    if (isspace(next) || streq(token_str->data + 1, "This")) {
         cur_target = get_current_target(context);
     } else {
         str name = *token_str;
         name.data += 1;
         reg_t *t;
-        if (!find_id(&local_ids, name, token, &t, 0)) {
+        int scope_up = extrat_scope_up(&name);
+        if (!find_id(&local_ids, name, token, &t, scope_up)) {
             compile_err(token, "could not find identifier "), str_printerr(name);
+            return true;
         }
         cur_target = &(target){.target_assigned = true, .reg = t};
     }
     if (!cur_target)
         return false;
     reg_t *target_reg = cur_target->reg;
+    reg_t src_reg = context->reg;
+    if (src_reg.reg_type == SCRATCH)
+        src_reg.offset -= 1;
     if (!cur_target->target_assigned) {
-        if (context->reg.type == NULL) {
+        if (src_reg.type == NULL) {
             compile_err(token, "compiler bug: reg type shouldn't be null\n");
-        } else if (context->reg.type == type_comptime_int) {
-            context->reg.type = type_i32;
-            context->reg.size = (reg_size)type_i32->size;
+        } else if (src_reg.type == type_comptime_int) {
+            src_reg.type = type_i32;
+            src_reg.size = (reg_size)type_i32->size;
         }
-        target_reg->addr = context->reg.addr;
-        target_reg->size = context->reg.size;
-        target_reg->type = context->reg.type;
+        target_reg->addr = src_reg.addr;
+        target_reg->size = src_reg.size;
+        target_reg->type = src_reg.type;
     } else {
-        if (context->reg.type == type_comptime_int
+        if (src_reg.type == type_comptime_int
                 && target_reg->type->tag == TK_FUND) {
-            context->reg.type = target_reg->type;
-            context->reg.size = target_reg->size;
+            src_reg.type = target_reg->type;
+            src_reg.size = target_reg->size;
         }
     }
-    reg_typecheck(token, *target_reg, context->reg);
-    emit_mov_reg(*target_reg, context->reg);
+    reg_typecheck(token, *target_reg, src_reg);
+    emit_mov_reg(*target_reg, src_reg);
     printd("stmt:reg_assign, size %d\n", target_reg->size);
     cur_target->target_assigned = true;
     return true;
@@ -1291,6 +1313,11 @@ void parse(parser_context *context) {
     } else {
         compile_err(token, "unexpected token "), str_printerr(token->id);
     }
+    if (token->end[0] == '\n') {
+        context->reg.offset = 0;
+        context->reg.type = NULL;
+        context->reg.size = 0;
+    }
 }
 
 void start_of_block(parser_context *context) {
@@ -1300,14 +1327,6 @@ void start_of_block(parser_context *context) {
 }
 
 void end_of_block(parser_context *context) {
-    // target *cur_target = arr_target_top(&context->targets);
-    // if (cur_target && !cur_target->target_assigned) {
-    //     if (cur_target->reg->reg_type == STACK)
-    //         compile_err(&context->cur_token, "this block must store\n");
-    //     else
-    //         compile_err(&context->cur_token, "this block must assign\n");
-    // }
-
     arr_mini_hashset_pop(&local_ids);
     arr_u16_pop(&context->deferred_unnamed_br);
     printd("end of a block\n\n");

@@ -6,7 +6,6 @@
 printf "Hellow World\n" =>
 
 Redirect :: get_hi_redirected =>
-
 printf Redirect =>
 
 V ::
@@ -104,7 +103,6 @@ short_lit: (=>)
         u64(3 + 4) =[]
         ^K =[]
 
-
     2 =K
     u64(3 + 4) =K
     K =K
@@ -117,4 +115,23 @@ short_lit: (=>)
 
 ret_int: (=> I i32)
     ret 1
+
+assign_vals: (=>)
+    I :: 1
+    3 =I
+
+    J ::
+        2 =
+        4 =This
+        5 =^J
+    ret
+
+store_vals: (=>)
+    [I] :: 1 =[]
+    2 =[I]
+
+    [J] ::
+        3 =[]
+        4 =[^J]
+        5 =[This]
 

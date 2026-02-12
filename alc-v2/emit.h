@@ -32,6 +32,7 @@ inline str str_from_token(const token_t *token) {
 typedef struct {
     reg_t *reg;
     bool target_assigned;
+    str name;
 } target;
 
 #define MAX_PARAMS 8
