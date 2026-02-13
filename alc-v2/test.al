@@ -178,5 +178,104 @@ fund_types: (=>)
 
 casting_i8: (=>)
     I8 :: i8{-3}
+    I16 :: i16{I8}
+    I32 :: i32{I8}
     I64 :: i64{I8}
+
+    U8 :: u8{I8}
+    U16 :: u16{I8}
+    U32 :: u32{I8}
+    U64 :: u64{I8}
+
+
+casting_i16: (=>)
+    Src :: i16{-3}
+
+    I8 :: i8{Src}
+    I32 :: i32{Src}
+    I64 :: i64{Src}
+
+    U8 :: u8{Src}
+    U16 :: u16{Src}
+    U32 :: u32{Src}
+    U64 :: u64{Src}
+
+
+casting_i32: (=>)
+    Src :: i32{-3}
+
+    I8 :: i8{Src}
+    I16 :: i16{Src}
+    I64 :: i64{Src}
+
+    U8 :: u8{Src}
+    U16 :: u16{Src}
+    U32 :: u32{Src}
+    U64 :: u64{Src}
+
+
+casting_u8: (=>)
+    Src :: u8{3}
+
+    I8 :: i8{Src}
+    I16 :: i16{Src}
+    I32 :: i32{Src}
+    I64 :: i64{Src}
+
+    U16 :: u16{Src}
+    U32 :: u32{Src}
+    U64 :: u64{Src}
+
+
+casting_u16: (=>)
+    Src :: u16{3}
+
+    I8 :: i8{Src}
+    I16 :: i16{Src}
+    I32 :: i32{Src}
+    I64 :: i64{Src}
+
+    U8 :: u8{Src}
+    U32 :: u32{Src}
+    U64 :: u64{Src}
+
+
+casting_u32: (=>)
+    Src :: u32{3}
+
+    I8 :: i8{Src}
+    I16 :: i16{Src}
+    I32 :: i32{Src}
+    I64 :: i64{Src}
+
+    U8 :: u8{Src}
+    U16 :: u16{Src}
+    U64 :: u64{Src}
+
+
+casting_u64: (=>)
+    Src :: u64{3}
+
+    I8 :: i8{Src}
+    I16 :: i16{Src}
+    I32 :: i32{Src}
+    I64 :: i64{Src}
+
+    U8 :: u8{Src}
+    U16 :: u16{Src}
+    U32 :: u32{Src}
+
+
+casting_i64: (=>)
+    Src :: i64{3}
+
+    I8 :: i8{Src}
+    I16 :: i16{Src}
+    I32 :: i32{Src}
+
+    U8 :: u8{Src}
+    U16 :: u16{Src}
+    U32 :: u32{Src}
+    U64 :: u64{Src}
+
 

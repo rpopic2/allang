@@ -153,11 +153,29 @@ void type_conv(reg_t dst, reg_t src) {
         buf_puts(fn_buf, STR_FROM("sxt"));
         if (srct->size == 1) {
             buf_putc(fn_buf, 'b');
+        } else if (srct->size == 2) {
+            buf_putc(fn_buf, 'h');
+        } else if (srct->size == 4) {
+            buf_putc(fn_buf, 'w');
+        }
+
+
+        buf_snprintf(fn_buf, " %s%d, ", get_wx(dst.rsize), get_regoff(dst));
+        buf_snprintf(fn_buf, "%s%d\n", get_wx(src.rsize), get_regoff(src));
+    } else {
+        const char *dst_ws = get_wx(dst.rsize);
+        if (srct->size == 1) {
+            buf_snprintf(fn_buf, "and %s%d, %s%d, #0xff\n",
+                    dst_ws, get_regoff(dst),
+                    dst_ws, get_regoff(src));
+        } else if (srct->size == 2) {
+            buf_snprintf(fn_buf, "and %s%d, %s%d, #0xffff\n",
+                    dst_ws, get_regoff(dst),
+                    dst_ws, get_regoff(src));
+        } else if (srct->size == 4) {
+            buf_snprintf(fn_buf, "mov w%d, w%d\n", get_regoff(dst), get_regoff(src));
         }
     }
-
-    buf_snprintf(fn_buf, " %s%d, ", get_wx(dst.rsize), get_regoff(dst));
-    buf_snprintf(fn_buf, "%s%d\n", get_wx(src.rsize), get_regoff(src));
 }
 
 void emit_mov_reg(reg_t dst, reg_t src) {
