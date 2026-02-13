@@ -1,16 +1,14 @@
 // dynamic arrays
 #pragma once
 
-#include "types.h"
-
 #define DYN_GENERIC(T) \
-typedef struct { \
+typedef struct dyn_T { \
     const T **begin; \
     const T **cur; \
     const T **end; \
 } dyn_T; \
  \
-void dyn_T_realloc(dyn_T *self) { \
+inline void dyn_T_realloc(dyn_T *self) { \
     if (self->end - self->begin < 0) \
         unreachable; \
     usize len = (usize)(self->end - self->begin); \
@@ -31,14 +29,14 @@ void dyn_T_realloc(dyn_T *self) { \
     } \
 } \
  \
-void dyn_T_push(dyn_T *self, const T *elem) { \
+inline void dyn_T_push(dyn_T *self, const T *elem) { \
     if (self->begin == self->end) { \
         dyn_T_realloc(self); \
     } \
     *self->cur++ = elem; \
 } \
  \
-bool dyn_T_contains(dyn_T *self, const T *query) { \
+inline bool dyn_T_contains(dyn_T *self, const T *query) { \
     for (const T **it = self->begin; it != self->cur; ++it) { \
         if (*it == query) \
             return true; \

@@ -65,6 +65,10 @@ inline static void str_fprint(const str *s, FILE *file) {
     fputc('\n', file);
 }
 
+inline static void str_printnl(const str *s) {
+    str_fprintnl(s, stdout);
+}
+
 inline static void str_print(const str *s) {
     str_fprintnl(s, stdout);
     fputc('\n', stdout);

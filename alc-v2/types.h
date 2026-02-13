@@ -38,7 +38,7 @@ typedef u8 sign_t;
 typedef struct {
     int offset;
     register_dst reg_type;
-    reg_size size;
+    reg_size rsize;
     // sign_t sign;
     u8 addr;
     type_t *type;

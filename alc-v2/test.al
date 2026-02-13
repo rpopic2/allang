@@ -3,7 +3,7 @@
 #declare get_hi: (=> Hi addr u8)
 #declare get_hi_redirected: (=> Hi addr u8)
 
-printf "Hellow World\n" =>
+printf "Hello World\n" =>
 
 redirect:
 Redirect :: get_hi_redirected =>
@@ -169,12 +169,14 @@ fund_types: (=>)
     I64 =[I64_Stack]
 
     [I8_Stack] =I8
+    [I16_Stack] =I16
+    [I32_Stack] =I32
+    [I64_Stack] =I64
 
     comptime_int:
     5 =I8
 
-casting: (=>)
+casting_i8: (=>)
     I8 :: i8{-3}
-    I16 :: i64{I8}
-
+    I64 :: i64{I8}
 

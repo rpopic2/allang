@@ -7,6 +7,7 @@
 #include "emit.h"
 #include "str.h"
 #include "err.h"
+#include "typesys.h"
 
 #define INIT_BUFSIZ 0x400
 #define CALLEE_START 19
@@ -104,9 +105,9 @@ static void buf_putreg(buf *buffer, reg_t reg) {
         buf_puts(buffer, STR_FROM("sp"));
     } else {
         const char *format;
-        if (reg.size <= 4) {
+        if (reg.rsize <= 4) {
             format = "w%d";
-        } else if (reg.size <= 8) {
+        } else if (reg.rsize <= 8) {
             format = "x%d";
         } else {
             printf("cannot load size bigger than 8 to regisetr");
@@ -139,17 +140,17 @@ static void emit_rri(str op, reg_t r0, reg_t r1, i64 i0) {
 
 void emit_mov(reg_t dst, i64 value) {
     int regidx = get_regoff(dst);
-    buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId64), get_wx(dst.size), regidx, value);
+    buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId64), get_wx(dst.rsize), regidx, value);
 }
 
 void emit_mov_reg(reg_t dst, reg_t src) {
     const char *format;
     if (dst.addr) {
-        dst.size = 8;
+        dst.rsize = 8;
     }
-    if (dst.size <= 4) {
+    if (dst.rsize <= 4) {
         format = INSTR("mov w%d, w%d");
-    } else if (dst.size <= 8) {
+    } else if (dst.rsize <= 8) {
         format = INSTR("mov x%d, x%d");
     } else {
         unreachable;
@@ -217,22 +218,31 @@ void emit_string_lit(reg_t dst, const str *s) {
 
 static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     const char *suffix = "";
-    if (r0.size <= 0) {
+    if (r0.rsize <= 0) {
         compile_err(NULL, "cannot %s size of zero\n", op);
 
         int size = 0x100;
         void *array[size];
         size = backtrace(array, size);
-        printd("dump r0 | size: %d, reg_type: %d, offset: %d\n", r0.size, r0.reg_type, r0.offset);
+        printd("dump r0 | size: %d, reg_type: %d, offset: %d\n", r0.rsize, r0.reg_type, r0.offset);
         fprintf(stderr, "Error: Stack trace:\n");
         backtrace_symbols_fd(array, size, STDERR_FILENO);
-    } else if (r0.size <= 1) {
-        suffix = "b";
-    } else if (r0.size <= 2) {
-        suffix = "h";
+    } else if (r0.rsize <= 1) {
+        if (*op == 'l' && r0.type->sign)
+            suffix = "sb";
+        else
+            suffix = "b";
+    } else if (r0.rsize <= 2) {
+        if (*op == 'l' && r0.type->sign)
+            suffix = "sh";
+        else
+            suffix = "h";
+    } else if (*op == 'l' && r0.rsize == 8 && r1.rsize == 4) {
+        if (*op == 'l' && r0.type->sign)
+            suffix = "sw";
     }
     buf_snprintf(fn_buf, ("\t%s%s %s%d, [x%d, "),
-            op, suffix, get_wx(r0.size), get_regoff(r0), get_regoff(r1));
+            op, suffix, get_wx(r0.rsize), get_regoff(r0), get_regoff(r1));
 }
 
 void emit_str(reg_t src, reg_t dst, int offset) {
