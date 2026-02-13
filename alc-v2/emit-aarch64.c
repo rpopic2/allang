@@ -143,10 +143,32 @@ void emit_mov(reg_t dst, i64 value) {
     buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId64), get_wx(dst.rsize), regidx, value);
 }
 
+void type_conv(reg_t dst, reg_t src) {
+    type_t *srct = src.type;
+    if (!srct) // TODO is it okay to ignore?
+        return;
+
+    buf_putc(fn_buf, '\t');
+    if (srct->sign) {
+        buf_puts(fn_buf, STR_FROM("sxt"));
+        if (srct->size == 1) {
+            buf_putc(fn_buf, 'b');
+        }
+    }
+
+    buf_snprintf(fn_buf, " %s%d, ", get_wx(dst.rsize), get_regoff(dst));
+    buf_snprintf(fn_buf, "%s%d\n", get_wx(src.rsize), get_regoff(src));
+}
+
 void emit_mov_reg(reg_t dst, reg_t src) {
     const char *format;
     if (dst.addr) {
         dst.rsize = 8;
+    }
+    if (dst.rsize > src.rsize) {
+        printf("    rsize was bigger! mov %d <- %d\n", dst.rsize, src.rsize);
+        type_conv(dst, src);
+        return;
     }
     if (dst.rsize <= 4) {
         format = INSTR("mov w%d, w%d");

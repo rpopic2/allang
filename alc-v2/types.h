@@ -31,7 +31,7 @@ typedef u8 reg_size;
 typedef struct _type_t type_t;
 
 enum sign_t {
-    S_UNSIGNED, S_SIGNED, S_NOSIGN
+    S_UNSIGNED, S_SIGNED
 };
 typedef u8 sign_t;
 
