@@ -5,7 +5,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-DYN_GENERIC(type_t)
+typedef struct member {
+    type_t *type;
+    str name;
+    size_t offset;
+} member_t;
+
+DYN_GENERIC(member_t)
 
 enum type_kind {
     TK_NONE, TK_FUND, TK_ARRAY, TK_STRUCT, TK_UNION,

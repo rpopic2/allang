@@ -3,12 +3,12 @@
 
 #define DYN_GENERIC(T) \
 typedef struct dyn_T { \
-    const T **begin; \
-    const T **cur; \
-    const T **end; \
+    T *begin; \
+    T *cur; \
+    T *end; \
 } dyn_T; \
  \
-inline void dyn_T_realloc(dyn_T *self) { \
+inline static void dyn_T_realloc(dyn_T *self) { \
     if (self->end - self->begin < 0) \
         unreachable; \
     usize len = (usize)(self->end - self->begin); \
@@ -19,6 +19,7 @@ inline void dyn_T_realloc(dyn_T *self) { \
         if (self->begin == NULL) \
             malloc_failed(); \
         self->end = self->begin + size; \
+        self->cur = self->begin; \
     } else { \
         len *= 2; \
         size_t size = len * sizeof (T *); \
@@ -29,18 +30,10 @@ inline void dyn_T_realloc(dyn_T *self) { \
     } \
 } \
  \
-inline void dyn_T_push(dyn_T *self, const T *elem) { \
-    if (self->begin == self->end) { \
+inline static void dyn_T_push(dyn_T *self, const T *elem) { \
+    if (self->begin == self->cur) { \
         dyn_T_realloc(self); \
     } \
-    *self->cur++ = elem; \
+    *(self->cur++) = *elem; \
 } \
  \
-inline bool dyn_T_contains(dyn_T *self, const T *query) { \
-    for (const T **it = self->begin; it != self->cur; ++it) { \
-        if (*it == query) \
-            return true; \
-    } \
-    return false; \
-} \
-

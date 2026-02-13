@@ -278,4 +278,9 @@ casting_i64: (=>)
     U32 :: u32{Src}
     U64 :: u64{Src}
 
-
+point:
+    struct {
+        C u8,
+        X i32, Y i32
+    }
+     

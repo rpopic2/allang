@@ -724,21 +724,53 @@ bool expect(parser_context *context, str expected) {
 }
 
 void stmt_struct(parser_context *context) {
-    type_t _s = {0};
     printd("struct "),str_printd(&context->symbol->name);
     str *type_name = &context->symbol->name;
+    type_t _s = {.name = *type_name, .tag = TK_STRUCT };
     type_t *s = hashmap_type_t_tryadd(types, *type_name, &_s);
     if (!s) {
         s = &_s;
         compile_err(&context->cur_token, "struct with same name already exist: "), str_printerr(*type_name);
     }
-    lex(context);
-    expect(context, STR_FROM("{"));
     str *current = &context->cur_token.id;
-    lex(context);
-    while (!str_eq(*current, STR_FROM("}"))) {
-        s->size += sizeof (i32);
+    while (true) {
         lex(context);
+        if (str_empty(current) || current->data[0] == '}')
+            break;
+        str name = *current;
+        lex(context);
+        if (str_empty(current) || current->data[0] == '}')
+            break;
+        type_t *t = hashmap_type_t_tryfind(types, *current);
+        if (t == NULL) {
+            compile_err(&context->cur_token, "unknown type "), str_print(current);
+            continue;
+        }
+        member_t m = {
+            .name = name, .type = t,
+            .offset = ALIGN_TO(s->size, t->align),
+        };
+        s->size = m.offset + t->size;
+        s->align = t->align > s->align ? t->align : s->align;
+        dyn_T_push(&s->struct_t.members, &m);
+    }
+    if (true) {
+        printd(CSI_GREEN"struct report for "), str_printd(&s->name);
+        printd("=================\n"CSI_RESET);
+        printd("\tsize: %zd, align %d\n", s->size, s->align);
+
+        dyn_T *members = &s->struct_t.members;
+        int ko = 0;
+        for (const member_t *it = members->begin; it != members->cur; ++it) {
+            const member_t *mem = it;
+            printd("\tmember %d: ", ko++);
+            str_printdnl(&mem->name);
+            printf(" ");
+            str_printdnl(&mem->type->name);
+            printd("\toffset: %zd, size: %zd\n",
+                    mem->offset, mem->type->size);
+        }
+        printd(CSI_GREEN"end report\n\n"CSI_RESET);
     }
 }
 
