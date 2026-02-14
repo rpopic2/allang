@@ -281,9 +281,7 @@ casting_i64: (=>)
 point:
     struct {
         X i32, Y i32,
-        C u8,
     }
 
 point_test: (=>)
-    P :: point{3}
-    ret
+    P :: point{.X 2 .Y 5}

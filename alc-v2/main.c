@@ -583,6 +583,39 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     printd("binary_op\n");
 }
 
+void struct_expr(parser_context *context, type_t *type) {
+    const token_t *token = &context->cur_token;
+    printd("struct expr\n");
+    str_print(&type->name);
+    const str *s = &context->cur_token.id;
+    while (true) {
+        lex(context);
+        str_print(s);
+        if (s->data[0] != '.') {
+            compile_err(token, "'.' and member name expected in struct literal\n");
+        }
+        str member_name = *s;
+        member_name.data++;
+        dyn_T members = type->struct_t.members;
+        for (member_t *it = members.begin; it != members.cur; ++it) {
+            if (str_eq(member_name, it->name)) {
+                break;
+            }
+        }
+
+        if (s->end[-1] == '}' || str_empty(s)) {
+            break;
+        }
+        lex(context);
+        str_print(s);
+
+        if (s->end[-1] == '}' || str_empty(s)) {
+            break;
+        }
+    }
+    printd("end struct expr\n");
+}
+
 bool expr(parser_context *context) {
     bool explicit_type = context->cur_token.end[0] == '{';
     if (explicit_type) {
@@ -590,6 +623,7 @@ bool expr(parser_context *context) {
         type_t *type = hashmap_type_t_tryfind(types, id);
         if (type == NULL) {
             compile_err(&context->cur_token, "unknown type "), str_printerr(id);
+            goto skip;
         }
 
         context->reg.type = type;
@@ -598,8 +632,13 @@ bool expr(parser_context *context) {
             compile_err(&context->cur_token, E_TOO_BIG_FOR_REG);
         }
         context->reg.rsize = (reg_size)type->size;
+        if (type->tag == TK_STRUCT) {
+            struct_expr(context, type);
+            return true;
+        }
         lex(context);
     }
+skip:;
 
     token_t _token = context->cur_token;
     token_t *token = &_token;
