@@ -28,7 +28,7 @@ typedef ptrdiff_t isize;
 typedef u8 register_dst;
 typedef u8 reg_size;
 
-typedef struct _type_t type_t;
+typedef struct type_t type_t;
 
 enum sign_t {
     S_UNSIGNED, S_SIGNED

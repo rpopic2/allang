@@ -25,6 +25,8 @@ symbol_t *fn_call(parser_context *context);
 bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 
+static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
+
 OPT_GENERIC(i64)
 
 unsigned char lineno = 1;
@@ -80,7 +82,7 @@ u32 next_pow2(u32 n) {
     return 1 << (32 - __builtin_clz(n - 1));
 }
 
-void lex(parser_context *context) {
+bool lex(parser_context *context) {
 retry:;
     iter *src = context->src;
     token_t *cur_token = &context->cur_token;
@@ -92,7 +94,7 @@ retry:;
         if (src->cur > src->end) {
             *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno};
             eof = true;
-            return;
+            return false;
         }
         char c = *src->cur;
         if (c == '"') {
@@ -127,7 +129,7 @@ retry:;
     if (cur_token->end > src->end) {
         *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno};
         eof = true;
-        return;
+        return false;
     }
     if (str_len(cur_token->id) == 0)
         goto retry;
@@ -162,6 +164,7 @@ retry:;
             context->ended = true;
         }
     }
+    return true;
 }
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -290,17 +293,6 @@ opt_i64 lit_numeric(const token_t *token) {
     }
     return opt_i64_some(value);
 }
-
-typedef struct {
-    enum {
-        NONE, VALUE, REG
-    } tag;
-    union {
-        i64 value;
-        reg_t reg;
-    };
-} regable;
-static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
 int extrat_scope_up(str *s) {
     int scope_up = 0;
@@ -585,35 +577,66 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 
 void struct_expr(parser_context *context, type_t *type) {
     const token_t *token = &context->cur_token;
-    printd("struct expr\n");
+    printd(CSI_GREEN"struct expr\n"CSI_RESET);
     str_print(&type->name);
     const str *s = &context->cur_token.id;
+
+    dyn_member_t members = type->struct_t.members;
+    dyn_regable args = {0};
+    ptrdiff_t member_count = members.cur - members.begin;
+    printf("member count: %ld\n", member_count);
+    dyn_regable_reserve(&args, member_count + 1);
     while (true) {
-        lex(context);
+        if (!lex(context))
+            break;
         str_print(s);
         if (s->data[0] != '.') {
             compile_err(token, "'.' and member name expected in struct literal\n");
         }
         str member_name = *s;
         member_name.data++;
-        dyn_T members = type->struct_t.members;
-        for (member_t *it = members.begin; it != members.cur; ++it) {
+
+        member_t *it = members.begin;
+        int index = 0;
+        for (; it != members.cur; ++it, ++index) {
             if (str_eq(member_name, it->name)) {
                 break;
             }
         }
-
-        if (s->end[-1] == '}' || str_empty(s)) {
-            break;
+        size_t offset = 0;
+        if (it == members.cur) {
+            compile_err(token, "member not found: \n"), str_printerr(*s);
+        } else {
+            offset = it->offset;
         }
-        lex(context);
+        (void)offset;
+
+        if (s->end[-1] == '}')
+            break;
+        if (!lex(context))
+            break;
         str_print(s);
 
-        if (s->end[-1] == '}' || str_empty(s)) {
+        regable r = read_regable(*s, token);
+        args.begin[index] = r;
+
+        if (s->end[-1] == '}')
             break;
-        }
     }
-    printd("end struct expr\n");
+
+    for (ptrdiff_t i = 0; i < member_count; ++i) {
+        regable *r = &args.begin[i];
+        printf("\targ %ld: ", i), str_printnl(&members.begin[i].name);
+        printf("\t");
+        if (r->tag == VALUE) {
+            printf("value: %lld", r->value);
+        }
+        printf("\n");
+    }
+    emit_make_struct(context->reg, type, &args);
+
+    dyn_regable_free(&args);
+    printd(CSI_GREEN"\nend struct expr\n"CSI_RESET);
 }
 
 bool expr(parser_context *context) {
@@ -791,7 +814,7 @@ void stmt_struct(parser_context *context) {
         };
         s->size = m.offset + t->size;
         s->align = t->align > s->align ? t->align : s->align;
-        dyn_T_push(&s->struct_t.members, &m);
+        dyn_member_t_push(&s->struct_t.members, &m);
     }
     s->size = ALIGN_TO(s->size, s->align);
     if (true) {
@@ -799,7 +822,7 @@ void stmt_struct(parser_context *context) {
         printd("=================\n"CSI_RESET);
         printd("\tsize: %zd, align %d\n", s->size, s->align);
 
-        dyn_T *members = &s->struct_t.members;
+        dyn_member_t *members = &s->struct_t.members;
         int ko = 0;
         for (const member_t *it = members->begin; it != members->cur; ++it) {
             const member_t *mem = it;

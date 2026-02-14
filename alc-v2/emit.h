@@ -73,6 +73,8 @@ typedef struct {
 #define PARAMS_MAX 16
 ARR_GENERIC(str, PARAMS_MAX)
 
+typedef struct dyn_regable dyn_regable;
+
 // typedef struct {
 //     str fn_name;
 //     bool is_tmp;
@@ -89,6 +91,7 @@ void emit_text(FILE *out);
 void emit_cstr(FILE *out);
 
 bool emit_need_escaping(void);
+void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args);
 
 void emit_mov(reg_t dst, i64 value);
 void emit_mov_reg(reg_t dst, reg_t src);

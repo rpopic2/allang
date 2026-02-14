@@ -18,7 +18,7 @@ enum type_kind {
 };
 typedef u8 type_kind;
 
-typedef struct _type_t {
+typedef struct type_t {
     size_t size;
     u8 align;
     u8 addr;
@@ -31,8 +31,18 @@ typedef struct _type_t {
             type_t *type;
         } arr;
         struct {
-            dyn_T members;
+            dyn_member_t members;
         } struct_t;
     };
 } type_t;
 
+typedef struct {
+    enum {
+        NONE, VALUE, REG
+    } tag;
+    union {
+        i64 value;
+        reg_t reg;
+    };
+} regable;
+DYN_GENERIC(regable)
