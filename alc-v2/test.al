@@ -280,9 +280,9 @@ casting_i64: (=>)
 
 point:
     struct {
-        X i16, Y i16, Z i32,
+        X i8, Y i8, Z i8, W i8,
     }
 
 point_test: (=>)
-    P :: point{.X 23 .Y 5 .Z 4}
+    P :: point{.X 23 .Y 5 .Z 1 .W 2}
 

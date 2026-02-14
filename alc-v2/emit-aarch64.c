@@ -141,16 +141,32 @@ static void emit_rri(str op, reg_t r0, reg_t r1, i64 i0) {
 void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
     (void)type;
 
-    emit_mov(dst, (args->begin[0].value));
     const dyn_member_t *members = &type->struct_t.members;
-    for (ptrdiff_t i = 1; i < members->cur - members->begin; ++i) {
+    ptrdiff_t member_count = members->cur - members->begin;
+    for (ptrdiff_t i = 0; i < member_count; ++i) {
         regable *r = &args->begin[i];
         member_t *memb = &members->begin[i];
 
+        i64 value = r->value;
+        size_t size = memb->type->size;
+        while (size < 2) {
+            if (++i >= member_count)
+                break;
+            regable *r = &args->begin[i];
+            member_t *memb = &members->begin[i];
+            size += memb->type->size;
+            value |= r->value << memb->type->size * 8;
+        }
+
+        size_t offset = memb->offset * 8;
+        if (offset == 0) {
+            emit_mov(dst, (value));
+            continue;
+        }
         buf_snprintf(fn_buf, "\tmovk ");
         buf_putreg(fn_buf, dst);
         buf_snprintf(fn_buf, ", #%"PRId64", lsl #%zd\n",
-                r->value, memb->offset * 8);
+                value, offset);
     }
 }
 

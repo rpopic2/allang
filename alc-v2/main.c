@@ -605,7 +605,7 @@ void struct_expr(parser_context *context, type_t *type) {
         }
         size_t offset = 0;
         if (it == members.cur) {
-            compile_err(token, "member not found: \n"), str_printerr(*s);
+            compile_err(token, "member not found: "), str_printerr(member_name);
         } else {
             offset = it->offset;
         }
