@@ -754,6 +754,7 @@ void stmt_struct(parser_context *context) {
         s->align = t->align > s->align ? t->align : s->align;
         dyn_T_push(&s->struct_t.members, &m);
     }
+    s->size = ALIGN_TO(s->size, s->align);
     if (true) {
         printd(CSI_GREEN"struct report for "), str_printd(&s->name);
         printd("=================\n"CSI_RESET);
