@@ -400,7 +400,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             offset_regable.value = -offset_regable.value;
             reg = (reg_t){
                 .reg_type = FP.reg_type, .rsize = FP.rsize,
-                .type = reg.type,
+                .type = reg.type, .addr = 1,
             };
         }
     } else if (offset_regable.tag == REG) {
@@ -411,6 +411,12 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     *out_offset = offset_regable;
     *out_reg = reg;
     return true;
+}
+
+void typecheck(const token_t *token, const type_t *ltype, const type_t *rtype) {
+    if (ltype == rtype)
+        return;
+    compile_err(token, "type checker: expected type "), str_printerrnl(ltype ? ltype->name : STR_FROM("NULL")), puterr(", but found "), str_printerr(rtype ? rtype->name : STR_FROM("NULL"));
 }
 
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
@@ -442,14 +448,14 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
 }
 
 bool binary_op_store(const regable *restrict lhs, parser_context *restrict context) {
-    const token_t *op_token = &context->cur_token;
-    if (!streq(op_token->end + 1, "=["))
+    const token_t *token = &context->cur_token;
+    if (!streq(token->end + 1, "=["))
         return false;
-    if (op_token->end[3] == ']')    // =[]. TODO need to merge this with stmt_stack_store?
+    if (token->end[3] == ']')    // =[]. TODO need to merge this with stmt_stack_store?
         return false;
 
     lex(context);
-    str s = op_token->id;
+    str s = token->id;
     s.data += 1;
     reg_t rhs;
     regable offset;
@@ -460,18 +466,22 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     if (lhs->tag == VALUE) {
         reg_to_store = (reg_t){
             .reg_type = SCRATCH, .offset = context->reg.offset,
-            .rsize = rhs.rsize
+            .rsize = rhs.rsize, .type = type_comptime_int,
         };
         emit_mov(reg_to_store, lhs->value);
-        if (rhs.type == NULL) {
-            rhs.type = type_i32;
+        if (rhs.type->tag == TK_FUND) {
+            reg_to_store.type = rhs.type;
         }
+        // if (rhs.type == NULL) {
+        //     rhs.type = type_i32;
+        // }
     } else if (lhs->tag == REG) {
         reg_to_store = lhs->reg;
         rhs.type = lhs->reg.type;
     } else {
         unreachable;
     }
+    typecheck(token, rhs.type, reg_to_store.type);
 
     printd("binary_op:store\n");
     if (offset.tag == REG) {
@@ -578,7 +588,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     printd("binary_op\n");
 }
 
-void struct_expr(parser_context *context, type_t *type) {
+void expr_struct(parser_context *context, type_t *type) {
     const token_t *token = &context->cur_token;
     printd(CSI_GREEN"struct expr: "CSI_RESET);
     str_printd(&type->name);
@@ -683,7 +693,7 @@ bool expr(parser_context *context) {
         }
         context->reg.rsize = (reg_size)type->size;
         if (type->tag == TK_STRUCT) {
-            struct_expr(context, type);
+            expr_struct(context, type);
             return true;
         }
         lex(context);
@@ -941,6 +951,9 @@ bool stmt_stack_store(parser_context *context) {
         context->reg.offset = 0;
         context->reg.reg_type = SCRATCH;
     }
+    printf("-- stack store\n");
+    printf("\t");
+    str_print(&target_reg->type->name);
 
     return true;
 }
@@ -1007,7 +1020,7 @@ bool decl_vars(parser_context *context) {
         lex(context);
         bool one_liner = context->cur_token.end[0] != '\n';
         context->reg.reg_type = SCRATCH;
-        reg_t *reg = overwrite_id(*local_ids.cur, name, &(reg_t){.reg_type = STACK});
+        reg_t *reg = overwrite_id(*local_ids.cur, name, &(reg_t){.reg_type = STACK, .addr = 1});
         if (one_liner) {
             lex(context);
             if (expr_line(context)) { }

@@ -343,3 +343,6 @@ struct64: (=>)
     all_zero:
     struct64{.. 0}
 
+struct_store: (=>)
+    [S] :: point32{.X 1, .Y 2} =[]
+    point32{.. 0} =[S]
