@@ -298,6 +298,30 @@ int extrat_scope_up(str *s) {
     return scope_up;
 }
 
+str dot_iter(str *s) {
+    const char *begin = s->data;
+    if (*begin == '.')
+        ++begin;
+    while (s->data < s->end) {
+        if ((++s->data)[0] == '.')
+            break;
+    }
+    return (str){begin, s->data};
+}
+
+member_t *find_member(dyn_member_t *members, str name) {
+    member_t *it = members->begin;
+    int index = 0;
+    for (; it != members->cur; ++it, ++index) {
+        if (str_eq(name, it->name)) {
+            break;
+        }
+    }
+    if (it == members->end)
+        return NULL;
+    return it;
+}
+
 regable read_regable(str s, const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE};
     if (isupper(s.data[0]) || s.data[0] == '^') {
@@ -305,12 +329,39 @@ regable read_regable(str s, const token_t *token) {
             s.end--;
         int scope_up = extrat_scope_up(&s);
         reg_t *e;
-        if (!find_id(&local_ids, s, token, &e, scope_up)
+
+        str name = dot_iter(&s);
+        if (!find_id(&local_ids, name, token, &e, scope_up)
             || e->reg_type == RD_NONE) {
             compile_err(token, "unknown id "), str_printerr(s);
-        } else {
-            result.reg = *e;
-            result.tag = REG;
+            return result;
+        }
+
+        result.reg = *e;
+        result.tag = REG;
+        member_t *mem = NULL;
+        while (true) {
+            str mem_name = dot_iter(&s);
+            if (str_empty(&mem_name))
+                break;
+            printf("find: ");
+            str_print(&mem_name);
+            member_t *mem = find_member(&e->type->struct_t.members, mem_name);
+            if (mem == NULL) {
+                compile_err(token, "member not found\n");
+            }
+            printf("mem: ");
+            str_print(&mem->name);
+            result.reg.type = mem->type;
+            printf("offset %d -> %zu", result.reg.offset, mem->offset);
+            result.reg.offset += mem->offset;
+        }
+        if (mem) {
+            size_t mem_size = mem->type->size;
+            if (mem_size > MAX_REG_SIZE) {
+                compile_err(token, "this member does not fit in register\n");
+            }
+            result.reg.rsize = (reg_size)mem_size;
         }
     } else {
         if_opt(i64, value, = lit_numeric(token)) {
@@ -472,9 +523,6 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
         if (rhs.type->tag == TK_FUND) {
             reg_to_store.type = rhs.type;
         }
-        // if (rhs.type == NULL) {
-        //     rhs.type = type_i32;
-        // }
     } else if (lhs->tag == REG) {
         reg_to_store = lhs->reg;
         rhs.type = lhs->reg.type;
@@ -484,6 +532,7 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     typecheck(token, rhs.type, reg_to_store.type);
 
     printd("binary_op:store\n");
+    printf("rsizes lhs: %d, rhs: %d\n", reg_to_store.rsize, rhs.rsize);
     if (offset.tag == REG) {
         emit_str_reg(reg_to_store, rhs, offset.reg);
     } else {

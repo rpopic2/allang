@@ -346,3 +346,12 @@ struct64: (=>)
 struct_store: (=>)
     [S] :: point32{.X 1, .Y 2} =[]
     point32{.. 0} =[S]
+
+    K :: point32{.. 0}
+    [S] =K
+
+struct_members: (=>)
+    [S] :: point{.X 1 .Y 2 .. 0} =[]
+    load_memb:
+    [S.B]
+    i8{3} =[S.B]

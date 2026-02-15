@@ -47,4 +47,4 @@ inline static void dyn_##T##_free(dyn_##T *self) { \
     free(self->begin); \
     *self = (dyn_##T){0}; \
 } \
- \
+
