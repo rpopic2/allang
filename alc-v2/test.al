@@ -306,3 +306,29 @@ point16_test: (=>)
     marker:
     P :: point16{.X X .Y Y .Z 3 .W 4}
 
+point32: (=>)
+    struct {
+        X i32, Y i32
+    }
+
+    X :: 1
+    Y :: 2
+    make:
+    point32{.X X .Y Y}
+    point32{.X X .Y 2}
+    point32{.X 1 .Y Y}
+    point32{.X 1 .Y 2}
+
+struct64: (=>)
+    struct {
+        X i8, Y i16, W i8
+    }
+
+    X :: i8{1}
+    Y :: i16{2}
+    Z :: i8{3}
+    struct64{.X X .Y Y .W Z}
+    zero:
+    struct64{.Y Y .. 0}
+    struct64{.. 0}
+

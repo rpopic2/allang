@@ -595,6 +595,7 @@ void struct_expr(parser_context *context, type_t *type) {
     ptrdiff_t member_count = members.cur - members.begin;
     printf("member count: %ld\n", member_count);
     dyn_regable_reserve(&args, member_count + 1);
+    bool init_zero = false;
     while (true) {
         if (!lex(context))
             break;
@@ -602,6 +603,14 @@ void struct_expr(parser_context *context, type_t *type) {
         if (s->data[0] != '.') {
             compile_err(token, "'.' and member name expected in struct literal\n");
         }
+        if (streq(s->data, ".. 0")){
+            lex(context);
+            init_zero = true;
+            if (s->end[-1] == '}')
+                break;
+            continue;
+        }
+
         str member_name = *s;
         member_name.data++;
 
@@ -643,6 +652,14 @@ void struct_expr(parser_context *context, type_t *type) {
 
     for (ptrdiff_t i = 0; i < member_count; ++i) {
         regable *r = &args.begin[i];
+        if (r->tag != VALUE && r->tag != REG) {
+            if (!init_zero) {
+                compile_err(token, "a field is not initialized: ");
+                str_printerr(members.begin[i].name);
+            }
+            r->tag = VALUE;
+            r->value = 0;
+        }
         printf("\targ %ld: ", i), str_printnl(&members.begin[i].name);
         printf("\t");
         if (r->tag == VALUE) {

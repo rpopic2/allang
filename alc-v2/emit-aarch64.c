@@ -152,6 +152,15 @@ static void emit_rrii(str op, reg_t r0, reg_t r1, i64 i0, i64 i1) {
     buf_putc(fn_buf, '\n');
 }
 
+static void emit_rrrsi(str op, reg_t r0, reg_t r1, reg_t r2, str s, i64 i0) {
+    emit_rrx(op, r0, r1);
+    buf_puts(fn_buf, STR_FROM(", "));
+    buf_putreg(fn_buf, r2);
+    buf_puts(fn_buf, STR_FROM(", "));
+    buf_puts(fn_buf, s);
+    buf_snprintf(fn_buf, " #0x%"PRIx64, i0);
+    buf_putc(fn_buf, '\n');
+}
 void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
     (void)type;
 
@@ -178,6 +187,10 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
                         break;
                     }
                     member_t *memb = &members->begin[i];
+                    if (size + memb->type->size > 2) {
+                        --i;
+                        break;
+                    }
                     size += memb->type->size;
                     value |= r->value << memb->type->size * 8;
                 }
@@ -185,6 +198,8 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
 
             if (offset == 0) {
                 emit_mov(dst, value);
+            } else if (value == 0) {
+                continue;
             } else if (offset % 16 != 0) {
                 emit_rri(STR_FROM("orr"), dst, dst, value << offset);
                 continue;
@@ -207,13 +222,20 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
                         reg.rsize = dst.rsize;
                     emit_rri(STR_FROM("and"), dst, reg, mask);
                 } else {
-                    emit_mov_reg(dst, reg);
+                    reg_t tmp_dst = dst;
+                    if (reg.rsize < tmp_dst.rsize) // no need to emit mov?
+                        tmp_dst.rsize = reg.rsize;
+                    emit_rr(STR_FROM("mov"), tmp_dst, reg);
                 }
             } else {
                 reg_t reg = r->reg;
                 if (reg.rsize < dst.rsize)
                     reg.rsize = dst.rsize;
-                emit_rrii(STR_FROM("bfi"), dst, reg, (i64)offset, (i64)memb_size * 8);
+                i64 width = (i64)memb_size * 8;
+                if (offset == 0x20 && width == 0x20)
+                    emit_rrrsi(STR("orr"), dst, dst, reg, STR("lsl"), width);
+                else
+                    emit_rrii(STR_FROM("bfi"), dst, reg, (i64)offset, width);
             }
         } else {
             unreachable;
