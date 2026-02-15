@@ -284,11 +284,6 @@ point: (=>)
         A i8, B i8, C i8, D i8,
     }
 
-point16: (=>)
-    struct {
-        X i16, Y i16, Z i16, W i16,
-    }
-
 point_test: (=>)
     make_1:
     P :: point{.X 3 .Y 5 .Z 1 .W 2 .A 1 .B 2 .C 3 .D 4}
@@ -299,12 +294,21 @@ point_test: (=>)
     W :: i8{6}
     make_2:
     O :: point{.X X .Y Y .Z Z .W W .A X .B Y .C 3 .D 4}
+    zero:
+    point{.B Y .. 0}
 
-point16_test: (=>)
+point16: (=>)
+    struct {
+        X i16, Y i16, Z i16, W i16,
+    }
+
     X :: i16{1}
     Y :: i16{2}
     marker:
     P :: point16{.X X .Y Y .Z 3 .W 4}
+    zero:
+    point16{.. 0}
+    point16{.Z X .. 0}
 
 point32: (=>)
     struct {
@@ -318,17 +322,24 @@ point32: (=>)
     point32{.X X .Y 2}
     point32{.X 1 .Y Y}
     point32{.X 1 .Y 2}
+    zero:
+    point32{.Y 2 .. 0}
+    point32{.X 2 .. 0}
+    zero_reg:
+    point32{.Y Y .. 0}
+    point32{.X X .. 0}
 
 struct64: (=>)
     struct {
-        X i8, Y i16, W i8
+        X i8, W i8, Y i16, Z i32
     }
 
     X :: i8{1}
     Y :: i16{2}
     Z :: i8{3}
-    struct64{.X X .Y Y .W Z}
+    struct64{.X X .Y Y .W Z .. 0}
     zero:
     struct64{.Y Y .. 0}
+    all_zero:
     struct64{.. 0}
 

@@ -116,11 +116,33 @@ static void buf_putreg(buf *buffer, reg_t reg) {
     }
 }
 
-static void emit_rrx(str op, reg_t r0, reg_t r1) {
+static void buf_puti(buf *buffer, i64 i0) {
+    buf_snprintf(buffer, "#0x%"PRIx64, i0);
+}
+
+static void emit_rx(str op, reg_t r0) {
     buf_putc(fn_buf, '\t');
     buf_puts(fn_buf, op);
     buf_putc(fn_buf, ' ');
     buf_putreg(fn_buf, r0);
+}
+
+static void emit_ri(str op, reg_t r0, i64 i0) {
+    emit_rx(op, r0);
+    buf_puts(fn_buf, STR_FROM(", "));
+    buf_puti(fn_buf, i0);
+}
+
+static void emit_risi(str op, reg_t r0, i64 i0, str s0, i64 i1) {
+    emit_ri(op, r0, i0);
+    buf_puts(fn_buf, STR_FROM(", "));
+    buf_puts(fn_buf, s0);
+    buf_snprintf(fn_buf, " #0x%"PRIx64, i1);
+    buf_putc(fn_buf, '\n');
+}
+
+static void emit_rrx(str op, reg_t r0, reg_t r1) {
+    emit_rx(op, r0);
     buf_puts(fn_buf, STR_FROM(", "));
     buf_putreg(fn_buf, r1);
 }
@@ -162,10 +184,10 @@ static void emit_rrrsi(str op, reg_t r0, reg_t r1, reg_t r2, str s, i64 i0) {
     buf_putc(fn_buf, '\n');
 }
 void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
-    (void)type;
-
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
+    bool cleared = false;
+
     for (ptrdiff_t i = 0; i < member_count; ++i) {
         regable *r = &args->begin[i];
         member_t *memb = &members->begin[i];
@@ -196,19 +218,24 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
                 }
             }
 
-            if (offset == 0) {
-                emit_mov(dst, value);
-            } else if (value == 0) {
+            if (value == 0)
                 continue;
-            } else if (offset % 16 != 0) {
+
+            if (offset % 16 != 0) {
+                if (!cleared) {
+                    emit_ri(STR_FROM("mov"), dst, value << offset);
+                    unreachable;
+                }
                 emit_rri(STR_FROM("orr"), dst, dst, value << offset);
                 continue;
             } else {
-                buf_snprintf(fn_buf, "\tmovk ");
-                buf_putreg(fn_buf, dst);
-                buf_snprintf(fn_buf, ", #%"PRId64", lsl #%zd\n",
-                        value, offset);
+                if (!cleared) {
+                    emit_risi(STR("movz"), dst, value, STR("lsl"), (i64)offset);
+                } else {
+                    emit_risi(STR("movk"), dst, value, STR("lsl"), (i64)offset);
+                }
             }
+            cleared = true;
         } else if (r->tag == REG) {
             reg_t reg = r->reg;
 
@@ -232,14 +259,19 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
                 if (reg.rsize < dst.rsize)
                     reg.rsize = dst.rsize;
                 i64 width = (i64)memb_size * 8;
-                if (offset == 0x20 && width == 0x20)
-                    emit_rrrsi(STR("orr"), dst, dst, reg, STR("lsl"), width);
-                else
+                if (cleared)
                     emit_rrii(STR_FROM("bfi"), dst, reg, (i64)offset, width);
+                else
+                    emit_rrii(STR("ubfiz"), dst, reg, (i64)offset, width);
             }
+            cleared = true;
         } else {
             unreachable;
         }
+    }
+
+    if (!cleared) {
+        emit_mov(dst, 0);
     }
 }
 
