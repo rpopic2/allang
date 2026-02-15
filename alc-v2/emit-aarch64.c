@@ -323,7 +323,7 @@ void emit_mov_reg(reg_t dst, reg_t src) {
         dst.rsize = 8;
     }
     if (dst.rsize > src.rsize) {
-        printf("    rsize was bigger! mov %d <- %d\n", dst.rsize, src.rsize);
+        // printf("    rsize was bigger! mov %d <- %d\n", dst.rsize, src.rsize);
         type_conv(dst, src);
         return;
     }

@@ -1,5 +1,3 @@
-#define DEBUG_TIMER 1
-
 #include <assert.h>
 #include <time.h>
 #include <ctype.h>
@@ -34,9 +32,6 @@ unsigned char indent = 0;
 bool eof = false;
 bool has_compile_err = false;
 bool do_airity_check = true;
-
-// #define array_len ('Z' - 'A' + 1)
-
 
 type_t *type_i32;
 type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR_FROM("comptime int")};
@@ -420,7 +415,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
 
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (lhs.type == rhs.type && lhs.addr == rhs.addr)
-            // && lhs.size == rhs.size)
         return;
     type_t *ltype = lhs.type;
     type_t *rtype = rhs.type;
@@ -586,20 +580,18 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 
 void struct_expr(parser_context *context, type_t *type) {
     const token_t *token = &context->cur_token;
-    printd(CSI_GREEN"struct expr\n"CSI_RESET);
-    str_print(&type->name);
+    printd(CSI_GREEN"struct expr: "CSI_RESET);
+    str_printd(&type->name);
     const str *s = &context->cur_token.id;
 
     dyn_member_t members = type->struct_t.members;
     dyn_regable args = {0};
     ptrdiff_t member_count = members.cur - members.begin;
-    printf("member count: %ld\n", member_count);
     dyn_regable_reserve(&args, member_count + 1);
     bool init_zero = false;
     while (true) {
         if (!lex(context))
             break;
-        str_print(s);
         if (s->data[0] != '.') {
             compile_err(token, "'.' and member name expected in struct literal\n");
         }
@@ -633,7 +625,6 @@ void struct_expr(parser_context *context, type_t *type) {
             break;
         if (!lex(context))
             break;
-        str_print(s);
 
         regable r = read_regable(*s, token);
         args.begin[index] = r;
@@ -660,14 +651,14 @@ void struct_expr(parser_context *context, type_t *type) {
             r->tag = VALUE;
             r->value = 0;
         }
-        printf("\targ %ld: ", i), str_printnl(&members.begin[i].name);
-        printf("\t");
-        if (r->tag == VALUE) {
-            printf("value: %lld", r->value);
-        } else if (r->tag == REG) {
-            printf("reg off: %d", r->reg.offset);
-        }
-        printf("\n");
+        // printf("\targ %ld: ", i), str_printnl(&members.begin[i].name);
+        // printf("\t");
+        // if (r->tag == VALUE) {
+        //     printf("value: %lld", r->value);
+        // } else if (r->tag == REG) {
+        //     printf("reg off: %d", r->reg.offset);
+        // }
+        // printf("\n");
     }
     emit_make_struct(context->reg, type, &args);
 
@@ -735,12 +726,6 @@ skip:;
     }
     if (lhs.tag == REG && lhs.reg.reg_type == NREG) {
         check_unassigned(lhs, context);
-    }
-    if (lhs.tag == REG) {
-        const str *lname = context->reg.type ? &context->reg.type->name : &str_null;
-        if (context->reg.type != lhs.reg.type) {
-            printf("different types! "), str_printnl(lname), printf("->"), str_print(&lhs.reg.type->name);
-        }
     }
 
     if (!explicit_type) {
@@ -841,7 +826,7 @@ void stmt_struct(parser_context *context) {
             break;
         type_t *t = hashmap_type_t_tryfind(types, *current);
         if (t == NULL) {
-            compile_err(&context->cur_token, "unknown type "), str_print(current);
+            compile_err(&context->cur_token, "unknown type "), str_printerr(*current);
             continue;
         }
         member_t m = {
@@ -864,7 +849,7 @@ void stmt_struct(parser_context *context) {
             const member_t *mem = it;
             printd("\tmember %d: ", ko++);
             str_printdnl(&mem->name);
-            printf(" ");
+            printd(" ");
             str_printdnl(&mem->type->name);
             printd("\toffset: %zd, size: %zd\n",
                     mem->offset, mem->type->size);
@@ -978,7 +963,6 @@ bool decl_vars(parser_context *context) {
             else {
                 symbol_t *fn = fn_call(context);
                 if (fn) {
-                    printf("fn calls "), str_print(&fn->name);
                     if (fn->ret_airity != 1) {
                         compile_err(&context->cur_token, "this function does not return exactly one value\n");
                     }
@@ -987,7 +971,6 @@ bool decl_vars(parser_context *context) {
                     nreg.rsize = ret_reg.rsize;
                     nreg.addr = ret_reg.addr;
                     nreg.type = ret_reg.type;
-                    printf("addr %d, size %d, type.size %zd, type.addr %d\n", nreg.addr, nreg.rsize, nreg.type->size, nreg.type->addr);
                     emit_mov_reg(nreg, context->reg);
                 }
             }
@@ -1010,8 +993,6 @@ bool decl_vars(parser_context *context) {
             }
             arr_target_pop(&context->targets);
         }
-        str_printdnl(&name);
-        printf(": decl addr %d, size %d, type.size %zd, type.addr %d, type ", reg->addr, reg->rsize, reg->type->size, reg->type->addr), str_print(&reg->type->name);
         return true;
     } else if (token->data[0] == '[') {
         str name = token->id;
@@ -1173,7 +1154,6 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 
         lex(context);
         _token = context->cur_token;
-        // token->data += 1;
         bool parsing_arg = true;
 		while (token->end < context->src->end) {
             bool break_out = false;
