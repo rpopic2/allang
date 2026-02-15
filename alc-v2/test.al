@@ -278,11 +278,31 @@ casting_i64: (=>)
     U32 :: u32{Src}
     U64 :: u64{Src}
 
-point:
+point: (=>)
     struct {
         X i8, Y i8, Z i8, W i8,
+        A i8, B i8, C i8, D i8,
+    }
+
+point16: (=>)
+    struct {
+        X i16, Y i16, Z i16, W i16,
     }
 
 point_test: (=>)
-    P :: point{.X 23 .Y 5 .Z 1 .W 2}
+    make_1:
+    P :: point{.X 3 .Y 5 .Z 1 .W 2 .A 1 .B 2 .C 3 .D 4}
+    reg:
+    X :: i8{3}
+    Y :: i8{4}
+    Z :: i8{5}
+    W :: i8{6}
+    make_2:
+    O :: point{.X X .Y Y .Z Z .W W .A X .B Y .C 3 .D 4}
+
+point16_test: (=>)
+    X :: i16{1}
+    Y :: i16{2}
+    marker:
+    P :: point16{.X X .Y Y .Z 3 .W 4}
 

@@ -102,6 +102,7 @@ void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs);
 void emit_cmp(reg_t lhs, i64 rhs);
 void emit_cmp_reg(reg_t lhs, reg_t rhs);
 void emit_string_lit(reg_t dst, const str *s);
+void emit_lsl(reg_t dst, reg_t lhs, i64 rhs);
 
 void emit_str(reg_t src, reg_t dst, int offset);
 void emit_ldr(reg_t dst, reg_t src, int offset);
@@ -115,6 +116,8 @@ void emit_fn_prologue_epilogue(const parser_context *context);
 void emit_fn_call(const str *s);
 void emit_fn(str fn_name);
 void emit_ret(void);
+
+void report_error(const char *format, ...);
 
 extern const char *text_section_header;
 extern const char *string_section_header;

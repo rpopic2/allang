@@ -123,18 +123,32 @@ static void emit_rrx(str op, reg_t r0, reg_t r1) {
     buf_putreg(fn_buf, r0);
     buf_puts(fn_buf, STR_FROM(", "));
     buf_putreg(fn_buf, r1);
-    buf_puts(fn_buf, STR_FROM(", "));
+}
+
+static void emit_rr(str op, reg_t r0, reg_t r1) {
+    emit_rrx(op, r0, r1);
+    buf_putc(fn_buf, '\n');
 }
 
 static void emit_rrr(str op, reg_t r0, reg_t r1, reg_t r2) {
     emit_rrx(op, r0, r1);
+    buf_puts(fn_buf, STR_FROM(", "));
     buf_putreg(fn_buf, r2);
     buf_putc(fn_buf, '\n');
 }
 
 static void emit_rri(str op, reg_t r0, reg_t r1, i64 i0) {
     emit_rrx(op, r0, r1);
-    buf_snprintf(fn_buf, "#%"PRId64, i0);
+    buf_puts(fn_buf, STR_FROM(", "));
+    buf_snprintf(fn_buf, "#0x%"PRIx64, i0);
+    buf_putc(fn_buf, '\n');
+}
+
+static void emit_rrii(str op, reg_t r0, reg_t r1, i64 i0, i64 i1) {
+    emit_rrx(op, r0, r1);
+    buf_puts(fn_buf, STR_FROM(", "));
+    buf_snprintf(fn_buf, "#0x%"PRIx64, i0);
+    buf_snprintf(fn_buf, ", #0x%"PRIx64, i1);
     buf_putc(fn_buf, '\n');
 }
 
@@ -146,27 +160,64 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
     for (ptrdiff_t i = 0; i < member_count; ++i) {
         regable *r = &args->begin[i];
         member_t *memb = &members->begin[i];
-
-        i64 value = r->value;
-        size_t size = memb->type->size;
-        while (size < 2) {
-            if (++i >= member_count)
-                break;
-            regable *r = &args->begin[i];
-            member_t *memb = &members->begin[i];
-            size += memb->type->size;
-            value |= r->value << memb->type->size * 8;
-        }
+        type_t *memb_type = memb->type;
+        size_t memb_size = memb_type->size;
 
         size_t offset = memb->offset * 8;
-        if (offset == 0) {
-            emit_mov(dst, (value));
-            continue;
+
+        if (r->tag == VALUE) {
+            i64 value = r->value;
+            if (offset % 16 == 0) {
+                size_t size = memb->type->size;
+                while (size < 2) {
+                    if (++i >= member_count)
+                        break;
+                    regable *r = args->begin + i;
+                    if (r->tag != VALUE) {
+                        --i;
+                        break;
+                    }
+                    member_t *memb = &members->begin[i];
+                    size += memb->type->size;
+                    value |= r->value << memb->type->size * 8;
+                }
+            }
+
+            if (offset == 0) {
+                emit_mov(dst, value);
+            } else if (offset % 16 != 0) {
+                emit_rri(STR_FROM("orr"), dst, dst, value << offset);
+                continue;
+            } else {
+                buf_snprintf(fn_buf, "\tmovk ");
+                buf_putreg(fn_buf, dst);
+                buf_snprintf(fn_buf, ", #%"PRId64", lsl #%zd\n",
+                        value, offset);
+            }
+        } else if (r->tag == REG) {
+            reg_t reg = r->reg;
+
+            if (offset == 0) {
+                if (memb_size < 4) {
+                    int mask = 0xff;
+                    for (size_t i = 1; i < memb_size; ++i) {
+                        mask |= 0xff << i * 8;
+                    }
+                    if (reg.rsize < dst.rsize)
+                        reg.rsize = dst.rsize;
+                    emit_rri(STR_FROM("and"), dst, reg, mask);
+                } else {
+                    emit_mov_reg(dst, reg);
+                }
+            } else {
+                reg_t reg = r->reg;
+                if (reg.rsize < dst.rsize)
+                    reg.rsize = dst.rsize;
+                emit_rrii(STR_FROM("bfi"), dst, reg, (i64)offset, (i64)memb_size * 8);
+            }
+        } else {
+            unreachable;
         }
-        buf_snprintf(fn_buf, "\tmovk ");
-        buf_putreg(fn_buf, dst);
-        buf_snprintf(fn_buf, ", #%"PRId64", lsl #%zd\n",
-                value, offset);
     }
 }
 
@@ -189,6 +240,8 @@ void type_conv(reg_t dst, reg_t src) {
             buf_putc(fn_buf, 'h');
         } else if (srct->size == 4) {
             buf_putc(fn_buf, 'w');
+        } else {
+            report_error("incorrect src size %d\n", srct->size);
         }
 
 
@@ -287,18 +340,17 @@ void emit_string_lit(reg_t dst, const str *s) {
     free(buffer);
 }
 
+void emit_lsl(reg_t dst, reg_t lhs, i64 rhs) {
+    emit_rri(STR_FROM("lsl"), dst, lhs, rhs);
+}
 
 static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     const char *suffix = "";
     if (r0.rsize <= 0) {
         compile_err(NULL, "cannot %s size of zero\n", op);
 
-        int size = 0x100;
-        void *array[size];
-        size = backtrace(array, size);
         printd("dump r0 | size: %d, reg_type: %d, offset: %d\n", r0.rsize, r0.reg_type, r0.offset);
-        fprintf(stderr, "Error: Stack trace:\n");
-        backtrace_symbols_fd(array, size, STDERR_FILENO);
+        report_error("");
     } else if (r0.rsize <= 1) {
         if (*op == 'l' && r0.type->sign)
             suffix = "sb";
@@ -493,4 +545,21 @@ void emit_fn(str fn_name) {
 
 void emit_ret(void) {
     buf_puts(fn_buf, STR_FROM_INSTR("ret"));
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 1, 2)))
+#endif
+void report_error(const char *format, ...) {
+    int size = 0x100;
+    void *array[size];
+    size = backtrace(array, size);
+
+    va_list args;
+    va_start(args, format);
+    fprintf(stderr, CSI_RED"error: "CSI_RESET);
+    vfprintf(stderr, format, args);
+    va_end(args);
+
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
 }

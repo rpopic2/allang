@@ -543,6 +543,15 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         } else if (lhs->tag == REG && rhs.tag == REG) {
             emit_sub_reg(context->reg, lhs->reg, rhs.reg);
         } else unreachable;
+    } else if (streq(op_token.data, "shl")) {
+        if (lhs->tag != REG) {
+            compile_err(&lhs_token, "expected register on the left hand side\n");
+        }
+        if (rhs.tag == VALUE) {
+            emit_lsl(context->reg, lhs->reg, rhs.value);
+        } else if (rhs.tag == REG) {
+            compile_err(&lhs_token, "lslv not implemented\n");
+        }
     } else if (streq(op_token.data, "is")) {
         if (lhs->tag == VALUE) {
             compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
@@ -619,6 +628,14 @@ void struct_expr(parser_context *context, type_t *type) {
 
         regable r = read_regable(*s, token);
         args.begin[index] = r;
+        if (r.tag == REG) {
+            if (r.reg.type != type_comptime_int && it->type != r.reg.type) {
+                compile_err(token, "expected type "),
+                    str_printerr(it->type->name);
+                compile_err(token, "but found "),
+                    str_printerr(r.reg.type->name);
+            }
+        }
 
         if (s->end[-1] == '}')
             break;
@@ -630,6 +647,8 @@ void struct_expr(parser_context *context, type_t *type) {
         printf("\t");
         if (r->tag == VALUE) {
             printf("value: %lld", r->value);
+        } else if (r->tag == REG) {
+            printf("reg off: %d", r->reg.offset);
         }
         printf("\n");
     }
@@ -956,6 +975,9 @@ bool decl_vars(parser_context *context) {
                 }
             }
         }
+        if (context->reg.type == type_comptime_int) {
+            context->reg.type = type_i32;
+        }
         reg_t arg = {
             .reg_type = NREG, .offset = context->nreg_count,
             .rsize = context->reg.rsize,
@@ -972,7 +994,7 @@ bool decl_vars(parser_context *context) {
             arr_target_pop(&context->targets);
         }
         str_printdnl(&name);
-        printf(": decl addr %d, size %d, type.size %zd, type.addr %d\n", reg->addr, reg->rsize, reg->type->size, reg->type->addr);
+        printf(": decl addr %d, size %d, type.size %zd, type.addr %d, type ", reg->addr, reg->rsize, reg->type->size, reg->type->addr), str_print(&reg->type->name);
         return true;
     } else if (token->data[0] == '[') {
         str name = token->id;
