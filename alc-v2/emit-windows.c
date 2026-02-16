@@ -1,3 +1,5 @@
+#include <stddef.h>
+
 const char *text_section_header = ("\t.text\n");
 const char *string_section_header = ("");
 
