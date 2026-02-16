@@ -81,6 +81,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 	}
 	if (reg.offset < 0) {
 		compile_err(NULL, "unexpected negative register offset %d", reg.offset);
+        return;
 	}
 	size_t offset = (size_t)reg.offset;
 
@@ -106,7 +107,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 	size_t rname_len = strlen(rname_original);
 	char rname_arr[8];
 	char *rname = rname_arr + 1;
-	strncpy(rname, rname_original, sizeof rname_arr);
+	strncpy(rname, rname_original, rname_len);
 	reg_size rsize = reg.rsize;
 	if (rsize == 0) {
 		rsize = 4;

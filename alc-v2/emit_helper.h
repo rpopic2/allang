@@ -1,6 +1,5 @@
 #include <inttypes.h>
 #include "buffer.h"
-#include "emit.h"
 
 static buf *fn_buf;
 static void buf_putreg(buf *buffer, reg_t reg);
