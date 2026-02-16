@@ -3,6 +3,7 @@
 #include "emit.h"
 #include "buffer.h"
 #include "err.h"
+#include "emit_helper.h"
 
 #define DECL_PTR(T, X) T _##X; T *X = &_##X
 #define INSTR(s) "\t"s"\n"
@@ -142,16 +143,9 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 void emit_mov(reg_t dst, i64 value) {
 	printf("dst size: %d\n", dst.rsize);
 	if (value == 0) {
-		buf_puts(fn_buf, STR("\txor "));
-		buf_putreg(fn_buf, dst);
-		buf_puts(fn_buf, STR(", "));
-		buf_putreg(fn_buf, dst);
-		buf_putc(fn_buf, '\n');
+		emit_rr(STR("xor"), dst, dst);
 	} else {
-		buf_puts(fn_buf, STR("\tmov "));
-		buf_putreg(fn_buf, dst);
-		buf_puts(fn_buf, STR(", "));
-		buf_snprintf(fn_buf, "%"PRId64"\n", value);
+		emit_ri(STR("mov"), dst, value);
 	}
 }
 
