@@ -1509,7 +1509,7 @@ void parse(parser_context *context) {
         compile_err(token, "unexpected token "), str_printerr(token->id);
     }
     if (token->end[0] == '\n') {
-        context->reg = (reg_t){0};
+        context->reg = (reg_t){.reg_type = SCRATCH};
     }
 }
 
