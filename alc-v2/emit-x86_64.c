@@ -105,7 +105,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 #undef RNAME_START
 
 	size_t rname_len = strlen(rname_original);
-	char rname_arr[8];
+	char rname_arr[8] = {0};
 	char *rname = rname_arr + 1;
 	strncpy(rname, rname_original, rname_len);
 	reg_size rsize = reg.rsize;
