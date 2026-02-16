@@ -894,13 +894,13 @@ void stmt_struct(parser_context *context) {
         }
         member_t m = {
             .name = name, .type = t,
-            .offset = ALIGN_TO(s->size, t->align),
+            .offset = ALIGN_TO(s->size, (size_t)t->align),
         };
         s->size = m.offset + t->size;
         s->align = t->align > s->align ? t->align : s->align;
         dyn_member_t_push(&s->struct_t.members, &m);
     }
-    s->size = ALIGN_TO(s->size, s->align);
+    s->size = ALIGN_TO(s->size, (size_t)s->align);
 #if !NDEBUG
     {
         printd(CSI_GREEN"struct report for "), str_printd(&s->name);
@@ -1673,9 +1673,9 @@ int main(int argc, const char *argv[]) {
         malloc_failed();
 	memset(source_start, 0, source_len);
 
-    unsigned long bytes_read = fread(source_start, sizeof (char), source_len, source_file);
+    size_t bytes_read = fread(source_start, sizeof (char), source_len, source_file);
     if (bytes_read > source_len) {
-		fprintf(stderr, "error: buffer overflow. expected %ld bytes but read %lu bytes\n", source_len, bytes_read);
+		fprintf(stderr, "error: buffer overflow. expected %zd bytes but read %zd bytes\n", source_len, bytes_read);
         exit(EXIT_FAILURE);
     }
     TIMER_END(clock_read_source);

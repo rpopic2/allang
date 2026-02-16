@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <inttypes.h>
+#ifndef _WIN32
 #include <execinfo.h>
 #include <unistd.h>
+#endif
 
 #include "buffer.h"
 #include "emit.h"
@@ -111,6 +113,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
             format = "x%d";
         } else {
             printf("cannot load size bigger than 8 to regisetr");
+			return;
         }
         buf_snprintf(buffer, format, get_regoff(reg));
     }
@@ -465,7 +468,7 @@ void emit_branch(str fn_name, str label, int index) {
 
 bool emit_branch_cond(cond condition, str fn_name, str label, int index) {
     buf_puts(fn_buf, STR_FROM("\tb."));
-    if (condition >= (sizeof (cond_str) / sizeof cond_str[0])) {
+    if (condition >= (cond)(sizeof (cond_str) / sizeof cond_str[0])) {
         fprintf(stderr, "unknown condition %d", condition);
         return false;
     }
@@ -605,6 +608,7 @@ void emit_ret(void) {
     buf_puts(fn_buf, STR_FROM_INSTR("ret"));
 }
 
+#ifndef _WIN32
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((format(printf, 1, 2)))
 #endif
@@ -621,3 +625,12 @@ void report_error(const char *format, ...) {
 
     backtrace_symbols_fd(array, size, STDERR_FILENO);
 }
+#else
+void report_error(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    fprintf(stderr, CSI_RED"error: "CSI_RESET);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
+#endif
