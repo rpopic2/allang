@@ -1,7 +1,12 @@
+#include <inttypes.h>
+
 #include "emit.h"
 #include "buffer.h"
+#include "err.h"
 
 #define DECL_PTR(T, X) T _##X; T *X = &_##X
+#define INSTR(s) "\t"s"\n"
+#define STR_FROM_INSTR(s) STR_FROM(INSTR(s))
 
 #define INIT_BUFSIZ 0x400
 
@@ -74,7 +79,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 		return;
 	}
 	if (reg.offset < 0) {
-		report_error("unexpected negative register offset %d", reg.offset);
+		compile_err(NULL, "unexpected negative register offset %d", reg.offset);
 	}
 	size_t offset = (size_t)reg.offset;
 
@@ -83,7 +88,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 #define RNAME(RTYPE, rtype) \
 	} else if (reg_type == RTYPE) { \
 		if (offset >= rname_##rtype##_len) { \
-			report_error("used up all "#rtype" registers\n"); \
+			compile_err(NULL, "used up all "#rtype" registers\n"); \
 			return; \
 		} \
 		rname_original = rname_##rtype[offset];
@@ -100,7 +105,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 	size_t rname_len = strlen(rname_original);
 	char rname_arr[8];
 	char *rname = rname_arr + 1;
-	strncpy(rname, rname_original, rname_len + 1);
+	strncpy(rname, rname_original, sizeof rname_arr);
 	reg_size rsize = reg.rsize;
 	if (rsize == 1) {
 		if (rname[0] == 'r') {
@@ -125,19 +130,25 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 			*--rname = 'r';
 		}
 	} else {
-		report_error("incorrect rsize %d\n", rsize);
+		compile_err(NULL, "incorrect rsize %d\n", rsize);
 	}
-	printf("rname: %s", rname);
+	printf("rname: %s\n", rname);
 	buf_snprintf(buffer, "%s", rname);
 }
 
 void emit_mov(reg_t dst, i64 value) {
+	printf("dst size: %d\n", dst.rsize);
 	if (value == 0) {
 		buf_puts(fn_buf, STR("\txor "));
 		buf_putreg(fn_buf, dst);
 		buf_puts(fn_buf, STR(", "));
 		buf_putreg(fn_buf, dst);
 		buf_putc(fn_buf, '\n');
+	} else {
+		buf_puts(fn_buf, STR("\tmov "));
+		buf_putreg(fn_buf, dst);
+		buf_puts(fn_buf, STR(", "));
+		buf_snprintf(fn_buf, "%"PRId64"\n", value);
 	}
 }
 
@@ -242,7 +253,7 @@ void emit_fn(str fn_name) {
 }
 
 void emit_ret(void) {
-
+    buf_puts(fn_buf, STR_FROM_INSTR("ret"));
 }
 
 

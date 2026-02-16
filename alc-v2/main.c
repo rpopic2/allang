@@ -729,6 +729,20 @@ void expr_struct(parser_context *context, type_t *type) {
     printd(CSI_GREEN"\nend struct expr\n"CSI_RESET);
 }
 
+reg_size get_rsize(reg_t reg) {
+	if (reg.addr) {
+		return (reg_size)sizeof (void *);
+	}
+	size_t size = reg.type->size;
+	if (size > MAX_REG_SIZE) {
+		compile_err(NULL, "compiler bug: this register size exceeds max register size\n");
+		return 0;
+	}
+	if (size == 0)
+		return 0;
+	return (reg_size)next_pow2((u32)size);
+}
+
 bool expr(parser_context *context) {
     bool explicit_type = context->cur_token.end[0] == '{';
     if (explicit_type) {
@@ -804,7 +818,12 @@ skip:;
         binary_op(&lhs, context);
     } else {
         printd("nullary op\n");
+		if (context->reg.type == type_comptime_int) {
+			context->reg.type = type_i32;
+		}
         if (lhs.tag == VALUE) {
+			str_print(&context->reg.type->name);
+			context->reg.rsize = get_rsize(context->reg);
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
@@ -1112,6 +1131,8 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
             lex(context);
             if (!expr(context))
                 break;
+					context->reg.rsize = get_rsize(context->reg);
+					printf("return size :%d", context->reg.rsize);
             if (rets_it < rets->cur) {
                 if (context->reg.type == type_comptime_int
                         && rets_it->type->tag == TK_FUND) {
