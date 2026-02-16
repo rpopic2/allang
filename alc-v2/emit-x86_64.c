@@ -90,7 +90,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 #define RNAME(RTYPE, rtype) \
 	} else if (reg_type == RTYPE) { \
 		if (offset >= rname_##rtype##_len) { \
-			compile_err(NULL, "used up all "#rtype" registers\n"); \
+			compile_err(NULL, "used up all "#rtype" registers. offset was %d\n", offset); \
 			return; \
 		} \
 		rname_original = rname_##rtype[offset];
