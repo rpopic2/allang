@@ -6,11 +6,13 @@ void compile_warning(const char *format, ...);
 
 #if NDEBUG
 #define printd(...) ((void)0)
+#define print(...) ((void)0)
 #define str_printd(...) ((void)0)
 #define str_printdnl(S) ((void)0)
 
 #else
 #define printd(...) printf(__VA_ARGS__)
+#define print(category, ...) if (category) printf(__VA_ARGS__)
 #define str_printd(...) str_print(__VA_ARGS__)
 #define str_printdnl(S) str_fprintnl(S, stdout)
 #endif

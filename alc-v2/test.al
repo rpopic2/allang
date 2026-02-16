@@ -355,3 +355,4 @@ struct_members: (=>)
     load_memb:
     [S.B]
     i8{3} =[S.B]
+

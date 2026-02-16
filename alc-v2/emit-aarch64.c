@@ -400,22 +400,26 @@ void emit_lsl(reg_t dst, reg_t lhs, i64 rhs) {
 
 static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     const char *suffix = "";
+    size_t size = r0.type->size;
+    if (r0.addr) {
+        size = 8;
+    }
     if (r0.rsize <= 0) {
         compile_err(NULL, "cannot %s size of zero\n", op);
 
         printd("dump r0 | size: %d, reg_type: %d, offset: %d\n", r0.rsize, r0.reg_type, r0.offset);
         report_error("");
-    } else if (r0.rsize <= 1) {
+    } else if (size <= 1) {
         if (*op == 'l' && r0.type->sign)
             suffix = "sb";
         else
             suffix = "b";
-    } else if (r0.rsize <= 2) {
+    } else if (size <= 2) {
         if (*op == 'l' && r0.type->sign)
             suffix = "sh";
         else
             suffix = "h";
-    } else if (*op == 'l' && r0.rsize == 8 && r1.rsize == 4) {
+    } else if (*op == 'l' && size == 8 && size == 4) {
         if (*op == 'l' && r0.type->sign)
             suffix = "sw";
     }

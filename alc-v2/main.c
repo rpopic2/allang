@@ -353,7 +353,7 @@ regable read_regable(str s, const token_t *token) {
             printf("mem: ");
             str_print(&mem->name);
             result.reg.type = mem->type;
-            printf("offset %d -> %zu", result.reg.offset, mem->offset);
+            printf("offset %d -> %zu\n", result.reg.offset, mem->offset);
             result.reg.offset += mem->offset;
         }
         if (mem) {
@@ -515,14 +515,17 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
 
     reg_t reg_to_store;
     if (lhs->tag == VALUE) {
+        printf("context type was "), str_print(&context->reg.type->name);
         reg_to_store = (reg_t){
             .reg_type = SCRATCH, .offset = context->reg.offset,
-            .rsize = rhs.rsize, .type = type_comptime_int,
+            .rsize = context->reg.rsize, .type = context->reg.type,
         };
         emit_mov(reg_to_store, lhs->value);
-        if (rhs.type->tag == TK_FUND) {
+        if (rhs.type->tag == TK_FUND && reg_to_store.type == type_comptime_int) {
             reg_to_store.type = rhs.type;
+            reg_to_store.rsize = rhs.rsize;
         }
+        printf("lhs was value\n");
     } else if (lhs->tag == REG) {
         reg_to_store = lhs->reg;
         rhs.type = lhs->reg.type;
@@ -533,6 +536,7 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
 
     printd("binary_op:store\n");
     printf("rsizes lhs: %d, rhs: %d\n", reg_to_store.rsize, rhs.rsize);
+    // reg_to_store.rsize = 1;
     if (offset.tag == REG) {
         emit_str_reg(reg_to_store, rhs, offset.reg);
     } else {
@@ -897,7 +901,8 @@ void stmt_struct(parser_context *context) {
         dyn_member_t_push(&s->struct_t.members, &m);
     }
     s->size = ALIGN_TO(s->size, s->align);
-    if (true) {
+#if !NDEBUG
+    {
         printd(CSI_GREEN"struct report for "), str_printd(&s->name);
         printd("=================\n"CSI_RESET);
         printd("\tsize: %zd, align %d\n", s->size, s->align);
@@ -915,6 +920,7 @@ void stmt_struct(parser_context *context) {
         }
         printd(CSI_GREEN"end report\n\n"CSI_RESET);
     }
+#endif
 }
 
 target *get_current_target(parser_context *context) {
@@ -1000,9 +1006,6 @@ bool stmt_stack_store(parser_context *context) {
         context->reg.offset = 0;
         context->reg.reg_type = SCRATCH;
     }
-    printf("-- stack store\n");
-    printf("\t");
-    str_print(&target_reg->type->name);
 
     return true;
 }
