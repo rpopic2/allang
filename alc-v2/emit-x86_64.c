@@ -102,7 +102,6 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 	char *rname = rname_arr + 1;
 	strncpy(rname, rname_original, rname_len + 1);
 	reg_size rsize = reg.rsize;
-	char *rname_w_size;
 	if (rsize == 1) {
 		if (rname[0] == 'r') {
 			rname[rname_len++] = 'b';
@@ -133,31 +132,119 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 }
 
 void emit_mov(reg_t dst, i64 value) {
-	buf_putreg(fn_buf, dst);
+	if (value == 0) {
+		buf_puts(fn_buf, STR("\txor "));
+		buf_putreg(fn_buf, dst);
+		buf_puts(fn_buf, STR(", "));
+		buf_putreg(fn_buf, dst);
+		buf_putc(fn_buf, '\n');
+	}
 }
 
-void emit_mov_reg(reg_t dst, reg_t src);
-void emit_add(reg_t dst, reg_t lhs, i64 rhs);
-void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs);
-void emit_sub(reg_t dst, reg_t lhs, i64 rhs);
-void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs);
-void emit_cmp(reg_t lhs, i64 rhs);
-void emit_cmp_reg(reg_t lhs, reg_t rhs);
-void emit_string_lit(reg_t dst, const str *s);
-void emit_lsl(reg_t dst, reg_t lhs, i64 rhs);
+void emit_mov_reg(reg_t dst, reg_t src) {
 
-void emit_str(reg_t src, reg_t dst, int offset);
-void emit_ldr(reg_t dst, reg_t src, int offset);
-void emit_str_reg(reg_t src, reg_t dst, reg_t offset);
-void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset);
+}
 
-void emit_branch(str fn_name, str label, int index);
-bool emit_branch_cond(cond condition, str fn_name, str label, int index);
-void emit_label(str fn_name, str label, int index);
-void emit_fn_prologue_epilogue(const parser_context *context);
-void emit_fn_call(const str *s);
-void emit_fn(str fn_name);
-void emit_ret(void);
+void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
+
+}
+
+void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
+
+}
+
+void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
+
+}
+
+void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
+
+}
+
+void emit_cmp(reg_t lhs, i64 rhs) {
+
+}
+
+void emit_cmp_reg(reg_t lhs, reg_t rhs) {
+
+}
+
+void emit_string_lit(reg_t dst, const str *s) {
+
+}
+
+void emit_lsl(reg_t dst, reg_t lhs, i64 rhs) {
+
+}
+
+
+void emit_str(reg_t src, reg_t dst, int offset) {
+
+}
+
+void emit_ldr(reg_t dst, reg_t src, int offset) {
+
+}
+
+void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
+
+}
+
+void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
+
+}
+
+
+void emit_branch(str fn_name, str label, int index) {
+
+}
+
+bool emit_branch_cond(cond condition, str fn_name, str label, int index) {
+	return true;
+}
+
+static void put_label(str fn_name, str label, int index) {
+    buf_putc(fn_buf, '.');
+    buf_puts(fn_buf, fn_name);
+    buf_putc(fn_buf, '.');
+    buf_puts(fn_buf, label);
+    if (index > 0) {
+        buf_snprintf(fn_buf, "%d", index);
+    }
+}
+
+void emit_label(str fn_name, str label, int index) {
+    put_label(fn_name, label, index);
+    buf_puts(fn_buf, STR_FROM(":\n"));
+}
+
+void emit_fn_prologue_epilogue(const parser_context *context) {
+
+}
+
+void emit_fn_call(const str *s) {
+
+}
+
+void emit_fn(str fn_name) {
+    buf_puts(fn_header_buf, STR_FROM("\n\t.def "));
+	buf_puts(fn_header_buf, fn_name);
+    buf_puts(fn_header_buf, STR_FROM(";\n"));
+    buf_puts(fn_header_buf, STR_FROM("\t.scl 2;\n"));
+    buf_puts(fn_header_buf, STR_FROM("\t.type 32;\n"));
+    buf_puts(fn_header_buf, STR_FROM("\t.endef\n"));
+
+    buf_puts(fn_header_buf, STR_FROM("\t.globl "));
+	buf_puts(fn_header_buf, fn_name);
+    buf_puts(fn_header_buf, STR_FROM("\n\t.p2align 4\n"));
+	buf_puts(fn_header_buf, fn_name);
+    buf_puts(fn_header_buf, STR_FROM(":\n"));
+}
+
+void emit_ret(void) {
+
+}
+
 
 void report_error(const char *format, ...) {
     va_list args;
