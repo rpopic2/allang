@@ -1018,11 +1018,6 @@ bool stmt_stack_store(parser_context *context) {
     emit_str(src, (reg_t){.reg_type = FRAME }, -offset);
     cur_target->target_assigned = true;
 
-    if (context->cur_token.end[0] == '\n') {
-        context->reg.offset = 0;
-        context->reg.reg_type = SCRATCH;
-    }
-
     return true;
 }
 
@@ -1514,9 +1509,7 @@ void parse(parser_context *context) {
         compile_err(token, "unexpected token "), str_printerr(token->id);
     }
     if (token->end[0] == '\n') {
-        context->reg.offset = 0;
-        context->reg.type = NULL;
-        context->reg.rsize = 0;
+        context->reg = (reg_t){0};
     }
 }
 
