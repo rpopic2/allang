@@ -150,11 +150,16 @@ void emit_mov(reg_t dst, i64 value) {
 }
 
 void emit_mov_reg(reg_t dst, reg_t src) {
-
+	emit_rr(STR("mov"), dst, src);
 }
 
 void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
-
+	emit_rx(STR("lea"), dst);
+	buf_puts(fn_buf, STR(", ["));
+	buf_putreg(fn_buf, lhs);
+	buf_puts(fn_buf, STR("+"));
+	buf_puti(fn_buf, rhs);
+	buf_puts(fn_buf, STR("]\n"));
 }
 
 void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
