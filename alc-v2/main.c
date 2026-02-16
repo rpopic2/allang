@@ -818,9 +818,6 @@ skip:;
         binary_op(&lhs, context);
     } else {
         printd("nullary op\n");
-		if (context->reg.type == type_comptime_int) {
-			context->reg.type = type_i32;
-		}
         if (lhs.tag == VALUE) {
 			str_print(&context->reg.type->name);
 			context->reg.rsize = get_rsize(context->reg);

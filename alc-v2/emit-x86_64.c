@@ -107,6 +107,9 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 	char *rname = rname_arr + 1;
 	strncpy(rname, rname_original, sizeof rname_arr);
 	reg_size rsize = reg.rsize;
+	if (rsize == 0) {
+		rsize = 4;
+	}
 	if (rsize == 1) {
 		if (rname[0] == 'r') {
 			rname[rname_len++] = 'b';
