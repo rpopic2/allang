@@ -342,6 +342,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     if (context->calls_fn) {
         stack_size += shadow_size; // for shadow space (x64 abi)
     }
+    stack_size += (size_t)context->stack_size;
     stack_size = ALIGN_TO(stack_size, (size_t)0x10);
 
     buf_puts(prologue_buf, STR_FROM_INSTR("push rbp"));
