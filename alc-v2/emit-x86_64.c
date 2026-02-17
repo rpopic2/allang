@@ -4,6 +4,7 @@
 #include "buffer.h"
 #include "err.h"
 #include "emit_helper.h"
+#include "typesys.h"
 
 #define DECL_PTR(T, X) T _##X; T *X = &_##X
 #define INSTR(s) "\t"s"\n"
@@ -151,7 +152,26 @@ void emit_mov(reg_t dst, i64 value) {
 }
 
 void emit_mov_reg(reg_t dst, reg_t src) {
-	emit_rr(STR("mov"), dst, src);
+    const char *op = "mov";
+    if (dst.rsize && src.rsize && dst.rsize > src.rsize) {
+        printf("rsize dst %d, src %d\n", dst.rsize, src.rsize);
+        if (src.type->sign) {
+            if (dst.rsize == 8 && src.rsize == 4) {
+                op = "movsxd";
+            } else {
+                op = "movsx";
+            }
+        } else {
+            if (dst.rsize == 8 && src.rsize == 4) {
+                dst.rsize = 4;
+            } else {
+                op = "movzx";
+            }
+        }
+    } else if (dst.rsize < src.rsize) {
+        dst.rsize = src.rsize;
+    }
+	emit_rr(STR(op), dst, src);
 }
 
 void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
