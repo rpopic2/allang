@@ -339,26 +339,34 @@ void put_r(buf *buffer, const char *op, reg_t reg) {
 void emit_fn_prologue_epilogue(const parser_context *context) {
     size_t stack_size = 0;
     const int shadow_size = 32;
-    if (context->calls_fn) {
+    bool calls_fn = context->calls_fn;
+    if (calls_fn) {
         stack_size += shadow_size; // for shadow space (x64 abi)
     }
-    stack_size += (size_t)context->stack_size;
+    size_t locals_size = (size_t)context->stack_size;
+    stack_size += locals_size;
     stack_size = ALIGN_TO(stack_size, (size_t)0x10);
 
-    buf_puts(prologue_buf, STR_FROM_INSTR("push rbp"));
+    if (locals_size)
+        buf_puts(prologue_buf, STR_FROM_INSTR("push rbp"));
     int regs_to_save = context->nreg_count;
-    if (regs_to_save % 2 == 1)
+    int tmp = regs_to_save + (locals_size ? 1 : 0);
+    if (calls_fn && tmp % 2 == 0)
         stack_size += 8; // for aligning stack to 0x10 bytes on 'call' (x64 abi)
 
     for (int i = 0; i < regs_to_save; ++i) {
         put_r(prologue_buf, "push", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
     }
-    buf_snprintf(prologue_buf, "\tlea rbp, [rsp - 0x%x]\n", shadow_size);
-    buf_snprintf(prologue_buf, "\tsub rsp, 0x%zx\n", stack_size);
+    if (locals_size)
+        buf_snprintf(prologue_buf, "\tlea rbp, [rsp - 0x%x]\n", shadow_size);
+    if (stack_size)
+        buf_snprintf(prologue_buf, "\tsub rsp, 0x%zx\n", stack_size);
 
 
-    buf_snprintf(fn_buf, "\tadd rsp, 0x%zx\n", stack_size);
-    buf_puts(fn_buf, STR_FROM_INSTR("pop rbp"));
+    if (stack_size)
+        buf_snprintf(fn_buf, "\tadd rsp, 0x%zx\n", stack_size);
+    if (locals_size)
+        buf_puts(fn_buf, STR_FROM_INSTR("pop rbp"));
     for (int i = 0; i < regs_to_save; ++i) {
         put_r(fn_buf, "pop", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
     }
