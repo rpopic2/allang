@@ -249,13 +249,40 @@ void emit_lsl(reg_t dst, reg_t lhs, i64 rhs) {
     }
 }
 
+const char *ptr_names[] = {
+    "byte", "word", "dword", "qword"
+};
+int rsize_log2(reg_size size) {
+    if (size <= 1)
+        return 0;
+    else if (size <= 2)
+        return 1;
+    else if (size <= 4)
+        return 2;
+    else if (size <= 8)
+        return 3;
+    else
+        unreachable;
+}
 
 void emit_str(reg_t src, reg_t dst, int offset) {
-
+    buf_puts(fn_buf, STR("\tmov "));
+    int index = rsize_log2(src.rsize);
+    buf_snprintf(fn_buf, " %s ptr [", ptr_names[index]);
+    buf_putreg(fn_buf, dst);
+    buf_snprintf(fn_buf, " + %d], ", offset);
+    buf_putreg(fn_buf, src);
+    buf_putc(fn_buf, '\n');
 }
 
 void emit_ldr(reg_t dst, reg_t src, int offset) {
+    buf_puts(fn_buf, STR("\tmov "));
+    buf_putreg(fn_buf, dst);
 
+    int index = rsize_log2(dst.rsize);
+    buf_snprintf(fn_buf, ", %s ptr [", ptr_names[index]);
+    buf_putreg(fn_buf, src);
+    buf_snprintf(fn_buf, " + %d]\n", offset);
 }
 
 void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
