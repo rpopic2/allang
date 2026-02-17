@@ -29,6 +29,7 @@ DECL_PTR(static buf, prologue_buf);
 DECL_PTR(static buf, fn_buf);
 
 char *cstr_begin = NULL;
+unsigned string_lit_counts = 0;
 
 void emit_init(void) {
     buf_init(text_buf, INIT_BUFSIZ);
@@ -154,7 +155,6 @@ void emit_mov(reg_t dst, i64 value) {
 void emit_mov_reg(reg_t dst, reg_t src) {
     const char *op = "mov";
     if (dst.rsize && src.rsize && dst.rsize > src.rsize) {
-        printf("rsize dst %d, src %d\n", dst.rsize, src.rsize);
         if (src.type->sign) {
             if (dst.rsize == 8 && src.rsize == 4) {
                 op = "movsxd";
@@ -174,41 +174,79 @@ void emit_mov_reg(reg_t dst, reg_t src) {
 	emit_rr(STR(op), dst, src);
 }
 
-void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
+void emit_lea_begin(reg_t dst, reg_t lhs, str op) {
 	emit_rx(STR("lea"), dst);
 	buf_puts(fn_buf, STR(", ["));
 	buf_putreg(fn_buf, lhs);
-	buf_puts(fn_buf, STR("+"));
-	buf_puti(fn_buf, rhs);
+	buf_puts(fn_buf, op);
+}
+void emit_lea_end(void) {
 	buf_puts(fn_buf, STR("]\n"));
 }
 
-void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
+void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
+    emit_lea_begin(dst, lhs, STR("+"));
+    buf_puti(fn_buf, rhs);
+    emit_lea_end();
+}
 
+void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
+    emit_lea_begin(dst, lhs, STR("+"));
+	buf_putreg(fn_buf, rhs);
+    emit_lea_end();
 }
 
 void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
-
+    emit_lea_begin(dst, lhs, STR("-"));
+	buf_puti(fn_buf, rhs);
+    emit_lea_end();
 }
 
 void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-
+    emit_rr(STR("mov"), dst, lhs);
+    emit_rr(STR("sub"), dst, rhs);
 }
 
 void emit_cmp(reg_t lhs, i64 rhs) {
-
+    emit_ri(STR("cmp"), lhs, rhs);
 }
 
 void emit_cmp_reg(reg_t lhs, reg_t rhs) {
-
+    emit_rr(STR("cmp"), lhs, rhs);
 }
 
 void emit_string_lit(reg_t dst, const str *s) {
+    char *buffer = malloc(SPRINTF_BUFSIZ);
+    if (!buffer)
+        malloc_failed();
+    int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, ".Lstr.%d", string_lit_counts++);
+    if (num_printed >= SPRINTF_BUFSIZ) {
+        fputs("buffer overflow in snprintf\n", stderr);
+        exit(EXIT_FAILURE);
+    }
 
+	emit_rx(STR("lea"), dst);
+	buf_snprintf(fn_buf, ", [rip+%s]\n", buffer);
+
+    buf_snprintf(cstr_buf, "%s:\n", buffer);
+    buf_puts(cstr_buf, STR_FROM("\t.asciz "));
+    buf_puts(cstr_buf, *s);
+    buf_putc(cstr_buf, '\n');
 }
 
 void emit_lsl(reg_t dst, reg_t lhs, i64 rhs) {
-
+    if (rhs >= 4) {
+        emit_rr(STR("mov"), dst, lhs);
+        emit_ri(STR("shl"), dst, rhs);
+    } else if (rhs == 0) {
+        emit_mov_reg(dst, lhs);
+    } else if (rhs == 1) {
+        emit_add_reg(dst, lhs, lhs);
+    } else if (rhs <= 3) {
+        emit_lea_begin(dst, lhs, STR("*"));
+        buf_puti(fn_buf, 1 << rhs);
+        emit_lea_end();
+    }
 }
 
 
