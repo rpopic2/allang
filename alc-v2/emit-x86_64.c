@@ -291,11 +291,19 @@ void emit_label(str fn_name, str label, int index) {
 }
 
 void emit_fn_prologue_epilogue(const parser_context *context) {
-
+    size_t stack_size = 0;
+    if (context->calls_fn) {
+        stack_size += 32; // for shadow space (x64 abi)
+        stack_size += 8; // for aligning stack to 0x10 bytes (x64 abi)
+    }
+    buf_snprintf(prologue_buf, "\tsub rsp, 0x%zx\n", stack_size);
+    buf_snprintf(fn_buf, "\tadd rsp, 0x%zx\n", stack_size);
 }
 
 void emit_fn_call(const str *s) {
-
+    buf_puts(fn_buf, STR("\tcall "));
+    buf_puts(fn_buf, *s);
+    buf_putc(fn_buf, '\n');
 }
 
 void emit_fn(str fn_name) {

@@ -57,6 +57,10 @@ ret 0
 foo: (X i32, Y i32 => A i32)
     ret X + Y
 
+minus: (X i32, Y i32 => A i32)
+    X - 12
+    ret X - Y
+
 get_hi: (=> Hi addr u8)
     ret "HI\n"
 
@@ -177,15 +181,17 @@ fund_types: (=>)
     5 =I8
 
 casting_i8: (=>)
-    I8 :: i8{-3}
-    I16 :: i16{I8}
-    I32 :: i32{I8}
-    I64 :: i64{I8}
+    Src :: i8{-3}
 
-    U8 :: u8{I8}
-    U16 :: u16{I8}
-    U32 :: u32{I8}
-    U64 :: u64{I8}
+    I8 :: i8{Src}
+    I16 :: i16{Src}
+    I32 :: i32{Src}
+    I64 :: i64{Src}
+
+    u8{Src}
+    u16{Src}
+    u32{Src}
+    u64{Src}
 
 
 casting_i16: (=>)
@@ -195,10 +201,10 @@ casting_i16: (=>)
     I32 :: i32{Src}
     I64 :: i64{Src}
 
-    U8 :: u8{Src}
-    U16 :: u16{Src}
-    U32 :: u32{Src}
-    U64 :: u64{Src}
+    u8{Src}
+    u16{Src}
+    u32{Src}
+    u64{Src}
 
 
 casting_i32: (=>)
@@ -208,10 +214,10 @@ casting_i32: (=>)
     I16 :: i16{Src}
     I64 :: i64{Src}
 
-    U8 :: u8{Src}
-    U16 :: u16{Src}
-    U32 :: u32{Src}
-    U64 :: u64{Src}
+    u8{Src}
+    u16{Src}
+    u32{Src}
+    u64{Src}
 
 
 casting_u8: (=>)
@@ -222,9 +228,9 @@ casting_u8: (=>)
     I32 :: i32{Src}
     I64 :: i64{Src}
 
-    U16 :: u16{Src}
-    U32 :: u32{Src}
-    U64 :: u64{Src}
+    u16{Src}
+    u32{Src}
+    u64{Src}
 
 
 casting_u16: (=>)
@@ -235,9 +241,9 @@ casting_u16: (=>)
     I32 :: i32{Src}
     I64 :: i64{Src}
 
-    U8 :: u8{Src}
-    U32 :: u32{Src}
-    U64 :: u64{Src}
+    u8{Src}
+    u32{Src}
+    u64{Src}
 
 
 casting_u32: (=>)
@@ -248,9 +254,9 @@ casting_u32: (=>)
     I32 :: i32{Src}
     I64 :: i64{Src}
 
-    U8 :: u8{Src}
-    U16 :: u16{Src}
-    U64 :: u64{Src}
+    u8{Src}
+    u16{Src}
+    u64{Src}
 
 
 casting_u64: (=>)
@@ -261,9 +267,9 @@ casting_u64: (=>)
     I32 :: i32{Src}
     I64 :: i64{Src}
 
-    U8 :: u8{Src}
-    U16 :: u16{Src}
-    U32 :: u32{Src}
+    u8{Src}
+    u16{Src}
+    u32{Src}
 
 
 casting_i64: (=>)
@@ -273,10 +279,10 @@ casting_i64: (=>)
     I16 :: i16{Src}
     I32 :: i32{Src}
 
-    U8 :: u8{Src}
-    U16 :: u16{Src}
-    U32 :: u32{Src}
-    U64 :: u64{Src}
+    u8{Src}
+    u16{Src}
+    u32{Src}
+    u64{Src}
 
 point: (=>)
     struct {
@@ -360,3 +366,11 @@ struct_members: (=>)
 big_lits: (=>)
     Big :: 0xFFFFFFFFFFFFFFFF
 
+lsl_test: (=>)
+    I :: 3
+    I shl 0
+    I shl 1
+    I shl 2
+    I shl 3
+    I shl 4
+    I shl 8
