@@ -268,7 +268,7 @@ int rsize_log2(reg_size size) {
 void emit_str(reg_t src, reg_t dst, int offset) {
     buf_puts(fn_buf, STR("\tmov "));
     int index = rsize_log2(src.rsize);
-    buf_snprintf(fn_buf, " %s ptr [", ptr_names[index]);
+    buf_snprintf(fn_buf, "%s ptr [", ptr_names[index]);
     buf_putreg(fn_buf, dst);
     buf_snprintf(fn_buf, " + %d], ", offset);
     buf_putreg(fn_buf, src);
@@ -286,6 +286,7 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
 }
 
 const reg_t rax = {.rsize = sizeof (void *), .reg_type = SCRATCH, .addr = 1};
+const reg_t rbp = {.rsize = sizeof (void *), .reg_type = FRAME, .addr = 1};
 
 void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
     emit_lea_begin(rax, dst, STR("+"));
@@ -329,15 +330,37 @@ void emit_label(str fn_name, str label, int index) {
     buf_puts(fn_buf, STR_FROM(":\n"));
 }
 
+void put_r(buf *buffer, const char *op, reg_t reg) {
+    buf_snprintf(buffer, "\t%s ", op);
+    buf_putreg(buffer, reg);
+    buf_putc(buffer, '\n');
+}
+
 void emit_fn_prologue_epilogue(const parser_context *context) {
     size_t stack_size = 0;
+    const int shadow_size = 32;
     if (context->calls_fn) {
-        stack_size += 32; // for shadow space (x64 abi)
+        stack_size += shadow_size; // for shadow space (x64 abi)
     }
     stack_size = ALIGN_TO(stack_size, (size_t)0x10);
-    stack_size += 8; // for aligning stack to 0x10 bytes on 'call' (x64 abi)
+
+    buf_puts(prologue_buf, STR_FROM_INSTR("push rbp"));
+    int regs_to_save = context->nreg_count;
+    if (regs_to_save % 2 == 1)
+        stack_size += 8; // for aligning stack to 0x10 bytes on 'call' (x64 abi)
+
+    for (int i = 0; i < regs_to_save; ++i) {
+        put_r(prologue_buf, "push", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
+    }
+    buf_snprintf(prologue_buf, "\tlea rbp, [rsp - %d]\n", shadow_size);
     buf_snprintf(prologue_buf, "\tsub rsp, 0x%zx\n", stack_size);
+
+
     buf_snprintf(fn_buf, "\tadd rsp, 0x%zx\n", stack_size);
+    buf_puts(fn_buf, STR_FROM_INSTR("pop rbp"));
+    for (int i = 0; i < regs_to_save; ++i) {
+        put_r(fn_buf, "pop", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
+    }
 }
 
 void emit_fn_call(const str *s) {
