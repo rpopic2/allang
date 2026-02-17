@@ -285,31 +285,33 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
     buf_snprintf(fn_buf, " + %d]\n", offset);
 }
 
-void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
+const reg_t rax = {.rsize = sizeof (void *), .reg_type = SCRATCH, .addr = 1};
 
+void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
+    emit_lea_begin(rax, dst, STR("+"));
+    buf_putreg(fn_buf, offset);
+    emit_lea_end();
+
+    emit_str(src, rax, 0);
 }
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
+    emit_lea_begin(dst, dst, STR("+"));
+    buf_putreg(fn_buf, offset);
+    emit_lea_end();
 
+    emit_ldr(dst, rax, 0);
 }
 
 
 void emit_branch(str fn_name, str label, int index) {
-
+    buf_puts(fn_buf, STR("\tjmp "));
+    put_label(fn_name, label, index);
+    buf_puts(fn_buf, STR_FROM("\n"));
 }
 
 bool emit_branch_cond(cond condition, str fn_name, str label, int index) {
 	return true;
-}
-
-static void put_label(str fn_name, str label, int index) {
-    buf_putc(fn_buf, '.');
-    buf_puts(fn_buf, fn_name);
-    buf_putc(fn_buf, '.');
-    buf_puts(fn_buf, label);
-    if (index > 0) {
-        buf_snprintf(fn_buf, "%d", index);
-    }
 }
 
 void emit_label(str fn_name, str label, int index) {
