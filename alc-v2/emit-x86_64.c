@@ -352,7 +352,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     for (int i = 0; i < regs_to_save; ++i) {
         put_r(prologue_buf, "push", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
     }
-    buf_snprintf(prologue_buf, "\tlea rbp, [rsp - %d]\n", shadow_size);
+    buf_snprintf(prologue_buf, "\tlea rbp, [rsp - 0x%x]\n", shadow_size);
     buf_snprintf(prologue_buf, "\tsub rsp, 0x%zx\n", stack_size);
 
 
