@@ -148,7 +148,10 @@ void emit_mov(reg_t dst, i64 value) {
 	if (value == 0) {
 		emit_rr(STR("xor"), dst, dst);
 	} else {
-		emit_ri(STR("mov"), dst, value);
+        emit_rx(STR("mov"), dst);
+        buf_puts(fn_buf, STR_FROM(", "));
+        buf_snprintf(fn_buf, "%"PRId64, value);
+        buf_putc(fn_buf, '\n');
 	}
 }
 
