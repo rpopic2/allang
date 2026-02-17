@@ -338,9 +338,10 @@ void put_r(buf *buffer, const char *op, reg_t reg) {
 
 void emit_fn_prologue_epilogue(const parser_context *context) {
     size_t stack_size = 0;
-    const int shadow_size = 32;
+    size_t shadow_size = 0;
     bool calls_fn = context->calls_fn;
     if (calls_fn) {
+        shadow_size = 32;
         stack_size += shadow_size; // for shadow space (x64 abi)
     }
     size_t locals_size = (size_t)context->stack_size;
@@ -357,8 +358,12 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     for (int i = 0; i < regs_to_save; ++i) {
         put_r(prologue_buf, "push", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
     }
-    if (locals_size)
-        buf_snprintf(prologue_buf, "\tlea rbp, [rsp - 0x%x]\n", shadow_size);
+    if (locals_size) {
+        if (shadow_size)
+            buf_snprintf(prologue_buf, "\tlea rbp, [rsp - 0x%zx]\n", shadow_size);
+        else
+            buf_snprintf(prologue_buf, "\tmov rbp, rsp\n");
+    }
     if (stack_size)
         buf_snprintf(prologue_buf, "\tsub rsp, 0x%zx\n", stack_size);
 
