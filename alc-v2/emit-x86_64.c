@@ -351,8 +351,8 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     if (locals_size)
         buf_puts(prologue_buf, STR_FROM_INSTR("push rbp"));
     int regs_to_save = context->nreg_count;
-    int tmp = regs_to_save + (locals_size ? 1 : 0);
-    if (calls_fn && tmp % 2 == 0)
+    int tmp = regs_to_save + (locals_size ? 1 : 0) + (calls_fn ? 1 : 0);
+    if (tmp % 2 == 1)
         stack_size += 8; // for aligning stack to 0x10 bytes on 'call' (x64 abi)
 
     for (int i = 0; i < regs_to_save; ++i) {
