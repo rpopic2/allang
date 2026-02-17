@@ -384,16 +384,6 @@ void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
 }
 
-static void put_label(str fn_name, str label, int index) {
-    buf_putc(fn_buf, '.');
-    buf_puts(fn_buf, fn_name);
-    buf_putc(fn_buf, '.');
-    buf_puts(fn_buf, label);
-    if (index > 0) {
-        buf_snprintf(fn_buf, "%d", index);
-    }
-}
-
 void emit_branch(str fn_name, str label, int index) {
     buf_puts(fn_buf, STR_FROM("\tb "));
     put_label(fn_name, label, index);

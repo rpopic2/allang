@@ -85,3 +85,13 @@ static void emit_rrrsi(str op, reg_t r0, reg_t r1, reg_t r2, str s, i64 i0) {
     buf_puti(fn_buf, i0);
     buf_putc(fn_buf, '\n');
 }
+
+static void put_label(str fn_name, str label, int index) {
+    buf_putc(fn_buf, '.');
+    buf_puts(fn_buf, fn_name);
+    buf_putc(fn_buf, '.');
+    buf_puts(fn_buf, label);
+    if (index > 0) {
+        buf_snprintf(fn_buf, "%d", index);
+    }
+}

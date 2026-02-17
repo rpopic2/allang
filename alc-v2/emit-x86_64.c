@@ -310,7 +310,17 @@ void emit_branch(str fn_name, str label, int index) {
     buf_puts(fn_buf, STR_FROM("\n"));
 }
 
+const char *const cond_str[] = {
+    "e",
+};
 bool emit_branch_cond(cond condition, str fn_name, str label, int index) {
+    if (condition >= (cond)(sizeof cond_str / sizeof cond_str[0])) {
+        fprintf(stderr, "unknown condition %d", condition);
+        return false;
+    }
+    buf_snprintf(fn_buf, "\tj%s ", cond_str[condition]);
+    put_label(fn_name, label, index);
+    buf_puts(fn_buf, STR_FROM("\n"));
 	return true;
 }
 
@@ -323,8 +333,9 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     size_t stack_size = 0;
     if (context->calls_fn) {
         stack_size += 32; // for shadow space (x64 abi)
-        stack_size += 8; // for aligning stack to 0x10 bytes (x64 abi)
     }
+    stack_size = ALIGN_TO(stack_size, (size_t)0x10);
+    stack_size += 8; // for aligning stack to 0x10 bytes on 'call' (x64 abi)
     buf_snprintf(prologue_buf, "\tsub rsp, 0x%zx\n", stack_size);
     buf_snprintf(fn_buf, "\tadd rsp, 0x%zx\n", stack_size);
 }
