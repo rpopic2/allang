@@ -523,7 +523,12 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
         emit_mov(reg_to_store, lhs->value);
         if (rhs.type->tag == TK_FUND && reg_to_store.type == type_comptime_int) {
             reg_to_store.type = rhs.type;
-            reg_to_store.rsize = rhs.rsize;
+            if (rhs.type->size > MAX_REG_SIZE) {
+                compile_err(NULL, "compiler bug: this register size exceeds max register size\n");
+                reg_to_store.rsize = 4;
+            } else {
+                reg_to_store.rsize = (reg_size)rhs.type->size;
+            }
         }
         printf("lhs was value\n");
     } else if (lhs->tag == REG) {
