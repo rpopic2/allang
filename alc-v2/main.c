@@ -27,7 +27,7 @@ static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
 OPT_GENERIC(i64)
 
-unsigned char lineno = 1;
+unsigned short lineno = 1;
 unsigned char indent = 0;
 bool eof = false;
 bool has_compile_err = false;

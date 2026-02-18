@@ -20,7 +20,7 @@ typedef struct {
         };
         str id;
     };
-    unsigned char lineno;
+    unsigned short lineno;
     unsigned char indent;
     eob_t eob;   // end of block
 } token_t;
