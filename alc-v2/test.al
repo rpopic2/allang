@@ -356,13 +356,6 @@ struct_store: (=>)
     K :: point32{.. 0}
     [S] =K
 
-struct_members: (=>)
-    [S] :: point{.X 1 .Y 2 .. 0} =[]
-    load_memb:
-    [S.B]
-    i8{3} =[S.B]
-    S.C
-
 big_lits: (=>)
     Big :: 0xFFFFFFFFFFFFFFFF
 
@@ -374,3 +367,20 @@ lsl_test: (=>)
     I shl 3
     I shl 4
     I shl 8
+
+struct_members: (=>)
+    [S] :: point{.X 1 .Y 2 .. 0} =[]
+    load_memb:
+    [S.B]
+    i8{3} =[S.B]
+    S.C
+
+nested_struct: (=>)
+    struct {
+        Point point32
+    }
+
+    [Nested] :: nested_struct{.. 0} =[]
+    [Nested.Point.Y]
+    // point32{.X 1 .Y 2} =Nested.Point
+

@@ -311,13 +311,12 @@ str dot_iter(str *s) {
 
 member_t *find_member(dyn_member_t *members, str name) {
     member_t *it = members->begin;
-    int index = 0;
-    for (; it != members->cur; ++it, ++index) {
+    for (; it != members->cur; ++it) {
         if (str_eq(name, it->name)) {
             break;
         }
     }
-    if (it == members->end)
+    if (it == members->cur)
         return NULL;
     return it;
 }
@@ -340,21 +339,24 @@ regable read_regable(str s, const token_t *token) {
         result.reg = *e;
         result.tag = REG;
         member_t *mem = NULL;
+        type_t *t = e->type;
         while (true) {
             str mem_name = dot_iter(&s);
             if (str_empty(&mem_name))
                 break;
             printf("find: ");
             str_print(&mem_name);
-            member_t *mem = find_member(&e->type->struct_t.members, mem_name);
+            member_t *mem = find_member(&t->struct_t.members, mem_name);
             if (mem == NULL) {
                 compile_err(token, "member not found\n");
+                break;
             }
             printf("mem: ");
             str_print(&mem->name);
             result.reg.type = mem->type;
             printf("offset %d -> %zu\n", result.reg.offset, mem->offset);
-            result.reg.offset += mem->offset;
+            result.reg.offset -= mem->offset;
+            t = mem->type;
         }
         if (mem) {
             size_t mem_size = mem->type->size;
