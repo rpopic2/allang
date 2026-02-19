@@ -97,7 +97,7 @@ static const char *get_wx(reg_size reg_size) {
     } else if (reg_size <= 8) {
         format = "x";
     } else {
-        printf(CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg_size);
+        compile_err(NULL, CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg_size);
         format = "x";
     }
     return format;
@@ -113,7 +113,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
         } else if (reg.rsize <= 8) {
             format = "x%d";
         } else {
-            printf("cannot load size bigger than 8 to regisetr");
+            compile_err(NULL, "cannot load size bigger than 8 to regisetr");
 			return;
         }
         buf_snprintf(buffer, format, get_regoff(reg));
