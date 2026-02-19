@@ -892,6 +892,27 @@ bool expect(parser_context *context, str expected) {
     return true;
 }
 
+void struct_report(type_t *type) {
+#if !NDEBUG
+    printd(CSI_GREEN"struct report for "), str_printd(&type->name);
+    printd("=================\n"CSI_RESET);
+    printd("\tsize: %zd, align %d\n", type->size, type->align);
+
+    dyn_member_t *members = &type->struct_t.members;
+    int ko = 0;
+    for (const member_t *it = members->begin; it != members->cur; ++it) {
+        const member_t *mem = it;
+        printd("\tmember %d: ", ko++);
+        str_printdnl(&mem->name);
+        printd(" ");
+        str_printdnl(&mem->type->name);
+        printd("\toffset: %zd, size: %zd\n",
+                mem->offset, mem->type->size);
+    }
+    printd(CSI_GREEN"end report\n\n"CSI_RESET);
+#endif
+}
+
 void stmt_struct(parser_context *context) {
     printd("struct "),str_printd(&context->symbol->name);
     str *type_name = &context->symbol->name;
@@ -924,26 +945,7 @@ void stmt_struct(parser_context *context) {
         dyn_member_t_push(&s->struct_t.members, &m);
     }
     s->size = ALIGN_TO(s->size, (size_t)s->align);
-#if !NDEBUG
-    {
-        printd(CSI_GREEN"struct report for "), str_printd(&s->name);
-        printd("=================\n"CSI_RESET);
-        printd("\tsize: %zd, align %d\n", s->size, s->align);
-
-        dyn_member_t *members = &s->struct_t.members;
-        int ko = 0;
-        for (const member_t *it = members->begin; it != members->cur; ++it) {
-            const member_t *mem = it;
-            printd("\tmember %d: ", ko++);
-            str_printdnl(&mem->name);
-            printd(" ");
-            str_printdnl(&mem->type->name);
-            printd("\toffset: %zd, size: %zd\n",
-                    mem->offset, mem->type->size);
-        }
-        printd(CSI_GREEN"end report\n\n"CSI_RESET);
-    }
-#endif
+    struct_report(s);
 }
 
 target *get_current_target(parser_context *context) {

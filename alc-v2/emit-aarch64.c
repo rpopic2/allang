@@ -35,6 +35,7 @@ extern const char *addrgen_add;
 extern const char *fn_prefix;
 extern const char *mainfn_annotation;
 extern const char *local_string_prefix;
+extern type_t *type_comptime_int;
 
 
 const char *const cond_str[] = {
@@ -213,8 +214,26 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
 }
 
 void emit_mov(reg_t dst, i64 value) {
+    if (dst.type == NULL) {
+        printf("untyped\n");
+    }
+    else
+        printf("mov type "), str_print(&dst.type->name);
+
     int regidx = get_regoff(dst);
-    buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId64), get_wx(dst.rsize), regidx, value);
+    if (dst.type == type_comptime_int) {
+        if (value <= INT32_MAX) {
+            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId32), get_wx(dst.rsize), regidx, (i32)value);
+        } else if (value <= INT64_MAX) {
+            dst.rsize = 8;
+            emit_ri(STR("mov"), dst, value);
+        } else if ((u64)value <= UINT64_MAX) {
+            dst.rsize = 8;
+            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
+        }
+    }
+
+    buf_snprintf(fn_buf, INSTR("mov %s%d, #0x%"PRIx64), get_wx(dst.rsize), regidx, value);
 }
 
 void type_conv(reg_t dst, reg_t src) {

@@ -356,9 +356,6 @@ struct_store: (=>)
     K :: point32{.. 0}
     [S] =K
 
-big_lits: (=>)
-    Big :: 0xFFFFFFFFFFFFFFFF
-
 lsl_test: (=>)
     I :: 3
     I shl 0
@@ -383,4 +380,7 @@ nested_struct: (=>)
     [Nested] :: nested_struct{.. 0} =[]
     [Nested.Point.Y]
     // point32{.X 1 .Y 2} =Nested.Point
+
+big_lits: (=>)
+    Big :: 0xFFFFFFFFFFFFFFFF
 
