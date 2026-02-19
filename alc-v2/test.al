@@ -375,6 +375,7 @@ struct_members: (=>)
 nested_struct: (=>)
     struct {
         Point point32
+        P2 point
     }
 
     [Nested] :: nested_struct{.. 0} =[]
@@ -397,3 +398,9 @@ big_struct4: (=>)
 
     [S] :: big_struct4{.A 1, .B 2 .C 3 .D 4} =[]
 
+short_struct: (=>)
+    struct {
+        A u16, B u16
+    }
+
+    [S] :: short_struct{.A 3 .B 7} =[]

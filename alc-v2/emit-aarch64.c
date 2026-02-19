@@ -233,9 +233,10 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
 }
 
 void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
-    // TODO request scratch registers from frontend
+    // TODO request scratch registers from the frontend
 
-    reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = 8}; // TODO tmp rsize
+    reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
+    reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = rsize};
 
     emit_make_struct(tmp, type, args);
 
