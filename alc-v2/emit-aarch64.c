@@ -121,6 +121,115 @@ static void buf_putreg(buf *buffer, reg_t reg) {
     }
 }
 
+void eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *index) {
+    printf("eighr\n");
+    const dyn_member_t *members = &type->struct_t.members;
+    ptrdiff_t member_count = members->cur - members->begin;
+    bool cleared = false;
+
+    if (type->size > 8) {
+        dst.rsize = 8;
+    } else {
+        dst.rsize = (reg_size)type->size;
+    }
+
+    size_t size_acc = 0;
+    size_t base_offset = 0;
+    for (ptrdiff_t i = *index; i < member_count; ++i, *index = (int)i) {
+        regable *r = &args->begin[i];
+        member_t *memb = &members->begin[i];
+        type_t *memb_type = memb->type;
+        size_t memb_size = memb_type->size;
+
+        size_t offset = memb->offset * 8;
+        if (!size_acc) {
+            base_offset = offset;
+        }
+        offset -= base_offset;
+        size_acc += memb_size;
+        if (size_acc > 8) {
+            break;
+        }
+
+        if (r->tag == VALUE) {
+            i64 value = r->value;
+            if (offset % 16 == 0) {
+                size_t size = memb->type->size;
+                while (size < 2) {
+                    if (++i >= member_count)
+                        break;
+                    regable *r = args->begin + i;
+                    if (r->tag != VALUE) {
+                        --i;
+                        break;
+                    }
+                    member_t *memb = &members->begin[i];
+                    if (size + memb->type->size > 2) {
+                        --i;
+                        break;
+                    }
+                    size += memb->type->size;
+                    value |= r->value << memb->type->size * 8;
+                }
+            }
+
+            if (value == 0)
+                continue;
+
+            if (offset % 16 != 0) {
+                if (!cleared) {
+                    emit_ri(STR_FROM("mov"), dst, value << offset);
+                    unreachable;
+                }
+                emit_rri(STR_FROM("orr"), dst, dst, value << offset);
+                continue;
+            } else {
+                if (!cleared) {
+                    emit_risi(STR("movz"), dst, value, STR("lsl"), (i64)offset);
+                } else {
+                    emit_risi(STR("movk"), dst, value, STR("lsl"), (i64)offset);
+                }
+            }
+            cleared = true;
+        } else if (r->tag == REG) {
+            reg_t reg = r->reg;
+
+            if (offset == 0) {
+                if (memb_size < 4) {
+                    int mask = 0xff;
+                    for (size_t i = 1; i < memb_size; ++i) {
+                        mask |= 0xff << i * 8;
+                    }
+                    if (reg.rsize < dst.rsize)
+                        reg.rsize = dst.rsize;
+                    emit_rri(STR_FROM("and"), dst, reg, mask);
+                } else {
+                    reg_t tmp_dst = dst;
+                    if (reg.rsize < tmp_dst.rsize) // no need to emit mov?
+                        tmp_dst.rsize = reg.rsize;
+                    emit_rr(STR_FROM("mov"), tmp_dst, reg);
+                }
+            } else {
+                reg_t reg = r->reg;
+                if (reg.rsize < dst.rsize)
+                    reg.rsize = dst.rsize;
+                i64 width = (i64)memb_size * 8;
+                if (cleared)
+                    emit_rrii(STR_FROM("bfi"), dst, reg, (i64)offset, width);
+                else
+                    emit_rrii(STR("ubfiz"), dst, reg, (i64)offset, width);
+            }
+            cleared = true;
+        } else {
+            unreachable;
+        }
+    }
+
+    if (!cleared) {
+        emit_mov(dst, 0);
+    }
+}
+
 void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
@@ -141,9 +250,12 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
 
         size_t offset = memb->offset * 8;
         if (size_acc > 8) {
-            dst.offset = base_regoff + (int)(size_acc - 1)/ 8;
+            int new_offset = base_regoff + (int)(size_acc - 1)/ 8;
+            if (dst.offset != new_offset) {
+                cleared = false;
+                dst.offset = new_offset;
+            }
             offset -= 8 * 8;
-            printf("too big ones\n");
         }
 
         if (r->tag == VALUE) {
@@ -238,12 +350,14 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
     reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
     reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = rsize};
 
-    emit_make_struct(tmp, type, args);
+    int index = 0;
+    eightbyte_make_struct(tmp, type, args, &index);
 
     size_t size = type->size;
     if (size >= 16) {
         reg_t tmp2 = tmp;
         tmp2.offset++;
+    eightbyte_make_struct(tmp2, type, args, &index);
         emit_stp(tmp, tmp2, dst, offset);
     } else if (size >= 0) {
         emit_str(tmp, dst, (int)offset);

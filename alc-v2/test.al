@@ -372,15 +372,6 @@ struct_members: (=>)
     i8{3} =[S.B]
     S.C
 
-nested_struct: (=>)
-    struct {
-        Point point32
-        P2 point
-    }
-
-    [Nested] :: nested_struct{.. 0} =[]
-    [Nested.Point.Y]
-
 big_lits: (=>)
     Big :: 0xFFFFFFFFFFFFFFFF
 
@@ -404,3 +395,13 @@ short_struct: (=>)
     }
 
     [S] :: short_struct{.A 3 .B 7} =[]
+
+nested_struct: (=>)
+    struct {
+        Point point32
+        P2 point
+    }
+
+    [Nested] :: nested_struct{.. 0} =[]
+    [Nested.Point.Y]
+

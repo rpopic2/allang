@@ -727,17 +727,19 @@ void expr_struct(parser_context *context, type_t *type) {
                 compile_err(token, "a field is not initialized: ");
                 str_printerr(members.begin[i].name);
             }
+        }
+        if (init_zero) {
             r->tag = VALUE;
             r->value = 0;
         }
-        // printf("\targ %ld: ", i), str_printnl(&members.begin[i].name);
-        // printf("\t");
-        // if (r->tag == VALUE) {
-        //     printf("value: %lld", r->value);
-        // } else if (r->tag == REG) {
-        //     printf("reg off: %d", r->reg.offset);
-        // }
-        // printf("\n");
+        printf("\targ %ld: ", i), str_printnl(&members.begin[i].name);
+        printf("\t");
+        if (r->tag == VALUE) {
+            printf("value: %ld", r->value);
+        } else if (r->tag == REG) {
+            printf("reg off: %d", r->reg.offset);
+        }
+        printf("\n");
     }
     if (streq(token->end + 1, "=[")) {
         lex(context);
