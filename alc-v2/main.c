@@ -726,11 +726,10 @@ void expr_struct(parser_context *context, type_t *type) {
             if (!init_zero) {
                 compile_err(token, "a field is not initialized: ");
                 str_printerr(members.begin[i].name);
+            } else {
+                r->tag = VALUE;
+                r->value = 0;
             }
-        }
-        if (init_zero) {
-            r->tag = VALUE;
-            r->value = 0;
         }
         printf("\targ %ld: ", i), str_printnl(&members.begin[i].name);
         printf("\t");

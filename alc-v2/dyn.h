@@ -14,8 +14,7 @@ inline static void dyn_##T##_realloc(dyn_##T *self) { \
     usize len = (usize)(self->end - self->begin); \
     if (len == 0) { \
         len = 8; \
-        size_t size = len * sizeof (T); \
-        self->begin = malloc(size); \
+        self->begin = calloc(len, sizeof (T)); \
         if (self->begin == NULL) \
             malloc_failed(); \
         self->end = self->begin + len; \
