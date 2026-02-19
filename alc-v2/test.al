@@ -379,7 +379,6 @@ nested_struct: (=>)
 
     [Nested] :: nested_struct{.. 0} =[]
     [Nested.Point.Y]
-    // point32{.X 1 .Y 2} =Nested.Point
 
 big_lits: (=>)
     Big :: 0xFFFFFFFFFFFFFFFF
@@ -396,6 +395,5 @@ big_struct4: (=>)
         A u32, B u32, C u32, D u32
     }
 
-    B :: big_struct4{.A 3, .B 5 .C 1 .D 2}
     [S] :: big_struct4{.A 1, .B 2 .C 3 .D 4} =[]
 

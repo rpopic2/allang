@@ -225,11 +225,28 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
     }
 }
 
+static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
+    emit_rrx(STR("stp"), src1, src2);
+    buf_puts(fn_buf, STR(", ["));
+    buf_putreg(fn_buf, base);
+    buf_snprintf(fn_buf, ", %"PRId64"]\n", offset);
+}
+
 void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
     // TODO request scratch registers from frontend
 
     reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = 8}; // TODO tmp rsize
+
     emit_make_struct(tmp, type, args);
+
+    size_t size = type->size;
+    if (size >= 16) {
+        reg_t tmp2 = tmp;
+        tmp2.offset++;
+        emit_stp(tmp, tmp2, dst, offset);
+    } else if (size >= 0) {
+        emit_str(tmp, dst, (int)offset);
+    }
 }
 
 void emit_mov(reg_t dst, i64 value) {

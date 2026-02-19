@@ -23,6 +23,7 @@ symbol_t *fn_call(parser_context *context);
 bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
+bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *args);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -739,34 +740,11 @@ void expr_struct(parser_context *context, type_t *type) {
         // printf("\n");
     }
     if (streq(token->end + 1, "=[")) {
-        printf("store!");
         lex(context);
-        reg_t base;
-        regable offset;
-        str s = token->id;
-        s.data++;
-        str_print(&s);
-        if (streq(s.data, "[]")) {
-            target *targ = get_current_target_stack(context);
-            if (targ == NULL) {
-                return;
-            }
-            base = *targ->reg;
-            targ->target_assigned = true;
-            targ->reg->type = type;
-            offset.value = 0;
-        } else {
-            bool success = read_load_store_offset(context, s, &base, &offset);
-            if (!success) {
-                compile_err(token, "failed to read offset\n");
-            }
-            if (offset.tag != VALUE) {
-                compile_err(token, "offset other than value us not supported\n");
-                return;
-            }
+        bool ok = stmt_stack_store_struct(context, (reg_t){.type = type, .rsize=(reg_size)type->size}, &args);
+        if (!ok) {
+            compile_err(token, "was not store struct\n");
         }
-        printf("off %ld\n", offset.value);
-        emit_store_struct(base, offset.value, type, &args);
     } else {
         emit_make_struct(context->reg, type, &args);
     }
@@ -1013,12 +991,72 @@ target *get_current_target_stack(parser_context *context) {
     return cur_target;
 }
 
+bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *args) {
+    const token_t *token = &context->cur_token;
+    const str *token_str = &token->id;
+
+    if (!streq(token_str->data, "=[")) {
+        return false;
+    }
+
+    char next = token_str->data[2];
+    target *cur_target;
+    if (next == ']') {
+        cur_target = arr_target_top(&context->targets);
+        if (cur_target == NULL) {
+            compile_err(token, "nothing to store to\n");
+            return true;
+        } else if (cur_target->reg->reg_type != STACK) {
+            compile_err(token, "target is not a stack variable\n");
+            return true;
+        }
+    } else if (isupper(next)) {
+        str name = *token_str;
+        name.data += 2;
+        name.end -= 1;
+
+        reg_t *t;
+        if (!find_id(&local_ids, name, token, &t, 0)) {
+            compile_err(token, "could not find identifier "), str_printerr(name);
+        }
+        cur_target = &(target){.target_assigned = true, .reg = t};
+
+    } else {
+        compile_err(token, "store target expected\n");
+        return true;
+    }
+    reg_t *target_reg = cur_target->reg;
+
+    target_reg->rsize = src.rsize;
+
+    if (target_reg->type == NULL) {
+        target_reg->type = src.type;
+    }
+
+    int offset;
+    if (!cur_target->target_assigned) {
+        assert(src.type);
+        assert(src.type->size);
+
+        size_t size = next_pow2(src.rsize);
+        context->stack_size += size;
+        offset = context->stack_size;
+    } else {
+        offset = target_reg->offset;
+    }
+
+    target_reg->offset = offset;
+
+    assert(src.rsize);
+    emit_store_struct(FP, -offset, src.type, args);
+    cur_target->target_assigned = true;
+
+    return true;
+}
 
 bool stmt_stack_store(parser_context *context) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
-    regable reg = {.tag = VALUE};
-    reg.reg = context->reg;
 
     if (!streq(token_str->data, "=[")) {
         return false;
