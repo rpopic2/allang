@@ -22,6 +22,7 @@ void parse_block(parser_context *context);
 symbol_t *fn_call(parser_context *context);
 bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
+target *get_current_target_stack(parser_context *context);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -422,7 +423,14 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             return false;
         }
         regable_target = (regable){.tag = REG, .reg = *t->reg};
+    } else if (str_empty(&s)) {
+        target *targ = get_current_target_stack(context);
+        if (!targ)
+            return false;
+        printf("empty\n");
+        regable_target = (regable){.reg = *targ->reg, .tag = REG};
     } else {
+        printf("target "); str_print(&s);
         regable_target = read_regable(s, cur_token);
     }
     if (regable_target.tag == NONE) {
@@ -730,24 +738,55 @@ void expr_struct(parser_context *context, type_t *type) {
         // }
         // printf("\n");
     }
-    emit_make_struct(context->reg, type, &args);
+    if (streq(token->end + 1, "=[")) {
+        printf("store!");
+        lex(context);
+        reg_t base;
+        regable offset;
+        str s = token->id;
+        s.data++;
+        str_print(&s);
+        if (streq(s.data, "[]")) {
+            target *targ = get_current_target_stack(context);
+            if (targ == NULL) {
+                return;
+            }
+            base = *targ->reg;
+            targ->target_assigned = true;
+            targ->reg->type = type;
+            offset.value = 0;
+        } else {
+            bool success = read_load_store_offset(context, s, &base, &offset);
+            if (!success) {
+                compile_err(token, "failed to read offset\n");
+            }
+            if (offset.tag != VALUE) {
+                compile_err(token, "offset other than value us not supported\n");
+                return;
+            }
+        }
+        printf("off %ld\n", offset.value);
+        emit_store_struct(base, offset.value, type, &args);
+    } else {
+        emit_make_struct(context->reg, type, &args);
+    }
 
     dyn_regable_free(&args);
     printd(CSI_GREEN"\nend struct expr\n"CSI_RESET);
 }
 
 reg_size get_rsize(reg_t reg) {
-	if (reg.addr) {
-		return (reg_size)sizeof (void *);
-	}
-	size_t size = reg.type->size;
-	if (size > MAX_REG_SIZE) {
-		compile_err(NULL, "compiler bug: this register size exceeds max register size\n");
-		return 0;
-	}
-	if (size == 0)
-		return 0;
-	return (reg_size)next_pow2((u32)size);
+    if (reg.addr) {
+        return (reg_size)sizeof (void *);
+    }
+    size_t size = reg.type->size;
+    if (size > MAX_REG_SIZE) {
+        compile_err(NULL, "compiler bug: this register size exceeds max register size\n");
+        return 0;
+    }
+    if (size == 0)
+        return 0;
+    return (reg_size)next_pow2((u32)size);
 }
 
 bool expr(parser_context *context) {
@@ -826,8 +865,8 @@ skip:;
     } else {
         printd("nullary op\n");
         if (lhs.tag == VALUE) {
-			str_print(&context->reg.type->name);
-			context->reg.rsize = get_rsize(context->reg);
+            str_print(&context->reg.type->name);
+            context->reg.rsize = get_rsize(context->reg);
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
@@ -951,9 +990,25 @@ void stmt_struct(parser_context *context) {
 target *get_current_target(parser_context *context) {
     const token_t *token = &context->cur_token;
     target *cur_target = arr_target_top(&context->targets);
-    if (cur_target == NULL || cur_target->reg->reg_type != NREG) {
+    if (cur_target == NULL) {
         compile_err(token, "nothing to assign\n");
         return NULL;
+    }
+    if (cur_target->reg->reg_type != NREG) {
+        compile_err(token, "target was not nreg\n");
+    }
+    return cur_target;
+}
+
+target *get_current_target_stack(parser_context *context) {
+    const token_t *token = &context->cur_token;
+    target *cur_target = arr_target_top(&context->targets);
+    if (cur_target == NULL) {
+        compile_err(token, "nothing to assign\n");
+        return NULL;
+    }
+    if (cur_target->reg->reg_type != STACK) {
+        compile_err(token, "target was not stack\n");
     }
     return cur_target;
 }
@@ -1094,6 +1149,8 @@ bool decl_vars(parser_context *context) {
         context->reg.reg_type = SCRATCH;
         reg_t *reg = overwrite_id(*local_ids.cur, name, &(reg_t){.reg_type = STACK, .addr = 1});
         if (one_liner) {
+            target *targ = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
+            printf("push target\n");
             lex(context);
             if (expr_line(context)) { }
             else {
@@ -1105,11 +1162,14 @@ bool decl_vars(parser_context *context) {
                     context->reg.offset += 1;
                 }
             }
-            arr_target_push(&context->targets, (target){.reg = reg, .name = name});
-            lex(context);
-            if (!stmt_stack_store(context)) {
+            if (!targ->target_assigned) {
+                lex(context);
+                if (!stmt_stack_store(context)) {
                 compile_err(&context->cur_token, "store statement '=[]' expected\n");
             }
+
+            }
+            printf("pop target\n");
             arr_target_pop(&context->targets);
         } else {
             target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
@@ -1132,8 +1192,8 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
             lex(context);
             if (!expr(context))
                 break;
-					context->reg.rsize = get_rsize(context->reg);
-					printf("return size :%d", context->reg.rsize);
+                    context->reg.rsize = get_rsize(context->reg);
+                    printf("return size :%d", context->reg.rsize);
             if (rets_it < rets->cur) {
                 if (context->reg.type == type_comptime_int
                         && rets_it->type->tag == TK_FUND) {
@@ -1221,7 +1281,7 @@ bool stmt(parser_context *context) {
 
 // out_param_names: set to NULL if not needed
 symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
-	token_t _token = context->cur_token;
+    token_t _token = context->cur_token;
     token_t *token = &_token;
     token_t *cur_token = &context->cur_token;
     str label = { .data = token->data, .end = token->end - 1 };
@@ -1235,19 +1295,19 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
         arr_str_init(out_param_names);
     }
 
-	if (streq(token->end, " (")) {
+    if (streq(token->end, " (")) {
         indent += 4;
         arr_mini_hashset_push(&local_ids);
 
         lex(context);
         _token = context->cur_token;
         bool parsing_arg = true;
-		while (token->end < context->src->end) {
+        while (token->end < context->src->end) {
             bool break_out = false;
             if (token->end[0] == ')') {
                 break_out = true;
             }
-			if (isupper(token->data[0])) {
+            if (isupper(token->data[0])) {
                 if (parsing_arg) {
                     symbol.airity += 1;
                     if (out_param_names)
@@ -1285,10 +1345,10 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 } else {
                     arr_reg_t_push(&symbol.rets, reg);
                 }
-			} else if (streq(token->data, "=>")) {
+            } else if (streq(token->data, "=>")) {
                 parsing_arg = false;
                 symbol.is_fn = true;
-			} else {
+            } else {
                 compile_err(token, "unknown token "), str_printerr(token->id);
             }
             if (break_out)
@@ -1296,8 +1356,8 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 next:
             lex(context);
             token = &context->cur_token;
-		}
-	}
+        }
+    }
 
     if (arr_reg_t_len(&symbol.params) != symbol.airity) {
         str_fprintnl(&symbol.name, stdout);
@@ -1508,7 +1568,7 @@ void parse(parser_context *context) {
             str label = {.data = token->data, .end = token->end - 2};
             emit_branch(context->symbol->name, label, 0);
         } else if (streq(token->end - 1, ":")) {
-			stmt_label(context);
+            stmt_label(context);
         } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
             fn_call(context);
         } else {
@@ -1691,11 +1751,11 @@ int main(int argc, const char *argv[]) {
     char *source_start = malloc(source_len);
     if (!source_start)
         malloc_failed();
-	memset(source_start, 0, source_len);
+    memset(source_start, 0, source_len);
 
     size_t bytes_read = fread(source_start, sizeof (char), source_len, source_file);
     if (bytes_read > source_len) {
-		fprintf(stderr, "error: buffer overflow. expected %zd bytes but read %zd bytes\n", source_len, bytes_read);
+        fprintf(stderr, "error: buffer overflow. expected %zd bytes but read %zd bytes\n", source_len, bytes_read);
         exit(EXIT_FAILURE);
     }
     TIMER_END(clock_read_source);
@@ -1705,7 +1765,7 @@ int main(int argc, const char *argv[]) {
     char *out_name = malloc(source_name_len + 1);
     if (!out_name)
         malloc_failed();
-	memset(out_name, 0, source_name_len + 1);
+    memset(out_name, 0, source_name_len + 1);
     strncpy(out_name, source_name, source_name_len - 1);
     out_name[source_name_len - 2] = 's';
 

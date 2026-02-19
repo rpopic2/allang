@@ -114,7 +114,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
         } else if (reg.rsize <= 8) {
             format = "x%d";
         } else {
-            compile_err(NULL, "cannot load size bigger than 8 to regisetr");
+            compile_err(NULL, CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg.rsize);
 			return;
         }
         buf_snprintf(buffer, format, get_regoff(reg));
@@ -126,13 +126,25 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
     ptrdiff_t member_count = members->cur - members->begin;
     bool cleared = false;
 
+    if (type->size > 8) {
+        dst.rsize = 8;
+    }
+
+    int base_regoff = dst.offset;
+    size_t size_acc = 0;
     for (ptrdiff_t i = 0; i < member_count; ++i) {
         regable *r = &args->begin[i];
         member_t *memb = &members->begin[i];
         type_t *memb_type = memb->type;
         size_t memb_size = memb_type->size;
+        size_acc += memb_size;
 
         size_t offset = memb->offset * 8;
+        if (size_acc > 8) {
+            dst.offset = base_regoff + (int)(size_acc - 1)/ 8;
+            offset -= 8 * 8;
+            printf("too big ones\n");
+        }
 
         if (r->tag == VALUE) {
             i64 value = r->value;
@@ -213,6 +225,13 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
     }
 }
 
+void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
+    // TODO request scratch registers from frontend
+
+    reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = 8}; // TODO tmp rsize
+    emit_make_struct(tmp, type, args);
+}
+
 void emit_mov(reg_t dst, i64 value) {
     if (dst.type == NULL) {
         printf("untyped\n");
@@ -230,6 +249,8 @@ void emit_mov(reg_t dst, i64 value) {
         } else if ((u64)value <= UINT64_MAX) {
             dst.rsize = 8;
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
+        } else {
+            compile_err(NULL, "literal was too big");
         }
     }
 

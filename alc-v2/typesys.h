@@ -36,13 +36,19 @@ typedef struct type_t {
     };
 } type_t;
 
+
+enum tag {
+    NONE, VALUE, REG
+};
+
 typedef struct {
-    enum {
-        NONE, VALUE, REG
-    } tag;
     union {
-        i64 value;
+        struct {
+            i64 value;
+            type_t *type;
+        };
         reg_t reg;
     };
+    u8 tag;
 } regable;
 DYN_GENERIC(regable)
