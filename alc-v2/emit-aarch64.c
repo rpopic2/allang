@@ -599,11 +599,11 @@ void emit_label(str fn_name, str label, int index) {
 void emit_fn_prologue_epilogue(const parser_context *context) {
     prologue_buf->cur = prologue_buf->start;
     if (!context->calls_fn
-            && context->nreg_count == 0
+            && context->max_nreg_count == 0
             && context->stack_size == 0)
         return;
 
-    int regs_to_save = context->nreg_count;
+    int regs_to_save = context->max_nreg_count;
     if (regs_to_save + CALLEE_START >= 28) {
         compile_err(&context->cur_token, "used up all callee-saved registers");
         return;
@@ -632,6 +632,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
 
     int remaining = regs_to_save;
     bool defer_ldp = false;
+    int deferred0 = 0, deferred1 = 0;
 
     if (remaining > 1) {
         int reg0 = CALLEE_START + remaining - 1;
@@ -650,6 +651,8 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
         buf_snprintf(prologue_buf, stp_format, reg0, reg1, off);
         if (!defer_ldp)
             buf_snprintf(fn_buf, ldp_format, reg0, reg1, off);
+        else
+            deferred0 = reg0, deferred1 = reg1;
         remaining -= 2;
         cur_stackoff += 16;
     }
@@ -688,8 +691,8 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     }
 
     if (defer_ldp) {
-        const char *ldp_format = INSTR("ldp x29, x30, [sp], #%d");
-        buf_snprintf(fn_buf, ldp_format, stack_size);
+        const char *ldp_format = INSTR("ldp x%d, x%d, [sp], #%d");
+        buf_snprintf(fn_buf, ldp_format, deferred0, deferred1, stack_size);
     }
     if (stack_objs_size > 0) {
         buf_snprintf(fn_buf, INSTR("add sp, sp, #%d"), stack_size);

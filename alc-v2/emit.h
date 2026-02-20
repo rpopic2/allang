@@ -49,23 +49,26 @@ typedef struct {
 #define MAX_BLOCK_DEPTH 10
 ARR_GENERIC(target, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u16, MAX_BLOCK_DEPTH)
+ARR_GENERIC(u8, MAX_BLOCK_DEPTH)
 
 typedef struct {
     iter *src;
     reg_t reg;
-    int nreg_count;
     int stack_size;
     bool calls_fn;
     bool ended;
     bool has_branched_ret;
     bool last_line_ret;
     u8 indent;
+    u8 nreg_count;
+    u8 max_nreg_count;
     u16 unnamed_labels;
     symbol_t *last_fn_call;
     str name;
     token_t cur_token;
     arr_target targets;
     arr_u16 deferred_unnamed_br;
+    arr_u8 nreg_mark;
     symbol_t *symbol;
 } parser_context;
 #define DEFERRED_NONE 0

@@ -407,5 +407,11 @@ nested_struct: (=>)
     }
 
     [Nested] :: nested_struct{.X 5 .Point short_struct{.. 0} .. 0} =[]
+    [Nested2] :: nested_struct{.X 5 .Point short_struct{.A 3 .. 0} .. 0} =[]
+
+recycle: (=>)
+    I ::
+        J :: 3
+        J =
 
 

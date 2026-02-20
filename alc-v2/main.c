@@ -1184,6 +1184,8 @@ bool decl_vars(parser_context *context) {
         };
         reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
         context->nreg_count += 1;
+#define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
+        UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
         if (!one_liner) {
             target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
             parse_block(context);
@@ -1645,11 +1647,17 @@ void start_of_block(parser_context *context) {
     printd("\nstart of a block\n");
     arr_mini_hashset_push(&local_ids);
     arr_u16_push(&context->deferred_unnamed_br, DEFERRED_NONE);
+    arr_u8_push(&context->nreg_mark, context->nreg_count);
 }
 
 void end_of_block(parser_context *context) {
     arr_mini_hashset_pop(&local_ids);
     arr_u16_pop(&context->deferred_unnamed_br);
+    u8 *top = arr_u8_top(&context->nreg_mark);
+    if (top) {
+        context->nreg_count = *top;
+        arr_u8_pop(&context->nreg_mark);
+    }
     printd("end of a block\n\n");
 }
 
@@ -1695,6 +1703,7 @@ void function(iter *src, FILE *object_file) {
         .unnamed_labels = 1,
     };
     arr_u16_init(&context->deferred_unnamed_br);
+    arr_u8_init(&context->nreg_mark);
     bool is_main = src->cur == src->start;
     if (is_main) {
         symbol_t tmp = {
