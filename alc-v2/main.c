@@ -657,7 +657,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     printd("binary_op\n");
 }
 
-void expr_struct(parser_context *context, type_t *type) {
+void expr_struct(parser_context *context, reg_t target, type_t *type) {
     const token_t *token = &context->cur_token;
     printd(CSI_GREEN"struct expr: "CSI_RESET);
     str_printd(&type->name);
@@ -702,17 +702,33 @@ void expr_struct(parser_context *context, type_t *type) {
 
         if (s->end[-1] == '}')
             break;
+
         if (!lex(context))
             break;
+        regable r;
+        if (islower(s->data[0])) {
+            reg_t tmp_reg = {.reg_type = SCRATCH, .type = it->type, .rsize = (reg_size)it->type->size};
+            r = (regable){.tag = REG, .reg = tmp_reg};
+            expr_struct(context, tmp_reg, it->type);
+            args.begin[index] = r;
+            continue;
+        } else {
+            r = read_regable(*s, token);
 
-        regable r = read_regable(*s, token);
-        args.begin[index] = r;
-        if (r.tag == REG) {
-            if (r.reg.type != type_comptime_int && it->type != r.reg.type) {
-                compile_err(token, "expected type "),
-                    str_printerr(it->type->name);
-                compile_err(token, "but found "),
-                    str_printerr(r.reg.type->name);
+            args.begin[index] = r;
+            if (r.tag == REG) {
+                if (r.reg.type != type_comptime_int && it->type != r.reg.type) {
+                    compile_err(token, "expected type "),
+                        str_printerr(it->type->name);
+                    compile_err(token, "but found "),
+                        str_printerr(r.reg.type->name);
+                }
+            } else if (r.tag == VALUE) {
+                if (it->type->tag != TK_FUND) {
+                    compile_err(token, "expected type "),
+                        str_printerr(it->type->name);
+                    compile_err(token, "but found numeric literal\n");
+                }
             }
         }
 
@@ -747,11 +763,12 @@ void expr_struct(parser_context *context, type_t *type) {
             compile_err(token, "was not store struct\n");
         }
     } else {
-        emit_make_struct(context->reg, type, &args);
+        emit_make_struct(target, type, &args);
     }
 
     dyn_regable_free(&args);
-    printd(CSI_GREEN"\nend struct expr\n"CSI_RESET);
+    printd(CSI_GREEN"\nend struct expr "CSI_RESET);
+    str_printd(&type->name);
 }
 
 reg_size get_rsize(reg_t reg) {
@@ -782,7 +799,7 @@ bool expr(parser_context *context) {
         context->reg.addr = 0;
         context->reg.rsize = (reg_size)type->size;
         if (type->tag == TK_STRUCT) {
-            expr_struct(context, type);
+            expr_struct(context, context->reg, type);
             return true;
         }
         lex(context);

@@ -357,12 +357,10 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
     ptrdiff_t member_count = members->cur - members->begin;
     int index = 0;
     size_t size = 0;
-    printf("offset: %ld\n", offset);
 
     while (index < member_count) {
         size_t member_off = size;
         eightbyte_make_struct(tmp, type, args, &index, &size);
-        printf("after idx : %d\n", index);
 
         size_t remaining_size = type->size - size;
         if (remaining_size >= 8) {
@@ -371,7 +369,6 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
             eightbyte_make_struct(tmp2, type, args, &index, &size);
             remaining_size = type->size - size;
             emit_stp(tmp, tmp2, dst, offset + (i64)member_off);
-            printf("after idx : %d\n", index);
         } else {
             emit_str(tmp, dst, (int)offset + (int)member_off);
         }

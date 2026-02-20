@@ -9,12 +9,15 @@ void compile_warning(const char *format, ...);
 #define print(...) ((void)0)
 #define str_printd(...) ((void)0)
 #define str_printdnl(S) ((void)0)
+#define p(...) ((void)0)
 
 #else
 #define printd(...) printf(__VA_ARGS__)
 #define print(category, ...) if (category) printf(__VA_ARGS__)
 #define str_printd(...) str_print(__VA_ARGS__)
 #define str_printdnl(S) str_fprintnl(S, stdout)
+#define p(...) printf(__VA_ARGS__), putc('\n', stdout);
+#define pi(i) printf(#i": %lld\n", (long long)i);
 #endif
 
 #if DEBUG_TIMER

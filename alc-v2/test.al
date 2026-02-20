@@ -405,7 +405,7 @@ nested_struct: (=>)
         P3 point32
     }
 
-    [Nested] :: nested_struct{.. 0} =[]
+    [Nested] :: nested_struct{.Point point32{.. 0} .. 0} =[]
     Nested.Point.Y
     Nested.P2
     Nested.P3.Y
