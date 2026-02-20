@@ -705,15 +705,20 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
 
         if (!lex(context))
             break;
-        regable r;
+
         if (islower(s->data[0])) {
-            reg_t tmp_reg = {.reg_type = SCRATCH, .type = it->type, .rsize = (reg_size)it->type->size};
-            r = (regable){.tag = REG, .reg = tmp_reg};
+            reg_t tmp_reg = {
+                .reg_type = SCRATCH, 
+                .type = it->type,
+                .rsize = (reg_size)it->type->size,
+                .offset = 2,
+            };
+            regable r = (regable){.tag = REG, .reg = tmp_reg};
             expr_struct(context, tmp_reg, it->type);
             args.begin[index] = r;
             continue;
         } else {
-            r = read_regable(*s, token);
+            regable r = read_regable(*s, token);
 
             args.begin[index] = r;
             if (r.tag == REG) {

@@ -400,13 +400,12 @@ short_struct: (=>)
 
 nested_struct: (=>)
     struct {
-        Point point32
         P2 point
+        X u32
+        Point short_struct
         P3 point32
     }
 
-    [Nested] :: nested_struct{.Point point32{.. 0} .. 0} =[]
-    Nested.Point.Y
-    Nested.P2
-    Nested.P3.Y
+    [Nested] :: nested_struct{.X 5 .Point short_struct{.. 0} .. 0} =[]
+
 
