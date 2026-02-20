@@ -780,9 +780,6 @@ bool expr(parser_context *context) {
 
         context->reg.type = type;
         context->reg.addr = 0;
-        if (type->size > MAX_REG_SIZE) {
-            compile_err(&context->cur_token, E_TOO_BIG_FOR_REG);
-        }
         context->reg.rsize = (reg_size)type->size;
         if (type->tag == TK_STRUCT) {
             expr_struct(context, type);
@@ -846,6 +843,7 @@ skip:;
         if (lhs.tag == VALUE) {
             str_print(&context->reg.type->name);
             context->reg.rsize = get_rsize(context->reg);
+            printf("bl: %"PRId64", %"PRIu64"\n", lhs.value, lhs.value);
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
@@ -1040,8 +1038,8 @@ bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *ar
         assert(src.type->size);
 
         size_t size = next_pow2(src.rsize);
+        offset = context->stack_size + (int)src.type->size;
         context->stack_size += size;
-        offset = context->stack_size;
     } else {
         offset = target_reg->offset;
     }

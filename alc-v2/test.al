@@ -387,7 +387,8 @@ big_struct4: (=>)
         A u32, B u32, C u32, D u32
     }
 
-    [S] :: big_struct4{.A 1, .B 2 .C 3 .D 4} =[]
+    [S] :: big_struct4{.A 1 .B 2 .C 3 .D 4} =[]
+    S.A, S.B
 
 short_struct: (=>)
     struct {
@@ -395,13 +396,17 @@ short_struct: (=>)
     }
 
     [S] :: short_struct{.A 3 .B 7} =[]
+    S.B
 
 nested_struct: (=>)
     struct {
         Point point32
         P2 point
+        P3 point32
     }
 
     [Nested] :: nested_struct{.. 0} =[]
-    [Nested.Point.Y]
+    Nested.Point.Y
+    Nested.P2
+    Nested.P3.Y
 

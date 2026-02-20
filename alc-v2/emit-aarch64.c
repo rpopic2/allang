@@ -121,8 +121,8 @@ static void buf_putreg(buf *buffer, reg_t reg) {
     }
 }
 
-void eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *index) {
-    printf("eighr\n");
+void eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *index, size_t *size) {
+    printf("eight\n");
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
     bool cleared = false;
@@ -148,6 +148,8 @@ void eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *inde
         offset -= base_offset;
         size_acc += memb_size;
         if (size_acc > 8) {
+            size_acc -= memb_size;
+            *index = (int)i;
             break;
         }
 
@@ -228,6 +230,7 @@ void eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *inde
     if (!cleared) {
         emit_mov(dst, 0);
     }
+    *size += size_acc;
 }
 
 void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
@@ -341,7 +344,7 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
     emit_rrx(STR("stp"), src1, src2);
     buf_puts(fn_buf, STR(", ["));
     buf_putreg(fn_buf, base);
-    buf_snprintf(fn_buf, ", %"PRId64"]\n", offset);
+    buf_snprintf(fn_buf, ", #%"PRId64"]\n", offset);
 }
 
 void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
@@ -350,17 +353,28 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
     reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
     reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = rsize};
 
+    const dyn_member_t *members = &type->struct_t.members;
+    ptrdiff_t member_count = members->cur - members->begin;
     int index = 0;
-    eightbyte_make_struct(tmp, type, args, &index);
+    size_t size = 0;
+    printf("offset: %ld\n", offset);
 
-    size_t size = type->size;
-    if (size >= 16) {
-        reg_t tmp2 = tmp;
-        tmp2.offset++;
-    eightbyte_make_struct(tmp2, type, args, &index);
-        emit_stp(tmp, tmp2, dst, offset);
-    } else if (size >= 0) {
-        emit_str(tmp, dst, (int)offset);
+    while (index < member_count) {
+        size_t member_off = size;
+        eightbyte_make_struct(tmp, type, args, &index, &size);
+        printf("after idx : %d\n", index);
+
+        size_t remaining_size = type->size - size;
+        if (remaining_size >= 8) {
+            reg_t tmp2 = tmp;
+            tmp2.offset++;
+            eightbyte_make_struct(tmp2, type, args, &index, &size);
+            remaining_size = type->size - size;
+            emit_stp(tmp, tmp2, dst, offset + (i64)member_off);
+            printf("after idx : %d\n", index);
+        } else {
+            emit_str(tmp, dst, (int)offset + (int)member_off);
+        }
     }
 }
 
@@ -377,16 +391,21 @@ void emit_mov(reg_t dst, i64 value) {
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId32), get_wx(dst.rsize), regidx, (i32)value);
         } else if (value <= INT64_MAX) {
             dst.rsize = 8;
-            emit_ri(STR("mov"), dst, value);
+            //emit_ri(STR("mov"), dst, value);
+            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
         } else if ((u64)value <= UINT64_MAX) {
             dst.rsize = 8;
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
         } else {
             compile_err(NULL, "literal was too big");
         }
+    } else {
+        if (!dst.type || !dst.type->sign)
+            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIx64), get_wx(dst.rsize), regidx, value);
+        else
+            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIi64), get_wx(dst.rsize), regidx, value);
     }
 
-    buf_snprintf(fn_buf, INSTR("mov %s%d, #0x%"PRIx64), get_wx(dst.rsize), regidx, value);
 }
 
 void type_conv(reg_t dst, reg_t src) {
