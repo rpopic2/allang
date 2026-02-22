@@ -11,21 +11,23 @@ typedef struct dyn_##T { \
 inline static void dyn_##T##_realloc(dyn_##T *self) { \
     if (self->end - self->begin < 0) \
         unreachable; \
-    usize len = (usize)(self->end - self->begin); \
-    if (len == 0) { \
-        len = 8; \
-        self->begin = calloc(len, sizeof (T)); \
+    usize capa = (usize)(self->end - self->begin); \
+    if (capa == 0) { \
+        capa = 8; \
+        self->begin = calloc(capa, sizeof (T)); \
         if (self->begin == NULL) \
             malloc_failed(); \
-        self->end = self->begin + len; \
+        self->end = self->begin + capa; \
         self->cur = self->begin; \
     } else { \
-        len *= 2; \
-        size_t size = len * sizeof (T); \
+        usize len = (usize)(self->cur - self->begin); \
+        capa *= 2; \
+        size_t size = capa * sizeof (T); \
         self->begin = realloc(self->begin, size); \
         if (self->begin == NULL) \
             malloc_failed(); \
-        self->end = self->begin + len; \
+        self->end = self->begin + capa; \
+        self->cur = self->begin + len; \
     } \
 } \
  \
