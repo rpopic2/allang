@@ -17,7 +17,9 @@ void compile_warning(const char *format, ...);
 #define str_printd(...) str_print(__VA_ARGS__)
 #define str_printdnl(S) str_fprintnl(S, stdout)
 #define p(...) printf(__VA_ARGS__), putc('\n', stdout);
+#define ps(s) printf(#s), putc('\n', stdout);
 #define pi(i) printf(#i": %lld\n", (long long)i);
+#define pp(i) printf(#i": %p\n", (void *)i);
 #endif
 
 #if DEBUG_TIMER

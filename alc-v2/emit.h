@@ -96,6 +96,8 @@ void emit_cstr(FILE *out);
 bool emit_need_escaping(void);
 void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args);
 void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args);
+void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args);
+void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args);
 
 void emit_mov(reg_t dst, i64 value);
 void emit_mov_reg(reg_t dst, reg_t src);

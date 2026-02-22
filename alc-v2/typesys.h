@@ -14,7 +14,7 @@ typedef struct member {
 DYN_GENERIC(member_t)
 
 enum type_kind {
-    TK_NONE, TK_FUND, TK_ARRAY, TK_STRUCT, TK_UNION,
+    TK_NONE, TK_FUND, TK_STRUCT, TK_UNION,
 };
 typedef u8 type_kind;
 
@@ -26,10 +26,6 @@ typedef struct type_t {
     sign_t sign;
     str name;
     union {
-        struct {
-            usize len;
-            type_t *type;
-        } arr;
         struct {
             dyn_member_t members;
         } struct_t;

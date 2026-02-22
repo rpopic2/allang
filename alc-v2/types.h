@@ -36,11 +36,11 @@ enum sign_t {
 typedef u8 sign_t;
 
 typedef struct {
-    int offset;
-    register_dst reg_type;
+    i32 offset;
+    u32 array;
     reg_size rsize;
-    // sign_t sign;
-    u8 addr;
+    register_dst reg_type : 3;
+    u8 addr : 2;
     type_t *type;
 } reg_t;
 
