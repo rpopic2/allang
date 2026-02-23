@@ -313,16 +313,11 @@ str dot_iter(str *s) {
 
 member_t *find_member(dyn_member_t *members, str name) {
     member_t *it = members->begin;
-    ps(loop_enter)
     for (; it != members->cur; ++it) {
-        pp(it)
-        str_print(&it->name);
         if (str_eq(name, it->name)) {
             break;
         }
-    ps(loop)
     }
-    ps(ok)
     if (it == members->cur)
         return NULL;
     return it;
@@ -351,17 +346,12 @@ regable read_regable(str s, const token_t *token) {
             str mem_name = dot_iter(&s);
             if (str_empty(&mem_name))
                 break;
-            printf("find: ");
-            str_print(&mem_name);
             member_t *mem = find_member(&t->struct_t.members, mem_name);
             if (mem == NULL) {
                 compile_err(token, "member not found\n");
                 break;
             }
-            printf("mem: \n");
-            str_print(&mem->name);
             result.reg.type = mem->type;
-            printf("offset %d -> %zu\n", result.reg.offset, mem->offset);
             result.reg.offset -= mem->offset;
             t = mem->type;
         }
@@ -436,7 +426,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         printf("empty\n");
         regable_target = (regable){.reg = *targ->reg, .tag = REG};
     } else {
-        printf("target "); str_print(&s);
         regable_target = read_regable(s, cur_token);
     }
     if (regable_target.tag == NONE) {
@@ -531,7 +520,6 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
 
     reg_t reg_to_store;
     if (lhs->tag == VALUE) {
-        printf("context type was "), str_print(&context->reg.type->name);
         reg_to_store = (reg_t){
             .reg_type = SCRATCH, .offset = context->reg.offset,
             .rsize = context->reg.rsize, .type = context->reg.type,
@@ -757,14 +745,14 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
                 r->value = 0;
             }
         }
-        printf("\targ %ld: ", i), str_printnl(&members.begin[i].name);
-        printf("\t");
+        printd("\targ %ld: ", i), str_printdnl(&members.begin[i].name);
+        printd("\t");
         if (r->tag == VALUE) {
-            printf("value: %ld", r->value);
+            printd("value: %ld", r->value);
         } else if (r->tag == REG) {
-            printf("reg off: %d", r->reg.offset);
+            printd("reg off: %d", r->reg.offset);
         }
-        printf("\n");
+        printd("\n");
     }
     if (streq(token->end + 1, "=[")) {
         lex(context);
@@ -937,7 +925,6 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
             .offset = (size_t)i * type->size,
             .type = type,
         };
-        str_print(&memb.name);
         dyn_member_t_push(arr_members, &memb);
         regable *r = &args.begin[i];
         if (r->tag != VALUE && r->tag != REG) {
@@ -949,18 +936,17 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
                 r->value = 0;
             }
         }
-        printf("\targ %ld: ", i);
-        printf("\t");
+        printd("\targ %ld: ", i);
+        printd("\t");
         if (r->tag == VALUE) {
-            printf("value: %ld", r->value);
+            printd("value: %ld", r->value);
         } else if (r->tag == REG) {
-            printf("reg off: %d", r->reg.offset);
+            printd("reg off: %d", r->reg.offset);
         }
-        printf("\n");
+        printd("\n");
     }
     if (streq(token->end + 1, "=[")) {
         lex(context);
-        p("oi")
         bool ok = stmt_stack_store_struct(context, (reg_t){.type = arr_type, .rsize=(reg_size)type->size}, &args);
         if (!ok) {
             compile_err(token, "was not store struct\n");
@@ -1077,9 +1063,7 @@ skip:;
     } else {
         printd("nullary op\n");
         if (lhs.tag == VALUE) {
-            str_print(&context->reg.type->name);
             context->reg.rsize = get_rsize(context->reg);
-            printf("bl: %"PRId64", %"PRIu64"\n", lhs.value, lhs.value);
             emit_mov(context->reg, lhs.value);
         } else if (lhs.tag == REG) {
             const reg_t *nreg = &lhs.reg;
@@ -1425,7 +1409,6 @@ bool decl_vars(parser_context *context) {
         reg_t *reg = overwrite_id(*local_ids.cur, name, &(reg_t){.reg_type = STACK, .addr = 1});
         if (one_liner) {
             target *targ = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
-            printf("push target\n");
             lex(context);
             if (expr_line(context)) { }
             else {
@@ -1444,7 +1427,6 @@ bool decl_vars(parser_context *context) {
             }
 
             }
-            printf("pop target\n");
             arr_target_pop(&context->targets);
         } else {
             target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
@@ -1468,7 +1450,6 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
             if (!expr(context))
                 break;
                     context->reg.rsize = get_rsize(context->reg);
-                    printf("return size :%d", context->reg.rsize);
             if (rets_it < rets->cur) {
                 if (context->reg.type == type_comptime_int
                         && rets_it->type->tag == TK_FUND) {

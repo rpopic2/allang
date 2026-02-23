@@ -122,7 +122,6 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 }
 
 void eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *index, size_t *size) {
-    printf("eight\n");
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
     bool cleared = false;
@@ -504,12 +503,6 @@ void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable 
     } else unreachable;
 }
 void emit_mov(reg_t dst, i64 value) {
-    if (dst.type == NULL) {
-        printf("untyped\n");
-    }
-    else
-        printf("mov type "), str_print(&dst.type->name);
-
     int regidx = get_regoff(dst);
     if (dst.type == type_comptime_int) {
         if (value <= INT32_MAX) {
@@ -576,7 +569,6 @@ void emit_mov_reg(reg_t dst, reg_t src) {
         dst.rsize = 8;
     }
     if (dst.rsize > src.rsize) {
-        // printf("    rsize was bigger! mov %d <- %d\n", dst.rsize, src.rsize);
         type_conv(dst, src);
         return;
     }
