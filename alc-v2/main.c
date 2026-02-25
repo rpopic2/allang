@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "emit.h"
 #include "err.h"
@@ -748,7 +749,7 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
         printd("\targ %ld: ", i), str_printdnl(&members.begin[i].name);
         printd("\t");
         if (r->tag == VALUE) {
-            printd("value: %ld", r->value);
+            printd("value: %"PRId64, r->value);
         } else if (r->tag == REG) {
             printd("reg off: %d", r->reg.offset);
         }
@@ -918,7 +919,7 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
     dyn_member_t_reserve(arr_members, len + 1);
     for (ptrdiff_t i = 0; i < len; ++i) {
         char tmp[8] = {0};
-        snprintf(tmp, sizeof tmp, "%"PRIu64, i);
+        snprintf(tmp, sizeof tmp, "%zd", i);
         char *name = strdup(tmp);
         member_t memb = (member_t){
             .name = STR_FROM(name),
@@ -939,7 +940,7 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
         printd("\targ %ld: ", i);
         printd("\t");
         if (r->tag == VALUE) {
-            printd("value: %ld", r->value);
+            printd("value: %"PRId64, r->value);
         } else if (r->tag == REG) {
             printd("reg off: %d", r->reg.offset);
         }
