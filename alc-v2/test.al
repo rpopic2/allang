@@ -416,5 +416,8 @@ recycle: (=>)
     O :: 2
 
 array: (Index i32 =>)
-    [Arr] :: 100*i32{.0 1 .1 2 .. 0} =[]
+    Dummy :: 0
+    [Arr] :: 10*i32{.0 1 .1 2 .. 0} =[]
+    Arrp :: Arr
+    [Arrp, Index]
 

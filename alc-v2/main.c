@@ -69,8 +69,6 @@ HASHMAP_GENERIC(type_t, 128, type_hash)
 hashmap_symbol_t fn_ids;
 hashmap_type_t types;
 
-#define E_TOO_BIG_FOR_REG "cannot load object of size bigger than 16 bytes to register\n"
-
 inline static bool is_id(char c) {
     return isalnum(c) || c == '_';
 }
@@ -463,6 +461,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     } else if (offset_regable.tag == REG) {
         if (reg.reg_type == STACK) {
             compile_err(&context->cur_token, "offset of stack variable by register is not allowed\n");
+            printf("offset info: type: %d, off: %d\n", offset_regable.reg.reg_type, offset_regable.reg.offset);
         }
     } else unreachable;
     *out_offset = offset_regable;
@@ -841,7 +840,6 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
     str_printd(&type->name);
     const str *s = &context->cur_token.id;
 
-    dyn_member_t members = type->struct_t.members;
     dyn_regable args = {0};
     dyn_regable_reserve(&args, len + 1);
     bool init_zero = false;
@@ -913,10 +911,11 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
         .size = type->size * len,
         .tag = TK_STRUCT,
     };
-    arr_type->struct_t.members = (dyn_member_t){0};
+
     dyn_member_t *arr_members = &arr_type->struct_t.members;
-    pi(len)
+    *arr_members = (dyn_member_t){0};
     dyn_member_t_reserve(arr_members, len + 1);
+
     for (ptrdiff_t i = 0; i < len; ++i) {
         char tmp[8] = {0};
         snprintf(tmp, sizeof tmp, "%zd", i);
@@ -931,7 +930,6 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
         if (r->tag != VALUE && r->tag != REG) {
             if (!init_zero) {
                 compile_err(token, "a field is not initialized: ");
-                str_printerr(members.begin[i].name);
             } else {
                 r->tag = VALUE;
                 r->value = 0;
@@ -946,6 +944,7 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
         }
         printd("\n");
     }
+
     if (streq(token->end + 1, "=[")) {
         lex(context);
         bool ok = stmt_stack_store_struct(context, (reg_t){.type = arr_type, .rsize=(reg_size)type->size}, &args);
@@ -1030,7 +1029,14 @@ skip:;
             return true;
         }
         if (rhs.type->size > MAX_REG_SIZE) {
-            compile_err(&context->cur_token, E_TOO_BIG_FOR_REG);
+          compile_err(
+              &context->cur_token,
+              "cannot load object of size bigger than 16 bytes to register\n"
+          );
+          printd("array: %d, type_size: %zd, rsize: %d\n", rhs.array, rhs.type->size, rhs.rsize);
+          dyn_member_t *members = &rhs.type->struct_t.members;
+          printd("memb_cnt: %zd\n", members->cur - members->begin);
+          str_print(&rhs.type->name);
         }
         lhs->rsize = (reg_size)rhs.type->size;
         lhs->type = rhs.type;
