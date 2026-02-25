@@ -415,7 +415,6 @@ recycle: (=>)
         J =
     O :: 2
 
-array: (=>)
+array: (Index i32 =>)
     [Arr] :: 100*i32{.0 1 .1 2 .. 0} =[]
-    [Arr.88]
 

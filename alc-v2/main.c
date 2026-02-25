@@ -349,7 +349,7 @@ regable read_regable(str s, const token_t *token) {
                 break;
             member_t *mem = find_member(&t->struct_t.members, mem_name);
             if (mem == NULL) {
-                compile_err(token, "member not found\n");
+                compile_err(token, "member not found: "), str_printerr(mem_name);
                 break;
             }
             result.reg.type = mem->type;
@@ -1957,8 +1957,8 @@ void function(iter *src, FILE *object_file) {
         emit_label(context->name, STR_FROM("ret"), 0);
     }
     if (do_airity_check && !context->last_line_ret) {
-        if (context->symbol->airity != 0) {
-            compile_err(&context->cur_token, "expected to return values\n");
+        if (context->symbol->ret_airity != 0) {
+            compile_err(&context->cur_token, "expected to return %d value(s)\n", context->symbol->ret_airity);
         }
     }
     emit_fn_prologue_epilogue(context);
