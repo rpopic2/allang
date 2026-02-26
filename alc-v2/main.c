@@ -422,7 +422,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         target *targ = get_current_target_stack(context);
         if (!targ)
             return false;
-        printf("empty\n");
         regable_target = (regable){.reg = *targ->reg, .tag = REG};
     } else {
         regable_target = read_regable(s, cur_token);
@@ -469,19 +468,23 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     return true;
 }
 
-void typecheck(const token_t *token, const type_t *ltype, const type_t *rtype) {
+bool typecheck(const token_t *token, const type_t *ltype, const type_t *rtype) {
+    if (!ltype) {
+        compile_err(token, "compiler bug: type was null\n");
+        return false;
+    }
     if (ltype == rtype)
-        return;
-    compile_err(token, "type checker: expected type "), str_printerrnl(ltype ? ltype->name : STR_FROM("NULL")), puterr(", but found "), str_printerr(rtype ? rtype->name : STR_FROM("NULL"));
+        return true;
+    str lname = ltype ? ltype->name : STR_FROM("NULL");
+    str rname = rtype ? rtype->name : STR_FROM("NULL");
+    compile_err(token, "type checker: expected type "), str_printerrnl(lname), puterr(", but found "), str_printerr(rname);
+    return false;
 }
 
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
-    if (lhs.type == rhs.type && lhs.addr == rhs.addr)
-        return;
     type_t *ltype = lhs.type;
     type_t *rtype = rhs.type;
-    compile_err(token, "type checker: expected type "), str_printerrnl(ltype ? ltype->name : STR_FROM("NULL")), puterr(", but found "), str_printerr(rtype ? rtype->name : STR_FROM("NULL"));
-    if (!ltype || !rtype)
+    if (typecheck(token, ltype, rtype) && lhs.addr == rhs.addr)
         return;
 
     if (lhs.addr != rhs.addr) {
@@ -507,7 +510,7 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     const token_t *token = &context->cur_token;
     if (!streq(token->end + 1, "=["))
         return false;
-    if (token->end[3] == ']')    // =[]. TODO need to merge this with stmt_stack_store?
+    if (token->end[3] == ']')    // =[]. TODO need to merge this with stmt_stack_store? ->yes, after store api change
         return false;
 
     lex(context);
@@ -534,7 +537,6 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
                 reg_to_store.rsize = (reg_size)rhs.type->size;
             }
         }
-        printf("lhs was value\n");
     } else if (lhs->tag == REG) {
         reg_to_store = lhs->reg;
         rhs.type = lhs->reg.type;
@@ -544,8 +546,6 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     typecheck(token, rhs.type, reg_to_store.type);
 
     printd("binary_op:store\n");
-    printf("rsizes lhs: %d, rhs: %d\n", reg_to_store.rsize, rhs.rsize);
-    // reg_to_store.rsize = 1;
     if (offset.tag == REG) {
         emit_str_reg(reg_to_store, rhs, offset.reg);
     } else {
@@ -685,17 +685,12 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
                 break;
             }
         }
-        size_t offset = 0;
         if (it == members.cur) {
             compile_err(token, "member not found: "), str_printerr(member_name);
-        } else {
-            offset = it->offset;
         }
-        (void)offset;
 
         if (s->end[-1] == '}')
             break;
-
         if (!lex(context))
             break;
 
@@ -710,23 +705,22 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
             expr_struct(context, tmp_reg, it->type);
             args.begin[index] = r;
             continue;
-        } else {
-            regable r = read_regable(*s, token);
+        }
 
-            args.begin[index] = r;
-            if (r.tag == REG) {
-                if (r.reg.type != type_comptime_int && it->type != r.reg.type) {
-                    compile_err(token, "expected type "),
-                        str_printerr(it->type->name);
-                    compile_err(token, "but found "),
-                        str_printerr(r.reg.type->name);
-                }
-            } else if (r.tag == VALUE) {
-                if (it->type->tag != TK_FUND) {
-                    compile_err(token, "expected type "),
-                        str_printerr(it->type->name);
-                    compile_err(token, "but found numeric literal\n");
-                }
+        regable r = read_regable(*s, token);
+        args.begin[index] = r;
+        if (r.tag == REG) {
+            if (r.reg.type != type_comptime_int && it->type != r.reg.type) {
+                compile_err(token, "expected type "),
+                    str_printerr(it->type->name);
+                compile_err(token, "but found "),
+                    str_printerr(r.reg.type->name);
+            }
+        } else if (r.tag == VALUE) {
+            if (it->type->tag != TK_FUND) {
+                compile_err(token, "expected type "),
+                    str_printerr(it->type->name);
+                compile_err(token, "but found numeric literal\n");
             }
         }
 
