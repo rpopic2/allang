@@ -3,7 +3,7 @@
 
 // listing 6-1
 
-#enum Coords: X, Y, Z
+#enum Coords :: X, Y, Z
 
 screen_point:
     struct {
@@ -36,7 +36,7 @@ screen_point:
             .ClippedStart   !ClippedStart
             .ClippedEnd     !ClippedEnd
         =>
-            ? ret
+        ? ret
 
         StartPosition = screen_point:to_screen_coordinate global:ScreenSize, [ClippedStart] =>
         EndPosition = screen_point:to_screen_coordinate global:ScreenSize, [ClippedEnd] =>
@@ -102,42 +102,45 @@ screen_point:
     . > InMaxPos.Y ?
         Result orr= 0b1000
 
-:cohen_sutherland_line_clip:
-    (!InOutStartPos addr vector2, !InOutEndPos addr vector2, InMinPos vector2, InMaxPos vector2 => ?)
-    &StartTest :: :test_region [InOutStartPos], InMinPos, InMaxPos =>
-    &EndTest :: :test_region [InOutEndPos], InMinPos, InMaxPos =>
-
-    Width :: InOutEndPos.X - InOutStartPos.X
-    Height :: InOutEndPos.Y - InOutStartPos.Y
+:cohen_sutherland_line_clip: (!InOutStartPos addr vector2, !InOutEndPos addr vector2, InMinPos vector2, InMaxPos vector2 => ?)
+    !StartTest :: test_region [InOutStartPos], InMinPos, InMaxPos =>
+    !EndTest :: test_region [InOutEndPos], InMinPos, InMaxPos =>
 
     loop:
     StartTest is 0 ? EndTest is 0 ?
         okret
-    StartTest and EndTest isnt zero ?
+    (StartTest and EndTest) isnt zero ?
         eret
     IsStartTest :: StartTest isnt zero
-    #leaf ClippedPosition ::
+    ClippedPosition :: #leaf
         CurrentTest :: IsStartTest ? StartTest : EndTest
+        Width #once :: [InOutEndPos.X] - [InOutStartPos.X]
+        Height #once :: [InOutEndPos.Y] - [InOutStartPos.Y]
+
         CurrentTest < 0b0100 ?
-            {
+            vector2{
                 .X CurrentTest and 0b0001 ? InMinPos.X : InMaxPos.X
-                .Y Height. math:equals_in_tolerance 0.0 @
+                .Y Height. equals_in_tolerance 0.0 @
                     ? InOutStartPos.Y
                     : InOutStartPos.Y + ((Height * (ClippedPosition.X - InOutStartPos.X)) / Width)
             }
         :
-            {
+            vector2{
                 .Y CurrentTest and 0b0100 ? InMinPos.Y : InMaxPos.Y
                 .X Width. math:equals_in_tolerance 0.0 @
                     ? InOutStartPos.X
-                    : (ClippedPosition.Y - InOutStartPos.Y) * Width / Height + InOutStartPos.X
+                    :
+                        ClippedPosition.Y - InOutStartPos.Y
+                        * Width
+                        / Height
+                        + InOutStartPos.X
             }
 
     IsStartTest ?
         [InOutStartPos]= ClippedPosition
-        StartTest = ClippedPosition. test_region InMinPos, InMaxPos =>
+        StartTest = test_region ClippedPosition, InMinPos, InMaxPos =>
     :
         [InOutEndPos]= ClippedPosition
-        EndTest = ClippedPosition. test_region InMinPos, InMaxPos =>
+        EndTest = test_region ClippedPosition, InMinPos, InMaxPos =>
     loop->
 
