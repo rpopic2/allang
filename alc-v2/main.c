@@ -78,6 +78,12 @@ u32 next_pow2(u32 n) {
     return 1 << (32 - __builtin_clz(n - 1));
 }
 
+int power_of_two_exponent(size_t n) {
+    if (!n || (n & (n - 1)))
+        return 0;
+    return __builtin_ctzll(n);
+}
+
 bool lex(parser_context *context) {
 retry:;
     iter *src = context->src;
@@ -336,7 +342,7 @@ regable read_regable(str s, const token_t *token) {
             compile_err(token, "unknown id "), str_printerr(s);
             return result;
         }
-
+        pi(e->array)
         result.reg = *e;
         result.tag = REG;
         member_t *mem = NULL;
@@ -840,9 +846,8 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
     while (true) {
         if (!lex(context))
             break;
-        if (s->data[0] != '.') {
+        if (s->data[0] != '.')
             compile_err(token, "'.' and member name expected in struct literal\n");
-        }
         if (streq(s->data, ".. 0")){
             lex(context);
             init_zero = true;
@@ -857,16 +862,16 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
         u64 subscript = strtoull(member_name.data, NULL, 0);
         if (subscript >= len) {
             compile_err(token, "array access out of bounds: %"PRIu64" (length %u)", subscript, len);
+            continue;
         }
         if (s->end[-1] == '}')
             break;
 
         if (!lex(context))
             break;
-
         if (islower(s->data[0])) {
             reg_t tmp_reg = {
-                .reg_type = SCRATCH, 
+                .reg_type = SCRATCH,
                 .type = type,
                 .rsize = (reg_size)type->size,
                 .offset = 2,
@@ -877,7 +882,6 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
             continue;
         } else {
             regable r = read_regable(*s, token);
-
             args.begin[subscript] = r;
             if (r.tag == REG) {
                 if (r.reg.type != type_comptime_int && type != r.reg.type) {
@@ -911,7 +915,7 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
     dyn_member_t_reserve(arr_members, len + 1);
 
     for (ptrdiff_t i = 0; i < len; ++i) {
-        char tmp[8] = {0};
+        char tmp[0x10] = {0};
         snprintf(tmp, sizeof tmp, "%zd", i);
         char *name = strdup(tmp);
         member_t memb = (member_t){
@@ -941,10 +945,12 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
 
     if (streq(token->end + 1, "=[")) {
         lex(context);
-        bool ok = stmt_stack_store_struct(context, (reg_t){.type = arr_type, .rsize=(reg_size)type->size}, &args);
+        bool ok = stmt_stack_store_struct(context, (reg_t){.type = arr_type, .rsize=(reg_size)type->size, .array = len}, &args);
         if (!ok) {
             compile_err(token, "was not store struct\n");
         }
+        context->reg.array = len;
+        pi(len)
     } else {
         emit_make_array(target, type, len, &args);
     }
@@ -966,6 +972,67 @@ reg_size get_rsize(reg_t reg) {
     if (size == 0)
         return 0;
     return (reg_size)next_pow2((u32)size);
+}
+
+void expr_load_array(parser_context *context, reg_t *lhs, reg_t rhs, regable offset) {
+    dyn_member_t *mem = &rhs.type->struct_t.members;
+    ptrdiff_t len = dyn_member_t_len(mem);
+    type_t *elem_type = mem->begin[0].type;
+    if (offset.tag == VALUE) {
+        compile_err(&context->cur_token, "use static bound checked syntax\n");
+        return;
+    }
+    if (len <= 0) {
+        compile_err(&context->cur_token, "array access out of bounds\n");
+    }
+    reg_t off = offset.reg;
+    lhs->type = elem_type;
+    lhs->rsize = (reg_size)elem_type->size;
+    emit_array_access(*lhs, rhs, off);
+    p(__func__)
+}
+
+bool expr_load(parser_context *context) {
+    token_t *token = &context->cur_token;
+
+    if (token->data[0] != '[') {
+        return false;
+    }
+    reg_t *lhs = &context->reg;
+    reg_t rhs;
+    regable offset;
+    if (!read_load_store_offset(context, token->id, &rhs, &offset))
+        return true;
+    if (!rhs.type) {
+        compile_err(token, "compiler bug: type you are trying to load is null\n");
+        return true;
+    }
+
+    if (rhs.array) {
+        expr_load_array(context, lhs, rhs, offset);
+        return true;
+    }
+    if (rhs.type->size > MAX_REG_SIZE) {
+        compile_err(
+                &context->cur_token,
+                "cannot load object of size bigger than 16 bytes to register\n"
+                );
+        printd("array: %d, type_size: %zd, rsize: %d\n", rhs.array, rhs.type->size, rhs.rsize);
+        dyn_member_t *members = &rhs.type->struct_t.members;
+        (void)members;
+        printd("memb_cnt: %zd\n", members->cur - members->begin);
+        str_printd(&rhs.type->name);
+    }
+    lhs->rsize = (reg_size)rhs.type->size;
+    lhs->type = rhs.type;
+    if (offset.tag == VALUE) {
+        emit_ldr(*lhs, rhs, (int)offset.value);
+    } else {
+        emit_ldr_reg(*lhs, rhs, offset.reg);
+    }
+    context->reg.type = rhs.type;
+    p(__func__)
+    return true;
 }
 
 bool expr(parser_context *context) {
@@ -1012,34 +1079,7 @@ skip:;
         literal_string(context, token);
         return true;
     }
-    if (token->data[0] == '[') {
-        reg_t *lhs = &context->reg;
-        reg_t rhs;
-        regable offset;
-        if (!read_load_store_offset(context, token->id, &rhs, &offset))
-            return true;
-        if (!rhs.type) {
-            compile_err(token, "compiler bug: type you are trying to load is null\n");
-            return true;
-        }
-        if (rhs.type->size > MAX_REG_SIZE) {
-          compile_err(
-              &context->cur_token,
-              "cannot load object of size bigger than 16 bytes to register\n"
-          );
-          printd("array: %d, type_size: %zd, rsize: %d\n", rhs.array, rhs.type->size, rhs.rsize);
-          dyn_member_t *members = &rhs.type->struct_t.members;
-          printd("memb_cnt: %zd\n", members->cur - members->begin);
-          str_print(&rhs.type->name);
-        }
-        lhs->rsize = (reg_size)rhs.type->size;
-        lhs->type = rhs.type;
-        if (offset.tag == VALUE) {
-            emit_ldr(*lhs, rhs, (int)offset.value);
-        } else {
-            emit_ldr_reg(*lhs, rhs, offset.reg);
-        }
-        context->reg.type = rhs.type;
+    if (expr_load(context)) {
         return true;
     }
     regable lhs = read_regable(token->id, token);
@@ -1083,6 +1123,8 @@ skip:;
                     compile_err(token, "taking address of stack object with unknown type\n");
                 }
                 context->reg.type = nreg->type;
+                context->reg.array = nreg->array;
+                pi(nreg->array)
                 emit_sub(context->reg, FP, nreg->offset);
             } else {
                 unreachable;
@@ -1147,6 +1189,8 @@ void struct_report(type_t *type) {
                 mem->offset, mem->type->size);
     }
     printd(CSI_GREEN"end report\n\n"CSI_RESET);
+#else
+    (void)type;
 #endif
 }
 
@@ -1248,6 +1292,9 @@ bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *ar
     reg_t *target_reg = cur_target->reg;
 
     target_reg->rsize = src.rsize;
+    target_reg->array = src.array;
+    p("arr len: ")
+    pi(target_reg->array)
 
     if (target_reg->type == NULL) {
         target_reg->type = src.type;
@@ -1380,6 +1427,7 @@ bool decl_vars(parser_context *context) {
             .reg_type = NREG, .offset = context->nreg_count,
             .rsize = context->reg.rsize,
             .addr = context->reg.addr, .type = context->reg.type,
+            .array = context->reg.array,
         };
         reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
         context->nreg_count += 1;
@@ -1424,10 +1472,10 @@ bool decl_vars(parser_context *context) {
             if (!targ->target_assigned) {
                 lex(context);
                 if (!stmt_stack_store(context)) {
-                compile_err(&context->cur_token, "store statement '=[]' expected\n");
+                    compile_err(&context->cur_token, "store statement '=[]' expected\n");
+                }
             }
-
-            }
+            pi(targ->reg->array);
             arr_target_pop(&context->targets);
         } else {
             target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});

@@ -687,8 +687,28 @@ void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
 }
 
+static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
+void emit_array_access(reg_t dst, reg_t src, reg_t offset) {
+    reg_t base = {.reg_type = SCRATCH, .offset = 0};
+    emit_sub(base, FP, src.offset);
+
+    reg_t size = {.reg_type = SCRATCH, .offset = 1};
+    emit_mov(size, (i64)src.type->size);
+
+    reg_t index = {.reg_type = SCRATCH, .offset = 2};
+    buf_snprintf(fn_buf, ("\tsmaddl x%d, w%d, w%d, x%d\n"),
+            get_regoff(index), get_regoff(index), get_regoff(size), get_regoff(base));
+
+    load_store_x("ldr", dst, src);
+    // size_t size = offset.type->size;
+    // if (
+    buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
+}
+
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
     load_store_x("ldr", dst, src);
+    // size_t size = offset.type->size;
+    // if (
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
 }
 

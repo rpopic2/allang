@@ -48,4 +48,7 @@ inline static void dyn_##T##_free(dyn_##T *self) { \
     free(self->begin); \
     *self = (dyn_##T){0}; \
 } \
-
+ \
+inline static ptrdiff_t dyn_##T##_len(dyn_##T *self) { \
+    return self->cur - self->begin; \
+} \

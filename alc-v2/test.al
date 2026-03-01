@@ -420,4 +420,10 @@ array: (Index i32 =>)
     [Arr] :: 10*i32{.0 1 .1 2 .. 0} =[]
     Arrp :: Arr
     [Arrp, Index]
+    Arrp+Index*auto
+
+    [Arrp * Index]
+    Index * Size + Arrp
+
+    #comptime Arrp + 3 * size
 

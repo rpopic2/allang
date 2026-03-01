@@ -16,20 +16,20 @@
     Input :: G .get_input_manger =>
 
     MoveSpeed: f32{100.0}
-    RandomPosX: math:uniform_distribution{.Start -300.0 .EndExclusive 300}
-    RandomPosY: math:uniform_distribution{.Start -200.0 .EndExclusive 200}
+    RandomPosX: math:uniform_distribution{.StartInclusive -300.0 .EndExclusive 300}
+    RandomPosY: math:uniform_distribution{.StartInclusive -200.0 .EndExclusive 200}
     Duration: f32{3.0}
     !ElapsedTime: f32{0.0}
     TargetStart: [:Target:Position]
     TargetDestination: vector2{.X RandomPosX .random => .Y RandomPosY .random =>}
     #alias TargetDst :: TargetDestination
 
-    HalfFovCos: cos (math:deg2rad :FovAngle * 0.5 @)
+    HalfFovCos: #comptime ([:FovAngle] * 0.5). deg2rad @). cos
 
-    $ElapsedTime :: ([ElapsedTime] + InDeltaSeconds) .clamp 0.0, [Duration] @ =:[ElapsedTime]
+    $ElapsedTime :: ([ElapsedTime] + InDeltaSeconds). clamp 0.0, [Duration] @ =:[ElapsedTime]
     . equals [Duration] ?
         [TargetDestination]
-            =:[TargetStart]=
+            =:[TargetStart]
             =:[!:Target:Position]
 
         [TargetDestination]= vector2{.X RandomPosX .random => .Y RandomPosY .random =>}
@@ -49,7 +49,7 @@
         . get_normalize @
     DeltaPosition ::
         $MoveSpeed :: [MoveSpeed]
-        InputVecor .* MoveSpeed .* InDeltaSeconds
+        InputVecor. * MoveSpeed.* InDeltaSeconds
 
     F :: vector2{UnitY}
     V ::
@@ -67,12 +67,12 @@
     G :: get_2d_game_engine =>
 
     Radius: f32{5.0}
-    Sphere: (dyn_array vector2):new => =[]
+    Sphere: dyn_array.vector2{0}
     SightLength: f32{300.0}
 
     $Sphere. is_empty @ ?
         $Radius :: [Radius]
-        RR :: Radius * Radius
+        RR :: $Radius * $Radius
         X :: - $Radius ?<= Radius
         loop:
             Y :: - $Radius ?<= Radius
@@ -100,7 +100,7 @@
     =>
     R. draw_line
         PlayerPosition,
-        PlayerPosition .+ vector2{UnitY} .* $SightLength .* 0.2,
+        PlayerPosition .+ vector2{unitY} .* $SightLength .* 0.2,
         PlayerColor
     =>
 
