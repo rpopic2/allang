@@ -1,0 +1,53 @@
+// hello world
+
+"Hello World!"n .print =>
+
+// symblols
+
+'@' : macro. replaces something.
+'#' : directive. tells compiler something
+'*' : multiplication. can be used for arithmetic, and also for arrays, as arrays means multiple same data.
+'()' : expression. inside this parenthesis are considered as one expression.
+'-' : minus. used for arithmetic.
+'+' : plus. used for arithmetic.
+'=' : assignment. means moving data.
+'{}' : aggregate. bundles data into one aggregate. it can be arrays, structs, bitfields.
+'[]' : memory opetation. load and store to memory.
+'=>' : call. branch to function.
+'->' : jump. branch to location.
+'>>' : jump to matching << in scope
+',' : next register. also implies dependency break, as these comma seperated expressions cannot refer to each other.
+'.' : offset. X.Y.Z means hierarchy, and is never interpreted as multiple expression.
+':' : right to left. inverts assignment directions. when used solo, binds static location to a name.
+'::' : named variable declaration. right to left. binds dynamic location to name(s).
+''' : character literal.
+'"' : string view. it is a readonly view to the string embedded in the code.
+'?' : conditional true.
+'!' : conditional false.
+'`' : formatting string.
+'>' '<' '>=' '<=' : comparison. sets flag.
+':' and compound : (e.g. ':=' ':+') operates to the left hand side.
+
+// punctuations, not fixed
+'$' : explicit register. 
+'<>' : aggregate view.
+'~' : owned address annotation
+'~>' : ownership transfer
+'%' : move to matching %
+'&' : alias
+'_' : discard
+';' : end of line
+'|' : pararrel
+'^' : outer scope
+'\' : escaping
+
+
+// reserved keywordd
+
+ret : returns from function.
+struct : declares a struct.
+enum : declares an enum.
+union : declares an union.
+undefined : undefined state.
+is : check equality
+

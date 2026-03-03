@@ -2,6 +2,7 @@
 #declare printf: (Format addr u8 => Num_Printed i32)
 #declare get_hi: (=> Hi addr u8)
 #declare get_hi_redirected: (=> Hi addr u8)
+#declare array: (Index i32 => i32)
 
 printf "Hello World\n" =>
 
@@ -51,6 +52,8 @@ foo K, [J] =>
 
 Hi :: get_hi =>
 [Hi_Stack] :: get_hi => =[]
+
+ret array 0 =>
 
 ret 0
 
@@ -408,22 +411,19 @@ nested_struct: (=>)
 
     [Nested] :: nested_struct{.X 5 .Point short_struct{.. 0} .. 0} =[]
     [Nested2] :: nested_struct{.X 5 .Point short_struct{.A 3 .. 0} .. 0} =[]
+    ret
 
 recycle: (=>)
     I ::
         J :: 3
         J =
     O :: 2
+    ret
 
-array: (Index i32 =>)
+array: (Index i32 => I i32)
     Dummy :: 0
     [Arr] :: 10*i32{.0 1 .1 2 .. 0} =[]
     Arrp :: Arr
     [Arrp, Index]
-    Arrp+Index*auto
 
-    [Arrp * Index]
-    Index * Size + Arrp
-
-    #comptime Arrp + 3 * size
 
