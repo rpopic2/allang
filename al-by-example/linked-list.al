@@ -72,6 +72,8 @@ elems print=>
 @list.i32    // you can expand it here explicitly if you need to specify where to expand it. it would be a compile error if there is multiple place where it expands, as it is a redefinition!
 
 
+
+
 // https://doc.rust-lang.org/stable/rust-by-example/custom_types/enum/testcase_linked_list.html
 
 // this time, the list is stack allocated and will be destroyed when it goes out of scope!
@@ -114,3 +116,71 @@ list .len=> %
 `linked list has length: `% print=>
 list .stringfy=> print=>
 
+
+// zig's linked list https://ziglang.org/documentation/master/#struct
+
+@generic linked_list: #type T => #type
+    liked_list.T:
+        struct {
+            First addr? node
+            Last slice? node
+            Len usize
+        }
+
+        struct node {
+            Prev slice? node
+            Next addr? node
+            Data T
+        }
+
+        push: Self addr self, Node addr~ node =>
+        #leaf
+            [Self.Last] ?
+                [Node.Prev] = null
+                [Node.Next] = null
+                [Self.First] = Node~>
+                [Self.Last] = Self.Last
+                ret
+            [Node.Next] = null
+            [Self.Last] = Node.Next~>
+
+        pop: Self addr self => addr? node
+        #leaf
+            Last :: [Self.Last] ? eret
+            Prev :: Last.Prev
+            Prev ->
+                [Prev.Next] = null
+            [Self.Last] = Prev
+
+            ret Last
+
+linked_list i32 @
+
+#literal view? addr? :: .0 null
+
+List :: linked_list.i32{
+    .First null
+    .Last null
+    .Len 0
+} =[]
+
+Node :: linked_list.i32.node{
+    .Prev null
+    .Next null
+    .Data 1234
+} =[]
+
+List2 :: linked_list.i32{
+    .First ~>Node    // Node is invalidated because it is moved
+    .Last This.First
+    .Len 1
+} =[]
+
+Node2 :: linked_list.i32.node{
+    .Prev [List2.Last]
+    .Next null
+}
+
+1234 is [List2.First].Data -> eret
+
+// addr cannot be copied. (can it be guaranteed to be not aliasing?)
