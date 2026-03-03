@@ -745,7 +745,7 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
                 r->value = 0;
             }
         }
-        printd("\targ %ld: ", i), str_printdnl(&members.begin[i].name);
+        printd("\targ %zd: ", i), str_printdnl(&members.begin[i].name);
         printd("\t");
         if (r->tag == VALUE) {
             printd("value: %"PRId64, r->value);
@@ -933,7 +933,7 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
                 r->value = 0;
             }
         }
-        printd("\targ %ld: ", i);
+        printd("\targ %zd: ", i);
         printd("\t");
         if (r->tag == VALUE) {
             printd("value: %"PRId64, r->value);

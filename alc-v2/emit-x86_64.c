@@ -300,7 +300,7 @@ void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
 }
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
-    emit_lea_begin(dst, dst, STR("+"));
+    emit_lea_begin(dst, src, STR("+"));
     buf_putreg(fn_buf, offset);
     emit_lea_end();
 
