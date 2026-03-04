@@ -105,6 +105,10 @@ static const char *get_wx(reg_size reg_size) {
 }
 
 static void buf_putreg(buf *buffer, reg_t reg) {
+    if (reg.reg_type == RD_NONE) {
+        buf_snprintf(buffer, reg.rsize <= 4 ? "wzr" : "xzr");
+        return;
+    }
     if (reg.reg_type == STACK) {
         buf_puts(buffer, STR_FROM("sp"));
     } else {
@@ -121,7 +125,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
     }
 }
 
-void eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *index, size_t *size) {
+bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *index, size_t *size) {
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
     bool cleared = false;
@@ -226,10 +230,11 @@ void eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *inde
         }
     }
 
-    if (!cleared) {
-        emit_mov(dst, 0);
-    }
+    // if (!cleared) {
+    //     emit_mov(dst, 0);
+    // }
     *size += size_acc;
+    return cleared;
 }
 
 void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {
@@ -459,10 +464,14 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
     pi(member_count)
     int index = 0;
     size_t size = 0;
+    const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8};
 
     while (index < member_count) {
         size_t member_off = size;
-        eightbyte_make_struct(tmp, type, args, &index, &size);
+        bool cleared = eightbyte_make_struct(tmp, type, args, &index, &size);
+        if (!cleared) {
+            tmp = xzr;
+        }
 
         size_t remaining_size = type->size - size;
         if (remaining_size >= 8) {
