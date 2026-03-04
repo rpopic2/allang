@@ -54,3 +54,10 @@ typedef struct {
 #define CSI_RED "\x1b[31m"
 #define CSI_GREEN "\x1b[32m"
 #define CSI_RESET "\x1b[0m"
+
+static int/*?*/ power_of_two_exponent(size_t n) {
+    if (!n || (n & (n - 1)))
+        return 0;
+    return __builtin_ctzll(n);
+}
+

@@ -692,8 +692,24 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset) {
     // reg_t base = {.reg_type = SCRATCH, .offset = 0};
     // emit_sub(base, FP, src.offset);
 
+    size_t array_size = src.type->size;
+    size_t elem_size = src.type->struct_t.members.begin[0].type->size;
+    if (elem_size == 1) {
+        emit_ldr_reg(dst, src, offset);
+        return;
+    }
+    if (elem_size <= 8) {
+        pi(elem_size);
+        int exp = power_of_two_exponent(elem_size);
+        if (exp) {
+            load_store_x("ldr", dst, src);
+            buf_snprintf(fn_buf, ("x%d, lsl #%d]\n"), get_regoff(offset), exp);
+            return;
+        }
+    }
+
     reg_t size = {.reg_type = SCRATCH, .offset = 1};
-    emit_mov(size, (i64)src.type->size);
+    emit_mov(size, (i64)array_size);
 
     reg_t index = {.reg_type = SCRATCH, .offset = 2};
     buf_snprintf(fn_buf, ("\tsmull x%d, w%d, w%d\n"),
@@ -703,8 +719,6 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset) {
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
     load_store_x("ldr", dst, src);
-    // size_t size = offset.type->size;
-    // if (
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
 }
 

@@ -78,12 +78,6 @@ u32 next_pow2(u32 n) {
     return 1 << (32 - __builtin_clz(n - 1));
 }
 
-int power_of_two_exponent(size_t n) {
-    if (!n || (n & (n - 1)))
-        return 0;
-    return __builtin_ctzll(n);
-}
-
 bool lex(parser_context *context) {
 retry:;
     iter *src = context->src;
