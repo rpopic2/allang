@@ -49,5 +49,6 @@ struct : declares a struct.
 enum : declares an enum.
 union : declares an union.
 undefined : undefined state.
+unreachable: should be unreachable. panics if this code is reached. if "#optimize unreachable" is on, reaching this code will be undefined behaviour.
 is : check equality
 

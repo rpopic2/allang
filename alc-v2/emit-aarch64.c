@@ -104,7 +104,7 @@ static const char *get_wx(reg_size reg_size) {
     return format;
 }
 
-static void buf_putreg(buf *buffer, reg_t reg) {
+void buf_putreg(buf *buffer, reg_t reg) {
     if (reg.reg_type == RD_NONE) {
         buf_snprintf(buffer, reg.rsize <= 4 ? "wzr" : "xzr");
         return;
@@ -128,27 +128,22 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *index, size_t *size) {
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
+    dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
+
     bool cleared = false;
-
-    if (type->size > 8) {
-        dst.rsize = 8;
-    } else {
-        dst.rsize = (reg_size)type->size;
-    }
-
     size_t size_acc = 0;
-    size_t base_offset = 0;
+    size_t base_offset_bits = 0;
+
     for (ptrdiff_t i = *index; i < member_count; ++i, *index = (int)i) {
-        regable *r = &args->begin[i];
         member_t *memb = &members->begin[i];
         type_t *memb_type = memb->type;
         size_t memb_size = memb_type->size;
+        size_t offset_bits = memb->offset * 8;
 
-        size_t offset = memb->offset * 8;
-        if (!size_acc) {
-            base_offset = offset;
+        if (size_acc == 0) {
+            base_offset_bits = offset_bits;
         }
-        offset -= base_offset;
+        offset_bits -= base_offset_bits;
         size_acc += memb_size;
         if (size_acc > 8) {
             size_acc -= memb_size;
@@ -156,10 +151,11 @@ bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *inde
             break;
         }
 
+        regable *r = &args->begin[i];
         if (r->tag == VALUE) {
             i64 value = r->value;
-            if (offset % 16 == 0) {
-                size_t size = memb->type->size;
+            if (offset_bits % 16 == 0) {
+                size_t size = memb_size;
                 while (size < 2) {
                     if (++i >= member_count)
                         break;
@@ -181,25 +177,25 @@ bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *inde
             if (value == 0)
                 continue;
 
-            if (offset % 16 != 0) {
+            if (offset_bits % 16 != 0) {
                 if (!cleared) {
-                    emit_ri(STR_FROM("mov"), dst, value << offset);
+                    emit_ri(STR_FROM("mov"), dst, value << offset_bits);
                     unreachable;
                 }
-                emit_rri(STR_FROM("orr"), dst, dst, value << offset);
+                emit_rri(STR_FROM("orr"), dst, dst, value << offset_bits);
                 continue;
             } else {
                 if (!cleared) {
-                    emit_risi(STR("movz"), dst, value, STR("lsl"), (i64)offset);
+                    emit_risi(STR("movz"), dst, value, STR("lsl"), (i64)offset_bits);
                 } else {
-                    emit_risi(STR("movk"), dst, value, STR("lsl"), (i64)offset);
+                    emit_risi(STR("movk"), dst, value, STR("lsl"), (i64)offset_bits);
                 }
             }
             cleared = true;
         } else if (r->tag == REG) {
             reg_t reg = r->reg;
 
-            if (offset == 0) {
+            if (offset_bits == 0) {
                 if (memb_size < 4) {
                     int mask = 0xff;
                     for (size_t i = 1; i < memb_size; ++i) {
@@ -215,14 +211,13 @@ bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *inde
                     emit_rr(STR_FROM("mov"), tmp_dst, reg);
                 }
             } else {
-                reg_t reg = r->reg;
                 if (reg.rsize < dst.rsize)
                     reg.rsize = dst.rsize;
                 i64 width = (i64)memb_size * 8;
                 if (cleared)
-                    emit_rrii(STR_FROM("bfi"), dst, reg, (i64)offset, width);
+                    emit_rrii(STR_FROM("bfi"), dst, reg, (i64)offset_bits, width);
                 else
-                    emit_rrii(STR("ubfiz"), dst, reg, (i64)offset, width);
+                    emit_rrii(STR("ubfiz"), dst, reg, (i64)offset_bits, width);
             }
             cleared = true;
         } else {
@@ -511,6 +506,7 @@ void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable 
         }
     } else unreachable;
 }
+
 void emit_mov(reg_t dst, i64 value) {
     int regidx = get_regoff(dst);
     if (dst.type == type_comptime_int) {
