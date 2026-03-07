@@ -1,6 +1,6 @@
 #alias Dst :: Destination
 #alias Memb :: Member
-eightbyte_make_struct: ($Dst addr reg_t, Type addr type_t, Args addr dyn.regable, Index addr &i32 => !)
+eightbyte_make_struct: $Dst addr reg_t, Type addr type_t, Args addr dyn.regable, Index addr &i32 => !
     Members :: {
         . [Type.Struct.Members]
         .Count Members .len @
@@ -9,7 +9,7 @@ eightbyte_make_struct: ($Dst addr reg_t, Type addr type_t, Args addr dyn.regable
     Dst :: reg_t{
         .Rsize [Type.Size] .min 8
         .. [$Dst]
-    }
+    } =[]
 
     &Size_Acc :: 0
     &Base_Offset :: 0 bits
@@ -68,7 +68,7 @@ eightbyte_make_struct: ($Dst addr reg_t, Type addr type_t, Args addr dyn.regable
 
             Memb.Offset mod 16 is 0 !
                 Cleared ! unreachable
-                emit_rri "orr", Dst, Dst, (Value shl Memb.Offset) =>
+                emit_rri "orr", [Dst], Dst, (Value shl Memb.Offset) =>
                 loop->
             :
                 emit_risi Cleared ! "movz" : "movk",
