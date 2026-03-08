@@ -125,7 +125,7 @@ void buf_putreg(buf *buffer, reg_t reg) {
     }
 }
 
-bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *index, size_t *size) {
+bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_agg_args *args, int *index, size_t *size) {
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
@@ -147,11 +147,15 @@ bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *inde
         size_acc += memb_size;
         if (size_acc > 8) {
             size_acc -= memb_size;
+            if (size_acc == 0) {
+                ++i;
+                compile_err(NULL, "size was too big\n");
+            }
             *index = (int)i;
             break;
         }
 
-        regable *r = &args->begin[i];
+        agg_args *r = &args->begin[i];
         if (r->tag == VALUE) {
             i64 value = r->value;
             if (offset_bits % 16 == 0) {
@@ -159,7 +163,7 @@ bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *inde
                 while (size < 2) {
                     if (++i >= member_count)
                         break;
-                    regable *r = args->begin + i;
+                    agg_args *r = args->begin + i;
                     if (r->tag != VALUE) {
                         --i;
                         break;
@@ -232,7 +236,7 @@ bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_regable *args, int *inde
     return cleared;
 }
 
-void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {
+void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_agg_args *args) {
     ptrdiff_t member_count = len;
     bool cleared = false;
 
@@ -243,7 +247,7 @@ void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {
     int base_regoff = dst.offset;
     size_t size_acc = 0;
     for (ptrdiff_t i = 0; i < member_count; ++i) {
-        regable *r = &args->begin[i];
+        agg_args *r = &args->begin[i];
         type_t *memb_type = type;
         size_t memb_size = memb_type->size;
         size_acc += memb_size;
@@ -265,7 +269,7 @@ void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {
                 while (size < 2) {
                     if (++i >= member_count)
                         break;
-                    regable *r = args->begin + i;
+                    agg_args *r = args->begin + i;
                     if (r->tag != VALUE) {
                         --i;
                         break;
@@ -336,7 +340,7 @@ void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {
     }
 }
 
-void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
+void emit_make_struct(reg_t dst, type_t *type, dyn_agg_args *args) {
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
     bool cleared = false;
@@ -348,7 +352,7 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
     int base_regoff = dst.offset;
     size_t size_acc = 0;
     for (ptrdiff_t i = 0; i < member_count; ++i) {
-        regable *r = &args->begin[i];
+        agg_args *r = &args->begin[i];
         member_t *memb = &members->begin[i];
         type_t *memb_type = memb->type;
         size_t memb_size = memb_type->size;
@@ -371,7 +375,7 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
                 while (size < 2) {
                     if (++i >= member_count)
                         break;
-                    regable *r = args->begin + i;
+                    agg_args *r = args->begin + i;
                     if (r->tag != VALUE) {
                         --i;
                         break;
@@ -433,6 +437,8 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args) {
                     emit_rrii(STR("ubfiz"), dst, reg, (i64)offset, width);
             }
             cleared = true;
+        } else if (r->tag == AGGREGATE) {
+            emit_make_struct(dst, r->a.type, r->a.aggs);
         } else {
             unreachable;
         }
@@ -450,7 +456,7 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
     buf_snprintf(fn_buf, ", #%"PRId64"]\n", offset);
 }
 
-void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
+void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_args *args) {
     reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
     reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = rsize};
 
@@ -463,6 +469,11 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
 
     while (index < member_count) {
         size_t member_off = size;
+        agg_args *target = args->begin + index;
+        if (target->tag == AGGREGATE) {
+            emit_store_struct(dst, offset + (i64)member_off, target->a.type, target->a.aggs);
+            continue;
+        }
         bool cleared = eightbyte_make_struct(tmp, type, args, &index, &size);
         if (!cleared) {
             tmp = xzr;
@@ -482,7 +493,7 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
 }
 
 
-void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args) {
+void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_agg_args *args) {
     ptrdiff_t member_count = len;
     int index = 0;
     size_t size = type->size;

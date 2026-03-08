@@ -77,6 +77,7 @@ typedef struct {
 ARR_GENERIC(str, PARAMS_MAX)
 
 typedef struct dyn_regable dyn_regable;
+typedef struct dyn_agg_args dyn_agg_args;
 
 // typedef struct {
 //     str fn_name;
@@ -94,10 +95,10 @@ void emit_text(FILE *out);
 void emit_cstr(FILE *out);
 
 bool emit_need_escaping(void);
-void emit_make_struct(reg_t dst, type_t *type, dyn_regable *args);
-void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args);
-void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args);
-void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args);
+void emit_make_struct(reg_t dst, type_t *type, dyn_agg_args *args);
+void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_args *args);
+void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_agg_args *args);
+void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_agg_args *args);
 void emit_array_access(reg_t dst, reg_t src, reg_t offset);
 
 void emit_mov(reg_t dst, i64 value);

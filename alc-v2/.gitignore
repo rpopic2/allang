@@ -1,4 +1,5 @@
 alc
 *.s
 test
+array
 compile_commands.json

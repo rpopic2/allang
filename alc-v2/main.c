@@ -24,7 +24,7 @@ symbol_t *fn_call(parser_context *context);
 bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
-bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *args);
+bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_agg_args *args);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -336,7 +336,6 @@ regable read_regable(str s, const token_t *token) {
             compile_err(token, "unknown id "), str_printerr(s);
             return result;
         }
-        pi(e->array)
         result.reg = *e;
         result.tag = REG;
         member_t *mem = NULL;
@@ -650,16 +649,16 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     printd("binary_op\n");
 }
 
-void expr_struct(parser_context *context, reg_t target, type_t *type) {
+dyn_agg_args *read_brackets(parser_context *context, type_t *type) {
     const token_t *token = &context->cur_token;
+    const str *s = &context->cur_token.id;
     printd(CSI_GREEN"struct expr: "CSI_RESET);
     str_printd(&type->name);
-    const str *s = &context->cur_token.id;
 
     dyn_member_t members = type->struct_t.members;
-    dyn_regable args = {0};
+    dyn_agg_args *args = calloc(1, sizeof (dyn_agg_args));
     ptrdiff_t member_count = members.cur - members.begin;
-    dyn_regable_reserve(&args, member_count + 1);
+    dyn_agg_args_reserve(args, member_count + 1);
     bool init_zero = false;
     while (true) {
         if (!lex(context))
@@ -695,21 +694,19 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
             break;
 
         if (islower(s->data[0])) {
-            reg_t tmp_reg = {
-                .reg_type = SCRATCH, 
-                .type = it->type,
-                .rsize = (reg_size)it->type->size,
-                .offset = 2,
-            };
-            regable r = (regable){.tag = REG, .reg = tmp_reg};
-            expr_struct(context, tmp_reg, it->type);
-            args.begin[index] = r;
+            dyn_agg_args *dyns = read_brackets(context, it->type);
+            args->begin[index].tag = AGGREGATE;
+            args->begin[index].a.aggs = dyns;
+            args->begin[index].a.type = it->type;
             continue;
         }
 
         regable r = read_regable(*s, token);
-        args.begin[index] = r;
+        agg_args *target = args->begin + index;
+        target->tag = r.tag;
         if (r.tag == REG) {
+            target->reg = r.reg;
+            printf("read value: %d\n", target->reg.offset);
             if (r.reg.type != type_comptime_int && it->type != r.reg.type) {
                 compile_err(token, "expected type "),
                     str_printerr(it->type->name);
@@ -717,53 +714,73 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
                     str_printerr(r.reg.type->name);
             }
         } else if (r.tag == VALUE) {
+            target->value = r.value;
+            printf("read value: %lld\n", target->value);
             if (it->type->tag != TK_FUND) {
                 compile_err(token, "expected type "),
                     str_printerr(it->type->name);
                 compile_err(token, "but found numeric literal\n");
             }
+        } else {
+            unreachable;
         }
 
         if (s->end[-1] == '}')
             break;
     }
-
-    for (ptrdiff_t i = 0; i < member_count; ++i) {
-        regable *r = &args.begin[i];
-        if (r->tag != VALUE && r->tag != REG) {
-            if (!init_zero) {
+    if (!init_zero) {
+        for (ptrdiff_t i = 0; i < member_count; ++i) {
+            agg_args *r = &args->begin[i];
+            if (r->tag == NONE) {
                 compile_err(token, "a field is not initialized: ");
                 str_printerr(members.begin[i].name);
-            } else {
                 r->tag = VALUE;
                 r->value = 0;
             }
         }
+    }
+
+    return args;
+}
+
+void expr_struct(parser_context *context, reg_t target, type_t *type) {
+    const token_t *token = &context->cur_token;
+    dyn_member_t members = type->struct_t.members;
+    ptrdiff_t member_count = members.cur - members.begin;
+
+    dyn_agg_args *args = read_brackets(context, type);
+
+    for (ptrdiff_t i = 0; i < member_count; ++i) {
+        agg_args *r = &args->begin[i];
         printd("\targ %zd: ", i), str_printdnl(&members.begin[i].name);
         printd("\t");
         if (r->tag == VALUE) {
             printd("value: %"PRId64, r->value);
         } else if (r->tag == REG) {
             printd("reg off: %d", r->reg.offset);
+        } else if (r->tag == AGGREGATE) {
+            printd("some_agg: %d", r->reg.offset);
+        } else {
+            printd("invalid tag %d", r->tag);
         }
         printd("\n");
     }
     if (streq(token->end + 1, "=[")) {
         lex(context);
-        bool ok = stmt_stack_store_struct(context, (reg_t){.type = type, .rsize=(reg_size)type->size}, &args);
+        bool ok = stmt_stack_store_struct(context, (reg_t){.type = type, .rsize=(reg_size)type->size}, args);
         if (!ok) {
             compile_err(token, "was not store struct\n");
         }
     } else {
-        emit_make_struct(target, type, &args);
+        emit_make_struct(target, type, args);
     }
 
-    dyn_regable_free(&args);
+    dyn_agg_args_free(args);
     printd(CSI_GREEN"\nend struct expr "CSI_RESET);
     str_printd(&type->name);
 }
 
-bool stmt_stack_store_array(parser_context *context, reg_t src, dyn_regable *args, u32 len) {
+bool stmt_stack_store_array(parser_context *context, reg_t src, dyn_agg_args *args, u32 len) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
 
@@ -834,8 +851,8 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
     str_printd(&type->name);
     const str *s = &context->cur_token.id;
 
-    dyn_regable args = {0};
-    dyn_regable_reserve(&args, len + 1);
+    dyn_agg_args *args = calloc(1, sizeof (dyn_agg_args));
+    dyn_agg_args_reserve(args, len + 1);
     bool init_zero = false;
     while (true) {
         if (!lex(context))
@@ -864,20 +881,16 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
         if (!lex(context))
             break;
         if (islower(s->data[0])) {
-            reg_t tmp_reg = {
-                .reg_type = SCRATCH,
-                .type = type,
-                .rsize = (reg_size)type->size,
-                .offset = 2,
-            };
-            regable r = (regable){.tag = REG, .reg = tmp_reg};
-            expr_struct(context, tmp_reg, type);
-            args.begin[subscript] = r;
+            args->begin[subscript].a.aggs = read_brackets(context, type);
+            args->begin[subscript].a.type = type;
+            args->begin[subscript].tag = AGGREGATE;
             continue;
         } else {
             regable r = read_regable(*s, token);
-            args.begin[subscript] = r;
+            agg_args *target = args->begin + subscript;
+            target->tag = r.tag;
             if (r.tag == REG) {
+                target->reg = r.reg;
                 if (r.reg.type != type_comptime_int && type != r.reg.type) {
                     compile_err(token, "expected type "),
                         str_printerr(type->name);
@@ -885,6 +898,7 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
                         str_printerr(r.reg.type->name);
                 }
             } else if (r.tag == VALUE) {
+                target->value = r.value;
                 if (type->tag != TK_FUND) {
                     compile_err(token, "expected type "),
                         str_printerr(type->name);
@@ -918,7 +932,7 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
             .type = type,
         };
         dyn_member_t_push(arr_members, &memb);
-        regable *r = &args.begin[i];
+        agg_args *r = &args->begin[i];
         if (r->tag != VALUE && r->tag != REG) {
             if (!init_zero) {
                 compile_err(token, "a field is not initialized: ");
@@ -939,17 +953,17 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
 
     if (streq(token->end + 1, "=[")) {
         lex(context);
-        bool ok = stmt_stack_store_struct(context, (reg_t){.type = arr_type, .rsize=(reg_size)type->size, .array = len}, &args);
+        bool ok = stmt_stack_store_struct(context, (reg_t){.type = arr_type, .rsize=(reg_size)type->size, .array = len}, args);
         if (!ok) {
             compile_err(token, "was not store struct\n");
         }
         context->reg.array = len;
         pi(len)
     } else {
-        emit_make_array(target, type, len, &args);
+        emit_make_array(target, type, len, args);
     }
 
-    dyn_regable_free(&args);
+    dyn_agg_args_free(args);
     printd(CSI_GREEN"\nend array expr "CSI_RESET);
     str_printd(&type->name);
 }
@@ -1249,7 +1263,7 @@ target *get_current_target_stack(parser_context *context) {
     return cur_target;
 }
 
-bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *args) {
+bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_agg_args *args) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
 
