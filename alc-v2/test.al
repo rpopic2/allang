@@ -398,12 +398,6 @@ recycle: (=>)
     O :: 2
     ret
 
-struct_store: (=>)
-    [S] :: point32{.X 1, .Y 2} =[]
-    point32{.. 0} =[S]
-
-    K :: point32{.. 0}
-    [S] =K
 
 nested_struct: (=>)
     struct {
@@ -423,3 +417,14 @@ nested_struct: (=>)
     [Nested2] :: nested_struct{.X 5 .Point short_struct{.A 3 .. 0} .. 0} =[]
     ret
 
+struct_store: (=>)
+    struct {
+        A i64 B i64
+    }
+    [S] :: point32{.X 1, .Y 2} =[]
+    point32{.. 0} =[S]
+
+    K :: point32{.X 3 .Y 4}
+    [S] =K
+    K2 :: point32{.. 0}
+    SS :: struct_store{.A 3 .B 5}

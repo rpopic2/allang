@@ -913,6 +913,12 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
         get_store_offset(context, &src, &out_offset);
         emit_store_struct(FP, -out_offset, type, &args);
     } else {
+        if (type->size > MAX_REG_SIZE) {
+            compile_err(token, "type exceeds max reg size\n");
+        }
+        if (type->size > default_register_size) {
+            context->nreg_count += 1;
+        }
         emit_make_struct(target, type, &args);
     }
 
