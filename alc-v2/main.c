@@ -131,7 +131,7 @@ retry:;
         goto retry;
 
     printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
-    str_printdnl((str *)cur_token);
+    str_printdnl(cur_token->id);
     printd("|\n");
 
     if (src->cur[-1] == '\n') {
@@ -182,13 +182,13 @@ void compile_err(const token_t *token, const char *format, ...) {
 
 void str_printerr(str s) {
     fputs(CSI_RED, stderr);
-    str_fprint(&s, stderr);
+    str_fprint(s, stderr);
     fputs(CSI_RESET, stderr);
 }
 
 void str_printerrnl(str s) {
     fputs(CSI_RED, stderr);
-    str_fprintnl(&s, stderr);
+    str_fprintnl(s, stderr);
     fputs(CSI_RESET, stderr);
 }
 
@@ -639,7 +639,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 void expr_struct(parser_context *context, reg_t target, type_t *type) {
     const token_t *token = &context->cur_token;
     printd(CSI_GREEN"struct expr: "CSI_RESET);
-    str_printd(&type->name);
+    str_printd(type->name);
     const str *s = &context->cur_token.id;
 
     dyn_member_t members = type->struct_t.members;
@@ -725,7 +725,7 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
                 r->value = 0;
             }
         }
-        printd("\targ %zd: ", i), str_printdnl(&members.begin[i].name);
+        printd("\targ %zd: ", i), str_printdnl(members.begin[i].name);
         printd("\t");
         if (r->tag == VALUE) {
             printd("value: %"PRId64, r->value);
@@ -746,7 +746,7 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
 
     dyn_regable_free(&args);
     printd(CSI_GREEN"\nend struct expr "CSI_RESET);
-    str_printd(&type->name);
+    str_printd(type->name);
 }
 
 bool stmt_stack_store_array(parser_context *context, reg_t src, dyn_regable *args, u32 len) {
@@ -817,7 +817,7 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
     u32 len = target.array;
     const token_t *token = &context->cur_token;
     printd(CSI_GREEN"array expr: "CSI_RESET"len %u of ", len);
-    str_printd(&type->name);
+    str_printd(type->name);
     const str *s = &context->cur_token.id;
 
     dyn_regable args = {0};
@@ -937,7 +937,7 @@ void expr_array(parser_context *context, reg_t target, type_t *type) {
 
     dyn_regable_free(&args);
     printd(CSI_GREEN"\nend array expr "CSI_RESET);
-    str_printd(&type->name);
+    str_printd(type->name);
 }
 
 reg_size get_rsize(reg_t reg) {
@@ -1001,7 +1001,7 @@ bool expr_load(parser_context *context) {
         dyn_member_t *members = &rhs.type->struct_t.members;
         (void)members;
         printd("memb_cnt: %zd\n", members->cur - members->begin);
-        str_printd(&rhs.type->name);
+        str_printd(rhs.type->name);
     }
     lhs->rsize = (reg_size)rhs.type->size;
     lhs->type = rhs.type;
@@ -1129,7 +1129,7 @@ int expr_line(parser_context *context) {
         printd(", ");
         lex(context);
         *token = context->cur_token;
-        str_printd(&token->id);
+        str_printd(token->id);
         ok = expr(context);
         if (!ok)
             break;
@@ -1153,7 +1153,7 @@ bool expect(parser_context *context, str expected) {
 
 void struct_report(type_t *type) {
 #if !NDEBUG
-    printd(CSI_GREEN"struct report for "), str_printd(&type->name);
+    printd(CSI_GREEN"struct report for "), str_printd(type->name);
     printd("=================\n"CSI_RESET);
     printd("\tsize: %zd, align %d\n", type->size, type->align);
 
@@ -1162,9 +1162,9 @@ void struct_report(type_t *type) {
     for (const member_t *it = members->begin; it != members->cur; ++it) {
         const member_t *mem = it;
         printd("\tmember %d: ", ko++);
-        str_printdnl(&mem->name);
+        str_printdnl(mem->name);
         printd(" ");
-        str_printdnl(&mem->type->name);
+        str_printdnl(mem->type->name);
         printd("\toffset: %zd, size: %zd\n",
                 mem->offset, mem->type->size);
     }
@@ -1175,7 +1175,7 @@ void struct_report(type_t *type) {
 }
 
 void stmt_struct(parser_context *context) {
-    printd("struct "),str_printd(&context->symbol->name);
+    printd("struct "),str_printd(context->symbol->name);
     str *type_name = &context->symbol->name;
     type_t _s = {.name = *type_name, .tag = TK_STRUCT };
     type_t *s = hashmap_type_t_tryadd(types, *type_name, &_s);
@@ -1645,7 +1645,7 @@ next:
     }
 
     if (arr_reg_t_len(&symbol.params) != symbol.airity) {
-        str_fprintnl(&symbol.name, stdout);
+        str_fprintnl(symbol.name, stdout);
         printf(": expected %zd, but %d\n", arr_reg_t_len(&symbol.params), symbol.airity);
         unreachable;
     }
@@ -1950,9 +1950,9 @@ void function(iter *src, FILE *object_file) {
     }
     context->indent = context->cur_token.indent;
     printd(CSI_GREEN"\n--- start of label: ");
-    str_printd(&context->name);
+    str_printd(context->name);
     printd(CSI_RESET);
-    TIMER_LABEL_STR(&context->name);
+    TIMER_LABEL_STR(context->name);
 
     TIMER_START(parse_while);
     while (src->cur < src->end) {

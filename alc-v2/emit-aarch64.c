@@ -773,7 +773,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
         ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16)
         + ALIGN_TO(context->stack_size, 16);
     printd("\nstack report for: ");
-    str_printd(&context->name);
+    str_printd(context->name);
     printd("\t- regs to save: %d, stack size: %d\n", regs_to_save, context->stack_size);
     printd("\t- aligned regs: %d, aligned stack: %d\n",
             ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16),

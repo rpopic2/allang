@@ -51,25 +51,25 @@ inline static bool str_ends_with(const str *restrict token, const char *restrict
 
 #define streq(s, t) (memcmp((s), (t), strlen(t)) == 0)
 
-static inline void str_fprintnl(const str *s, FILE *file) {
-    if (s->data == s->end) {
+static inline void str_fprintnl(const str s, FILE *file) {
+    if (s.data == s.end) {
         fputs("(empty)", file);
     } else {
-        if (str_len(*s) > 0)
-            fwrite(s->data, sizeof (char), (size_t)str_len(*s), file);
+        if (str_len(s) > 0)
+            fwrite(s.data, sizeof (char), (size_t)str_len(s), file);
     }
 }
 
-inline static void str_fprint(const str *s, FILE *file) {
+inline static void str_fprint(const str s, FILE *file) {
     str_fprintnl(s, file);
     fputc('\n', file);
 }
 
-inline static void str_printnl(const str *s) {
+inline static void str_printnl(const str s) {
     str_fprintnl(s, stdout);
 }
 
-inline static void str_print(const str *s) {
+inline static void str_print(const str s) {
     str_fprintnl(s, stdout);
     fputc('\n', stdout);
 }
