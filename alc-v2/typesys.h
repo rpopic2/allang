@@ -49,3 +49,27 @@ typedef struct {
 } regable;
 DYN_GENERIC(regable)
 
+typedef struct {
+    union {
+        i64 value;
+        reg_t reg;
+    };
+    u8 tag;
+} agg_member;
+DYN_GENERIC(agg_member)
+
+static inline agg_member agg_member_from(const regable *r) {
+    agg_member a = {0};
+    a.tag = r->tag;
+    if (r->tag == VALUE) {
+        a.value = r->value;
+    } else if (r->tag == REG) {
+        a.reg = r->reg;
+    } else if (r->tag == NONE) {
+
+    } else {
+        unreachable;
+    }
+    return a;
+}
+

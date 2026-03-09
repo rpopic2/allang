@@ -664,7 +664,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 }
 
 
-bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *args) {
+bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_agg_member *args) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
 
@@ -732,15 +732,15 @@ bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *ar
 }
 
 
-dyn_regable read_braces(parser_context *context, type_t *type) {
+dyn_agg_member read_braces(parser_context *context, type_t *type) {
     const token_t *token = &context->cur_token;
     const str *s = &context->cur_token.id;
 
     dyn_member_t members = type->struct_t.members;
     ptrdiff_t member_count = members.cur - members.begin;
 
-    dyn_regable args = {0};
-    dyn_regable_reserve(&args, member_count + 1);
+    dyn_agg_member args = {0};
+    dyn_agg_member_reserve(&args, member_count + 1);
     bool init_zero = false;
 
     while (true) {
@@ -781,12 +781,12 @@ dyn_regable read_braces(parser_context *context, type_t *type) {
             };
             regable r = (regable){.tag = REG, .reg = tmp_reg};
             read_braces(context, it->type);
-            args.begin[index] = r;
+            args.begin[index] = agg_member_from(&r);
             continue;
         }
 
         regable r = read_regable(*s, token);
-        args.begin[index] = r;
+        args.begin[index] = agg_member_from(&r);
         typecheck_regable(token, it->type, &r);
 
         if (s->end[-1] == '}')
@@ -794,7 +794,7 @@ dyn_regable read_braces(parser_context *context, type_t *type) {
     }
 
     for (ptrdiff_t i = 0; i < member_count; ++i) {
-        regable *r = &args.begin[i];
+        agg_member *r = &args.begin[i];
         if (r->tag != VALUE && r->tag != REG) {
             if (!init_zero) {
                 compile_err(token, "a field is not initialized: ");
@@ -809,13 +809,13 @@ dyn_regable read_braces(parser_context *context, type_t *type) {
     return args;
 }
 
-void struct_expr_report(dyn_regable args, type_t *type) {
+void struct_expr_report(dyn_agg_member args, type_t *type) {
     dyn_member_t members = type->struct_t.members;
     ptrdiff_t member_count = members.cur - members.begin;
 
     printd("\nstruct expr: "), str_printd(type->name);
     for (ptrdiff_t i = 0; i < member_count; ++i) {
-        regable *r = &args.begin[i];
+        agg_member *r = &args.begin[i];
         printd("\targ %zd: ", i), str_printdnl(members.begin[i].name);
         printd("\t");
         if (r->tag == VALUE) {
@@ -900,7 +900,7 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
 void expr_struct(parser_context *context, reg_t target, type_t *type) {
     const token_t *token = &context->cur_token;
 
-    dyn_regable args = read_braces(context, type);
+    dyn_agg_member args = read_braces(context, type);
 
     struct_expr_report(args, type);
 
@@ -916,7 +916,7 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
         emit_make_struct(target, type, &args);
     }
 
-    dyn_regable_free(&args);
+    dyn_agg_member_free(&args);
 }
 
 reg_size get_rsize(reg_t reg) {

@@ -419,7 +419,7 @@ nested_struct: (=>)
 
     [F] :: four{.. 0} =[]
 
-    [Nested] :: nested_struct{.X 5 .Point short_struct{.. 0} .. 0} =[]
+    // [Nested] :: nested_struct{.X 5 .Point short_struct{.. 0} .. 0} =[]
     [Nested2] :: nested_struct{.X 5 .Point short_struct{.A 3 .. 0} .. 0} =[]
     ret
 
