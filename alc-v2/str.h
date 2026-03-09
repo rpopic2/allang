@@ -34,8 +34,8 @@ inline static bool str_eq(const str lhs, const str rhs) {
         && memcmp(lhs.data, rhs.data, str_len(lhs)) == 0;
 }
 
-inline static bool str_eq_lit(const str *restrict s, const char *restrict cstr) {
-    return str_len(*s) == strlen(cstr) && memcmp(s->data, cstr, strlen(cstr)) == 0;
+inline static bool str_eq_lit(const str s, const char *restrict cstr) {
+    return str_len(s) == strlen(cstr) && memcmp(s.data, cstr, strlen(cstr)) == 0;
 }
 
 inline static str str_move(str *s) {

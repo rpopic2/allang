@@ -264,9 +264,9 @@ opt_i64 lit_numeric(const token_t *token) {
             compile_err(token, "expected closing \'\n");
         }
         value = c;
-    } else if (str_eq_lit(&token->id, "true")) {
+    } else if (str_eq_lit(token->id, "true")) {
         value = 1;
-    } else if (str_eq_lit(&token->id, "false")) {
+    } else if (str_eq_lit(token->id, "false")) {
         value = 0;
     } else {
         return opt_long_none;
@@ -395,7 +395,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     }
 
     regable regable_target;
-    if (str_eq_lit(&s, "This")) {
+    if (str_eq_lit(s, "This")) {
         target *t = arr_target_top(&context->targets);
         if (!t) {
             compile_err(cur_token, "nothing to assign\n");
@@ -1172,14 +1172,25 @@ void struct_report(type_t *type) {
 #endif
 }
 
-void stmt_struct(parser_context *context) {
+bool stmt_struct(parser_context *context) {
+    const token_t *cur_token = &context->cur_token;
+    if (!str_eq_lit(cur_token->id, "struct")) {
+        return false;
+    }
+    str struct_name;
+    if (cur_token->end[1] != '{') {
+        lex(context);
+        struct_name = cur_token->id;
+    } else {
+        struct_name = context->symbol->name;
+    }
+
     printd("struct "),str_printd(context->symbol->name);
-    str *type_name = &context->symbol->name;
-    type_t _s = {.name = *type_name, .tag = TK_STRUCT };
-    type_t *s = hashmap_type_t_tryadd(types, *type_name, &_s);
+    type_t _s = {.name = struct_name, .tag = TK_STRUCT };
+    type_t *s = hashmap_type_t_tryadd(types, struct_name, &_s);
     if (!s) {
         s = &_s;
-        compile_err(&context->cur_token, "struct with same name already exist: "), str_printerr(*type_name);
+        compile_err(&context->cur_token, "struct with same name already exist: "), str_printerr(struct_name);
     }
     str *current = &context->cur_token.id;
     while (true) {
@@ -1205,6 +1216,7 @@ void stmt_struct(parser_context *context) {
     }
     s->size = ALIGN_TO(s->size, (size_t)s->align);
     struct_report(s);
+    return true;
 }
 
 target *get_current_target(parser_context *context) {
@@ -1494,7 +1506,7 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
 bool stmt_ret(parser_context *context) {
     const token_t *token = &context->cur_token;
 
-    if (!str_eq_lit(&token->id, "ret"))
+    if (!str_eq_lit(token->id, "ret"))
         return false;
 
     context->reg.reg_type = RET;
@@ -1531,8 +1543,7 @@ bool stmt_ret(parser_context *context) {
 bool stmt(parser_context *context) {
     const token_t *token = &context->cur_token;
 
-    if (str_eq_lit(&token->id, "struct")) {
-        stmt_struct(context);
+    if (stmt_struct(context)) {
         return true;
     }
     if (stmt_ret(context)) {
@@ -1600,7 +1611,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 }
             } else if (islower(cur_token->data[0])) {
                 u8 addr = 0;
-                while (str_eq_lit(&cur_token->id, "addr")) {
+                while (str_eq_lit(cur_token->id, "addr")) {
                     addr += 1;
                     lex(context);
                     if (token->end[0] == ')') {
@@ -1718,7 +1729,7 @@ bool directives(parser_context *context) {
         return false;
 
     str token_str = { .data = token->id.data + 1, .end = token->id.end };
-    if (str_eq_lit(&token_str, "declare")) {
+    if (str_eq_lit(token_str, "declare")) {
         lex(context);
         symbol_t *symbol = label_meta(context, NULL);
         arr_mini_hashset_pop(&local_ids);
@@ -1808,7 +1819,7 @@ symbol_t *fn_call(parser_context *context) {
 
     const str *cur_token_str = &token->id;
 
-    if (!str_eq_lit(cur_token_str, "=>")) {
+    if (!str_eq_lit(*cur_token_str, "=>")) {
         compile_err(token, "function call '=>' is expected\n");
     }
 
@@ -2015,7 +2026,7 @@ void register_fund_types(void) {
             .name = name,
         };
         type_t *t = hashmap_type_t_overwrite(types, name, &s);
-        if (str_eq_lit(&name, "i32")) {
+        if (str_eq_lit(name, "i32")) {
             type_i32 = t;
         }
     }

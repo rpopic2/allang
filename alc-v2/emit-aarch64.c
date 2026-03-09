@@ -867,7 +867,7 @@ void emit_fn(str fn_name) {
     buf_puts(fn_header_buf, STR_FROM(fn_prefix));
 	buf_puts(fn_header_buf, fn_name);
     buf_puts(fn_header_buf, STR_FROM("\n\t.p2align 2\n"));
-    if (str_eq_lit(&fn_name, "main")) {
+    if (str_eq_lit(fn_name, "main")) {
         buf_puts(fn_header_buf, STR_FROM(mainfn_annotation));
     }
     buf_puts(fn_header_buf, STR_FROM(fn_prefix));
