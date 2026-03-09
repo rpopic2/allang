@@ -116,8 +116,6 @@ retry:;
         if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';'
                 || c == ')' || c == '(' || c == '{') {
             cur_token->end = src->cur++;
-            if (c == ',' || c == ';')
-                src->cur++;
             break;
         }
         ++src->cur;

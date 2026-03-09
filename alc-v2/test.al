@@ -286,8 +286,8 @@ casting_i64: (=>)
 
 point: (=>)
     struct {
-        X i8, Y i8, Z i8, W i8,
-        A i8, B i8, C i8, D i8,
+        X i8, Y i8, Z i8, W i8
+        A i8, B i8, C i8, D i8
     }
 
 point_test: (=>)
