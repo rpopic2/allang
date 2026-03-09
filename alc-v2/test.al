@@ -414,17 +414,28 @@ struct_store: (=>)
 nested_struct: (=>)
     struct {
         P2 point
-        X u32
-        Point short_struct
         P3 point32
+        Point short_struct
+        X u32
     }
 
-    struct four {
-        X i32
-    }
-
-    [F] :: four{.. 0} =[]
-
-    // [Nested] :: nested_struct{.X 5 .Point short_struct{.. 0} .. 0} =[]
-    [Nested2] :: nested_struct{.X 5 .Point short_struct{.A 3 .. 0} .. 0} =[]
+    [Nested] :: nested_struct{.P3 point32{.X 3 .Y 4} .Point short_struct{.A 6 .B 7} .X 5 .. 0} =[]
     ret
+
+nested_2: (=>)
+    struct {
+        A point32 B point32 C point32
+    }
+    [N] :: nested_2{.A point32{.X 1 .Y 2} .B point32{.X 3 .Y 4} .. 0} =[]
+
+nested_3: (=>)
+    struct point64 {
+        X i64 Y i64
+    }
+    struct {
+        A point64 B point64 C point64
+    }
+    [N] :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6} .. 0} =[]
+    [N] :: nested_3{.A {.X 1 .Y 2} .B {.X 3 .Y 4} .C {.X 5 .Y 6} .. 0} =[]
+    // bug 1: doesn't compile without ..0 due to wrong end detection
+    // bug 2: doesn't compile if initialize all with .. 0 because it is treated as value

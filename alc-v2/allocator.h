@@ -32,3 +32,33 @@ void *allocator_alloc(allocator *self, size_t size) {
     return ret;
 }
 
+// fixed dynamic arrays
+#pragma once
+
+#define list_GENERIC(T) \
+typedef struct list_##T { \
+    T *begin; \
+    T *cur; \
+    T *end; \
+    allocator *alloc; \
+} list_##T; \
+ \
+inline static void list_##T##_init(list_##T *self, allocator *alloc, size_t len) { \
+    self->allocator = alloc; \
+    size_t size = sizeof (T) * len; \
+    self->begin = allocator_alloc_undefined(alloc, size); \
+    self->cur = self->begin; \
+    self->end = self->begin + len; \
+} \
+ \
+inline static void list_##T##_push(list_##T *self, const T *elem) { \
+    if (self->begin == self->cur) { \
+        fprintf(stderr, "array was full\n"); \
+        abort() \
+    } \
+    *(self->cur++) = *elem; \
+} \
+ \
+inline static ptrdiff_t list_##T##_len(list_##T *self) { \
+    return self->cur - self->begin; \
+} \

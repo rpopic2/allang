@@ -269,7 +269,6 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
 }
 
 void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_member *args) {
-
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
     int index = 0;
@@ -281,6 +280,13 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_member *args
         size_t member_off = size;
         int tmp_index = index;
 
+        if (args->begin[index].tag == AGGREGATE) {
+            type_t *type = members->begin[index].type;
+            emit_store_struct(dst, offset + (i64)size, type, args->begin[index].agg);
+            size += type->size;
+            index += 1;
+            continue;
+        }
         bool cleared = eightbyte_make_struct(tmp, type, args, &index, &size);
         if (tmp_index == index) {
             compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", members->begin[index].type->size);
@@ -289,7 +295,8 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_member *args
         }
 
         size_t remaining_size = type->size - size;
-        if (remaining_size >= 8) {
+        if (remaining_size >= 8
+                && args->begin[index].tag != AGGREGATE) {
             reg_t tmp2 = tmp;
             tmp2.offset++;
             bool cleared2 = eightbyte_make_struct(tmp2, type, args, &index, &size);
@@ -304,6 +311,7 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_member *args
             emit_stp(tmp, tmp2, dst, offset + (i64)member_off);
             continue;
         }
+
         if (!cleared) {
             tmp.reg_type = RD_NONE;
         }

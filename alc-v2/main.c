@@ -25,6 +25,7 @@ symbol_t *fn_call(parser_context *context);
 bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
+void struct_report(type_t *type);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -774,15 +775,10 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
             continue;
         }
         if (islower(s->data[0])) {
-            reg_t tmp_reg = {
-                .reg_type = SCRATCH,
-                .type = it->type,
-                .rsize = (reg_size)it->type->size,
-                .offset = 2,
-            };
-            regable r = (regable){.tag = REG, .reg = tmp_reg};
-            read_braces(alloc, context, it->type);
-            args->begin[index] = agg_member_from(&r);
+            printd("aggs\n");
+            dyn_agg_member *aggs = read_braces(alloc, context, it->type);
+            args->begin[index].tag = AGGREGATE;
+            args->begin[index].agg = aggs;
             continue;
         }
 
@@ -796,7 +792,7 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
 
     for (ptrdiff_t i = 0; i < member_count; ++i) {
         agg_member *r = &args->begin[i];
-        if (r->tag != VALUE && r->tag != REG) {
+        if (r->tag != VALUE && r->tag != REG && r->tag != AGGREGATE) {
             if (!init_zero) {
                 compile_err(token, "a field is not initialized: ");
                 str_printerr(members.begin[i].name);
@@ -810,24 +806,32 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
     return args;
 }
 
-void struct_expr_report(dyn_agg_member *args, type_t *type) {
+void struct_expr_report(dyn_agg_member *args, type_t *type, int depth) {
     dyn_member_t members = type->struct_t.members;
     ptrdiff_t member_count = members.cur - members.begin;
 
-    printd("\nstruct expr: "), str_printd(type->name);
+    if (depth == 0)
+        printd("\n");
+    printd("struct expr: "), str_printd(type->name);
     for (ptrdiff_t i = 0; i < member_count; ++i) {
         agg_member *r = &args->begin[i];
+        for (int i = 0; i < depth; ++i) {
+            printd("\t");
+        }
         printd("\targ %zd: ", i), str_printdnl(members.begin[i].name);
         printd("\t");
         if (r->tag == VALUE) {
-            printd("value: %"PRId64, r->value);
+            printd("value: %"PRId64"\n", r->value);
         } else if (r->tag == REG) {
-            printd("reg off: %d", r->reg.offset);
+            printd("reg off: %d\n", r->reg.offset);
+        } else if (r->tag == AGGREGATE) {
+            struct_expr_report(r->agg, members.begin[i].type, depth + 1);
+        } else {
+            printd("error tag %d\n", r->tag);
         }
-        printd("\n");
     }
-
-    printd("\nend struct expr "), str_printd(type->name), printd("\n");
+    if (depth == 0)
+        printd("\n");
 }
 
 bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
@@ -907,7 +911,8 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
 
     dyn_agg_member *args = read_braces(&alloc, context, type);
 
-    struct_expr_report(args, type);
+    struct_report(type);
+    struct_expr_report(args, type, 0);
 
     if (streq(token->end + 1, "=[")) {
         lex(context);
@@ -919,7 +924,7 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
         emit_store_struct(FP, -out_offset, type, args);
     } else {
         if (type->size > MAX_REG_SIZE) {
-            compile_err(token, "type exceeds max reg size\n");
+            compile_err(token, "type exceeds max reg size (maybe you might want to store it)\n");
         }
         if (type->size > default_register_size) {
             context->nreg_count += 1;

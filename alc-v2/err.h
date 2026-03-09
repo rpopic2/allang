@@ -19,6 +19,7 @@ void compile_err(const token_t *token, const char *format, ...);
 #define ps(s) printf(#s), putc('\n', stdout);
 #define pi(i) printf(#i": %lld\n", (long long)i);
 #define pp(i) printf(#i": %p\n", (void *)i);
+#define pstr(s) str_print(s);
 #endif
 
 #if DEBUG_TIMER
