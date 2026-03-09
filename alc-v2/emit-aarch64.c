@@ -37,6 +37,7 @@ extern const char *mainfn_annotation;
 extern const char *local_string_prefix;
 extern type_t *type_comptime_int;
 
+void str_printerr(str s);
 
 const char *const cond_str[] = {
     "eq",
@@ -463,10 +464,16 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
 
     while (index < member_count) {
         size_t member_off = size;
+        int tmp_index = index;
         bool cleared = eightbyte_make_struct(tmp, type, args, &index, &size);
         if (!cleared) {
             tmp = xzr;
             tmp.type = type;
+        }
+        if (tmp_index == index) {
+            compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", members->begin[index].type->size);
+            str_printerr(members->begin[index].type->name);
+            break;
         }
 
         size_t remaining_size = type->size - size;

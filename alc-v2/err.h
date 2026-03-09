@@ -8,10 +8,7 @@ void compile_err(const token_t *token, const char *format, ...);
 #define print(...) ((void)0)
 #define str_printd(...) ((void)0)
 #define str_printdnl(S) ((void)0)
-#define p(...) ((void)0);
-#define ps(s) (void)0;
-#define pi(i) (void)0;
-#define pp(i) (void)0;
+// p* series are intended to be compiler error here, as they are only for inspection
 
 #else
 #define printd(...) printf(__VA_ARGS__)

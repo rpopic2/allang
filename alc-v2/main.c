@@ -636,7 +636,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 
 void expr_struct(parser_context *context, reg_t target, type_t *type) {
     const token_t *token = &context->cur_token;
-    printd(CSI_GREEN"struct expr: "CSI_RESET);
+    printd("\nstruct expr: ");
     str_printd(type->name);
     const str *s = &context->cur_token.id;
 
@@ -743,8 +743,9 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
     }
 
     dyn_regable_free(&args);
-    printd(CSI_GREEN"\nend struct expr "CSI_RESET);
+    printd("\nend struct expr ");
     str_printd(type->name);
+    printd("\n");
 }
 
 bool stmt_stack_store_array(parser_context *context, reg_t src, dyn_regable *args, u32 len) {
