@@ -880,7 +880,7 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
         assert(src->type);
         assert(src->type->size);
 
-        size_t size = next_pow2(src->rsize);
+        size_t size = next_pow2((u32)src->type->size);
         context->stack_size += size;
         *out_offset = context->stack_size;
     } else {

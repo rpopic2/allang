@@ -391,18 +391,6 @@ short_struct: (=>)
     [S] :: short_struct{.A 3 .B 7} =[]
     S.B
 
-nested_struct: (=>)
-    struct {
-        P2 point
-        X u32
-        Point short_struct
-        P3 point32
-    }
-
-    [Nested] :: nested_struct{.X 5 .Point short_struct{.. 0} .. 0} =[]
-    [Nested2] :: nested_struct{.X 5 .Point short_struct{.A 3 .. 0} .. 0} =[]
-    ret
-
 recycle: (=>)
     I ::
         J :: 3
@@ -416,4 +404,22 @@ struct_store: (=>)
 
     K :: point32{.. 0}
     [S] =K
+
+nested_struct: (=>)
+    struct {
+        P2 point
+        X u32
+        Point short_struct
+        P3 point32
+    }
+
+    struct four {
+        X i32
+    }
+
+    [F] :: four{.. 0} =[]
+
+    [Nested] :: nested_struct{.X 5 .Point short_struct{.. 0} .. 0} =[]
+    [Nested2] :: nested_struct{.X 5 .Point short_struct{.A 3 .. 0} .. 0} =[]
+    ret
 

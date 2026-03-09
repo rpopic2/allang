@@ -349,24 +349,18 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
 
 void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
     reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
-    reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = rsize};
 
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
     int index = 0;
     size_t size = 0;
-    const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8};
 
     while (index < member_count) {
+        reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = rsize};
         size_t member_off = size;
         int tmp_index = index;
+
         bool cleared = eightbyte_make_struct(tmp, type, args, &index, &size);
-        if (!cleared) {
-            tmp = xzr;
-            tmp.type = type;
-            ps(not_cleared);
-        } else
-            ps(cleared);
         if (tmp_index == index) {
             compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", members->begin[index].type->size);
             str_printerr(members->begin[index].type->name);
@@ -377,10 +371,20 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
         if (remaining_size >= 8) {
             reg_t tmp2 = tmp;
             tmp2.offset++;
-            eightbyte_make_struct(tmp2, type, args, &index, &size);
+            bool cleared2 = eightbyte_make_struct(tmp2, type, args, &index, &size);
             remaining_size = type->size - size;
+
+            if (!cleared) {
+                tmp.reg_type = RD_NONE;
+            }
+            if (!cleared2) {
+                tmp2.reg_type = RD_NONE;
+            }
             emit_stp(tmp, tmp2, dst, offset + (i64)member_off);
             continue;
+        }
+        if (!cleared) {
+            tmp.reg_type = RD_NONE;
         }
         emit_str(tmp, dst, (int)offset + (int)member_off);
     }
