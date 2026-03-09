@@ -34,7 +34,7 @@ typedef struct type_t {
 
 
 enum tag {
-    NONE, VALUE, REG
+    NONE, VALUE, REG, AGGREGATE
 };
 
 typedef struct {
@@ -49,10 +49,12 @@ typedef struct {
 } regable;
 DYN_GENERIC(regable)
 
+typedef struct dyn_agg_member dyn_agg_member;
 typedef struct {
     union {
         i64 value;
         reg_t reg;
+        dyn_agg_member *agg;
     };
     u8 tag;
 } agg_member;

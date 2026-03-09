@@ -8,6 +8,7 @@
 #include <string.h>
 #include <limits.h>
 
+#include "allocator.h"
 #include "emit.h"
 #include "err.h"
 #include "hashmap.h"
@@ -732,15 +733,15 @@ bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_agg_member 
 }
 
 
-dyn_agg_member read_braces(parser_context *context, type_t *type) {
+dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *type) {
     const token_t *token = &context->cur_token;
     const str *s = &context->cur_token.id;
 
     dyn_member_t members = type->struct_t.members;
     ptrdiff_t member_count = members.cur - members.begin;
 
-    dyn_agg_member args = {0};
-    dyn_agg_member_reserve(&args, member_count + 1);
+    dyn_agg_member *args = allocator_alloc(alloc, sizeof (dyn_agg_member));
+    dyn_agg_member_reserve(args, member_count + 1);
     bool init_zero = false;
 
     while (true) {
@@ -780,13 +781,13 @@ dyn_agg_member read_braces(parser_context *context, type_t *type) {
                 .offset = 2,
             };
             regable r = (regable){.tag = REG, .reg = tmp_reg};
-            read_braces(context, it->type);
-            args.begin[index] = agg_member_from(&r);
+            read_braces(alloc, context, it->type);
+            args->begin[index] = agg_member_from(&r);
             continue;
         }
 
         regable r = read_regable(*s, token);
-        args.begin[index] = agg_member_from(&r);
+        args->begin[index] = agg_member_from(&r);
         typecheck_regable(token, it->type, &r);
 
         if (s->end[-1] == '}')
@@ -794,7 +795,7 @@ dyn_agg_member read_braces(parser_context *context, type_t *type) {
     }
 
     for (ptrdiff_t i = 0; i < member_count; ++i) {
-        agg_member *r = &args.begin[i];
+        agg_member *r = &args->begin[i];
         if (r->tag != VALUE && r->tag != REG) {
             if (!init_zero) {
                 compile_err(token, "a field is not initialized: ");
@@ -809,13 +810,13 @@ dyn_agg_member read_braces(parser_context *context, type_t *type) {
     return args;
 }
 
-void struct_expr_report(dyn_agg_member args, type_t *type) {
+void struct_expr_report(dyn_agg_member *args, type_t *type) {
     dyn_member_t members = type->struct_t.members;
     ptrdiff_t member_count = members.cur - members.begin;
 
     printd("\nstruct expr: "), str_printd(type->name);
     for (ptrdiff_t i = 0; i < member_count; ++i) {
-        agg_member *r = &args.begin[i];
+        agg_member *r = &args->begin[i];
         printd("\targ %zd: ", i), str_printdnl(members.begin[i].name);
         printd("\t");
         if (r->tag == VALUE) {
@@ -900,7 +901,11 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
 void expr_struct(parser_context *context, reg_t target, type_t *type) {
     const token_t *token = &context->cur_token;
 
-    dyn_agg_member args = read_braces(context, type);
+    char buffer[1 << 17];
+    allocator alloc;
+    allocator_init(&alloc, buffer, sizeof buffer);
+
+    dyn_agg_member *args = read_braces(&alloc, context, type);
 
     struct_expr_report(args, type);
 
@@ -911,7 +916,7 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
         };
         int out_offset;
         get_store_offset(context, &src, &out_offset);
-        emit_store_struct(FP, -out_offset, type, &args);
+        emit_store_struct(FP, -out_offset, type, args);
     } else {
         if (type->size > MAX_REG_SIZE) {
             compile_err(token, "type exceeds max reg size\n");
@@ -919,10 +924,10 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
         if (type->size > default_register_size) {
             context->nreg_count += 1;
         }
-        emit_make_struct(target, type, &args);
+        emit_make_struct(target, type, args);
     }
 
-    dyn_agg_member_free(&args);
+    dyn_agg_member_free(args);
 }
 
 reg_size get_rsize(reg_t reg) {
