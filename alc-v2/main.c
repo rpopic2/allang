@@ -882,6 +882,9 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
 
         size_t size = next_pow2((u32)src->type->size);
         context->stack_size += size;
+        if (size > 8) {
+            context->stack_size = ALIGN_TO(context->stack_size, 8);
+        }
         *out_offset = context->stack_size;
     } else {
         *out_offset = target_reg->offset;
