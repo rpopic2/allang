@@ -364,7 +364,9 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
         if (!cleared) {
             tmp = xzr;
             tmp.type = type;
-        }
+            ps(not_cleared);
+        } else
+            ps(cleared);
         if (tmp_index == index) {
             compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", members->begin[index].type->size);
             str_printerr(members->begin[index].type->name);
@@ -378,9 +380,9 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
             eightbyte_make_struct(tmp2, type, args, &index, &size);
             remaining_size = type->size - size;
             emit_stp(tmp, tmp2, dst, offset + (i64)member_off);
-        } else {
-            emit_str(tmp, dst, (int)offset + (int)member_off);
+            continue;
         }
+        emit_str(tmp, dst, (int)offset + (int)member_off);
     }
 }
 
@@ -551,8 +553,11 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
         if (*op == 'l' && r0.type->sign)
             suffix = "sw";
     }
-    buf_snprintf(fn_buf, ("\t%s%s %s%d, [x%d, "),
-            op, suffix, get_wx(r0.rsize), get_regoff(r0), get_regoff(r1));
+    buf_snprintf(fn_buf, ("\t%s%s "), op, suffix);
+    buf_putreg(fn_buf, r0);
+    buf_snprintf(fn_buf, ", [");
+    buf_putreg(fn_buf, r1);
+    buf_snprintf(fn_buf, ", ");
 }
 
 void emit_str(reg_t src, reg_t dst, int offset) {

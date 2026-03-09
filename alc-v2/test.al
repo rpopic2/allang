@@ -349,13 +349,6 @@ struct64: (=>)
     all_zero:
     struct64{.. 0}
 
-struct_store: (=>)
-    [S] :: point32{.X 1, .Y 2} =[]
-    point32{.. 0} =[S]
-
-    K :: point32{.. 0}
-    [S] =K
-
 lsl_test: (=>)
     I :: 3
     I shl 0
@@ -416,4 +409,11 @@ recycle: (=>)
         J =
     O :: 2
     ret
+
+struct_store: (=>)
+    [S] :: point32{.X 1, .Y 2} =[]
+    point32{.. 0} =[S]
+
+    K :: point32{.. 0}
+    [S] =K
 
