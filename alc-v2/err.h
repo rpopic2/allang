@@ -2,7 +2,6 @@
 
 #include "emit.h"
 void compile_err(const token_t *token, const char *format, ...);
-void compile_warning(const char *format, ...);
 
 #if NDEBUG
 #define printd(...) ((void)0)

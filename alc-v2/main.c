@@ -180,20 +180,6 @@ void compile_err(const token_t *token, const char *format, ...) {
     fputs(CSI_RESET, stderr);
 }
 
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((format(printf, 1, 2)))
-#endif
-void compile_warning(const char *format, ...) {
-    fputs(CSI_RED, stderr);
-    fprintf(stderr, "warning in line %d: ", lineno);
-
-    va_list args;
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    fputs(CSI_RESET, stderr);
-}
-
 void str_printerr(str s) {
     fputs(CSI_RED, stderr);
     str_fprint(&s, stderr);
