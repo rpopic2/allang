@@ -48,3 +48,4 @@ typedef struct {
     u8 tag;
 } regable;
 DYN_GENERIC(regable)
+

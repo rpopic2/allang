@@ -24,7 +24,6 @@ symbol_t *fn_call(parser_context *context);
 bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
-bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *args);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -332,7 +331,6 @@ regable read_regable(str s, const token_t *token) {
             compile_err(token, "unknown id "), str_printerr(s);
             return result;
         }
-        pi(e->array)
         result.reg = *e;
         result.tag = REG;
         member_t *mem = NULL;
@@ -666,6 +664,73 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
 }
 
 
+bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *args) {
+    const token_t *token = &context->cur_token;
+    const str *token_str = &token->id;
+
+    if (!streq(token_str->data, "=["))
+        return false;
+
+    char next = token_str->data[2];
+    target *cur_target;
+    if (next == ']') {
+        cur_target = arr_target_top(&context->targets);
+        if (cur_target == NULL) {
+            compile_err(token, "nothing to store to\n");
+            return true;
+        } else if (cur_target->reg->reg_type != STACK) {
+            compile_err(token, "target is not a stack variable\n");
+            return true;
+        }
+    } else if (isupper(next)) {
+        str name = *token_str;
+        name.data += 2;
+        name.end -= 1;
+
+        reg_t *t;
+        if (!find_id(&local_ids, name, token, &t, 0)) {
+            compile_err(token, "could not find identifier "), str_printerr(name);
+        }
+        cur_target = &(target){.target_assigned = true, .reg = t};
+
+    } else {
+        compile_err(token, "store target expected\n");
+        return true;
+    }
+    reg_t *target_reg = cur_target->reg;
+
+    target_reg->rsize = src.rsize;
+    target_reg->array = src.array;
+
+    if (src.type == type_comptime_int || src.type == NULL) {
+        src.type = type_i32;
+        src.rsize = (reg_size)type_i32->size;
+    }
+    if (target_reg->type == NULL) {
+        target_reg->type = src.type;
+    }
+
+    int offset;
+    if (!cur_target->target_assigned) {
+        assert(src.type);
+        assert(src.type->size);
+
+        size_t size = next_pow2(src.rsize);
+        offset = context->stack_size + (int)src.type->size;
+        context->stack_size += size;
+    } else {
+        offset = target_reg->offset;
+    }
+
+    target_reg->offset = offset;
+
+    assert(src.rsize);
+    emit_store_struct(FP, -offset, src.type, args);
+    cur_target->target_assigned = true;
+
+    return true;
+}
+
 
 dyn_regable read_braces(parser_context *context, type_t *type) {
     const token_t *token = &context->cur_token;
@@ -773,10 +838,7 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
 
     if (streq(token->end + 1, "=[")) {
         lex(context);
-        bool ok = stmt_stack_store_struct(context, (reg_t){.type = type, .rsize=(reg_size)type->size}, &args);
-        if (!ok) {
-            compile_err(token, "was not store struct\n");
-        }
+        stmt_stack_store_struct(context, (reg_t){.type = type, .rsize=(reg_size)type->size}, &args);
     } else {
         emit_make_struct(target, type, &args);
     }
@@ -813,7 +875,7 @@ void expr_load_array(parser_context *context, reg_t *lhs, reg_t rhs, regable off
     lhs->type = elem_type;
     lhs->rsize = (reg_size)elem_type->size;
     emit_array_access(*lhs, rhs, off);
-    p(__func__)
+    printd(__func__);
 }
 
 bool expr_load(parser_context *context) {
@@ -855,7 +917,7 @@ bool expr_load(parser_context *context) {
         emit_ldr_reg(*lhs, rhs, offset.reg);
     }
     context->reg.type = rhs.type;
-    p(__func__)
+    printd(__func__);
     return true;
 }
 
@@ -949,7 +1011,6 @@ skip:;
                 }
                 context->reg.type = nreg->type;
                 context->reg.array = nreg->array;
-                pi(nreg->array)
                 emit_sub(context->reg, FP, nreg->offset);
             } else {
                 unreachable;
@@ -1092,13 +1153,13 @@ target *get_current_target_stack(parser_context *context) {
     return cur_target;
 }
 
-bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *args) {
+bool store_to(parser_context *context, reg_t *src, int *out_offset) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
+    *out_offset = 0;
 
-    if (!streq(token_str->data, "=[")) {
+    if (!streq(token_str->data, "=["))
         return false;
-    }
 
     char next = token_str->data[2];
     target *cur_target;
@@ -1128,102 +1189,42 @@ bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_regable *ar
     }
     reg_t *target_reg = cur_target->reg;
 
-    target_reg->rsize = src.rsize;
-    target_reg->array = src.array;
-    p("arr len: ")
-    pi(target_reg->array)
+    target_reg->rsize = src->rsize;
+    target_reg->array = src->array;
 
+    if (src->type == type_comptime_int || src->type == NULL) {
+        src->type = type_i32;
+        src->rsize = (reg_size)type_i32->size;
+    }
     if (target_reg->type == NULL) {
-        target_reg->type = src.type;
+        target_reg->type = src->type;
     }
 
-    int offset;
     if (!cur_target->target_assigned) {
-        assert(src.type);
-        assert(src.type->size);
+        assert(src->type);
+        assert(src->type->size);
 
-        size_t size = next_pow2(src.rsize);
-        offset = context->stack_size + (int)src.type->size;
+        size_t size = next_pow2(src->rsize);
         context->stack_size += size;
+        *out_offset = context->stack_size;
     } else {
-        offset = target_reg->offset;
+        *out_offset = target_reg->offset;
     }
 
-    target_reg->offset = offset;
+    target_reg->offset = *out_offset;
 
-    assert(src.rsize);
-    emit_store_struct(FP, -offset, src.type, args);
+    assert(src->rsize);
     cur_target->target_assigned = true;
-
     return true;
 }
 
-bool stmt_stack_store(parser_context *context) {
-    const token_t *token = &context->cur_token;
-    const str *token_str = &token->id;
-
-    if (!streq(token_str->data, "=[")) {
+bool stmt_stack_store(parser_context *context, reg_t src) {
+    int offset;
+    bool ok = store_to(context, &src, &offset);
+    if (!ok) {
         return false;
     }
-
-    char next = token_str->data[2];
-    target *cur_target;
-    if (next == ']') {
-        cur_target = arr_target_top(&context->targets);
-        if (cur_target == NULL) {
-            compile_err(token, "nothing to store to\n");
-            return true;
-        } else if (cur_target->reg->reg_type != STACK) {
-            compile_err(token, "target is not a stack variable\n");
-            return true;
-        }
-    } else if (isupper(next)) {
-        str name = *token_str;
-        name.data += 2;
-        name.end -= 1;
-
-        reg_t *t;
-        if (!find_id(&local_ids, name, token, &t, 0)) {
-            compile_err(token, "could not find identifier "), str_printerr(name);
-        }
-        cur_target = &(target){.target_assigned = true, .reg = t};
-
-    } else {
-        compile_err(token, "store target expected\n");
-        return true;
-    }
-    reg_t *target_reg = cur_target->reg;
-
-    reg_t src = context->reg;
-    src.offset -= 1;
-    target_reg->rsize = src.rsize;
-
-    if (src.type == type_comptime_int || src.type == NULL) {
-        src.type = type_i32;
-        src.rsize = (reg_size)type_i32->size;
-    }
-    if (target_reg->type == NULL) {
-        target_reg->type = src.type;
-    }
-
-    int offset;
-    if (!cur_target->target_assigned) {
-        assert(src.type);
-        assert(src.type->size);
-
-        size_t size = next_pow2(src.rsize);
-        context->stack_size += size;
-        offset = context->stack_size;
-    } else {
-        offset = target_reg->offset;
-    }
-
-    target_reg->offset = offset;
-
-    assert(src.rsize);
     emit_str(src, (reg_t){.reg_type = FRAME }, -offset);
-    cur_target->target_assigned = true;
-
     return true;
 }
 
@@ -1308,11 +1309,12 @@ bool decl_vars(parser_context *context) {
             }
             if (!targ->target_assigned) {
                 lex(context);
-                if (!stmt_stack_store(context)) {
+                reg_t last_reg = context->reg;
+                last_reg.offset -= 1;
+                if (!stmt_stack_store(context, last_reg)) {
                     compile_err(&context->cur_token, "store statement '=[]' expected\n");
                 }
             }
-            pi(targ->reg->array);
             arr_target_pop(&context->targets);
         } else {
             target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
@@ -1694,13 +1696,15 @@ symbol_t *fn_call(parser_context *context) {
 
 void parse(parser_context *context) {
     const token_t *token = &context->cur_token;
+    reg_t last_reg = context->reg;
+    last_reg.offset -= 1;
     if (directives(context)) {
 
     } else if (stmt(context)) {
 
     } else if (expr_line(context)) {
 
-    } else if (stmt_stack_store(context)) {
+    } else if (stmt_stack_store(context, last_reg)) {
 
     } else if (stmt_reg_assign(context)) {
 

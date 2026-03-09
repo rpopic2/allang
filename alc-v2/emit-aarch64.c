@@ -353,7 +353,6 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_regable *args) {
 
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
-    pi(member_count)
     int index = 0;
     size_t size = 0;
     const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8};
@@ -583,7 +582,6 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset) {
         return;
     }
     if (elem_size <= 8) {
-        pi(elem_size);
         int exp = power_of_two_exponent(elem_size);
         if (exp) {
             load_store_x("ldr", dst, src);

@@ -78,15 +78,6 @@ ARR_GENERIC(str, PARAMS_MAX)
 
 typedef struct dyn_regable dyn_regable;
 
-// typedef struct {
-//     str fn_name;
-//     bool is_tmp;
-//     union {
-//         str name;
-//         int index;
-//     };
-// } label_t;
-
 void emit_init(void);
 void emit_reset_fn(void);
 void emit_fnbuf(FILE *out);
