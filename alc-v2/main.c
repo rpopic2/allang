@@ -114,6 +114,20 @@ retry:;
         if (src->cur[0] == '\n') {
             ++lineno;
         }
+        if (c == '}') {
+            if (src->cur == cur_token->data) {
+                src->cur++;
+                cur_token->end++;
+                if (src->cur[0] == '\n') {
+                    src->cur++;
+                    ++lineno;
+                }
+                break;
+            }
+
+            cur_token->end = src->cur;
+            break;
+        }
         if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';'
                 || c == ')' || c == '(' || c == '{') {
             cur_token->end = src->cur++;
@@ -128,7 +142,7 @@ retry:;
     }
     if (str_len(cur_token->id) == 0)
         goto retry;
-
+// skip:
     printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
     str_printdnl(cur_token->id);
     printd("|\n");
@@ -322,8 +336,8 @@ int find_member_index(const dyn_member_t *members, str name) {
 regable read_regable(str s, const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE};
     if (isupper(s.data[0]) || s.data[0] == '^') {
-        if (s.end[-1] == '}')
-            s.end--;
+        // if (s.end[-1] == '}')
+        //     s.end--;
         int scope_up = extrat_scope_up(&s);
         reg_t *e;
 
@@ -748,6 +762,8 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
     while (true) {
         if (!tok(context))
             break;
+        if (s->data[0] == '}')
+            break;
         if (s->data[0] != '.') {
             compile_err(token, "'.' and member name expected in struct literal\n");
         }
@@ -765,8 +781,6 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
         int index = find_member_index(&members, member_name);
         member_t *it = &members.begin[index];
 
-        if (s->end[-1] == '}')
-            break;
         if (!tok(context))
             break;
 
@@ -1010,6 +1024,14 @@ bool expr_load(parser_context *context) {
     return true;
 }
 
+bool expect(parser_context *context, str expected) {
+    if (!str_eq(context->cur_token.id, expected)) {
+        compile_err(&context->cur_token, "expected "), str_printerr(expected);
+        return false;
+    }
+    return true;
+}
+
 bool expr(parser_context *context) {
     bool explicit_type = context->cur_token.end[0] == '{';
     if (explicit_type) {
@@ -1073,9 +1095,8 @@ skip:;
     }
     char token_end = token->end[0];
     if (binary_op_store(&lhs, context)) {
-        return true;
-    }
-    if (token_end != ',' && token_end != '\n' && token_end != ')' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>") && !streq(token->end + 1, "=")) {
+
+    } else if (token_end != ',' && token_end != '\n' && token_end != ')' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>") && !streq(token->end + 1, "=") && token_end != '}') {
         binary_op(&lhs, context);
     } else {
         printd("nullary op\n");
@@ -1108,6 +1129,10 @@ skip:;
             unreachable;
         }
     }
+    if (explicit_type) {
+        tok(context);
+        expect(context, STR("}"));
+    }
     return true;
 }
 
@@ -1138,13 +1163,6 @@ int expr_line(parser_context *context) {
     return expr_count;
 }
 
-bool expect(parser_context *context, str expected) {
-    if (!str_eq(context->cur_token.id, expected)) {
-        compile_err(&context->cur_token, "expected "), str_printerr(expected);
-        return false;
-    }
-    return true;
-}
 
 void struct_report(type_t *type) {
 #if !NDEBUG
@@ -1243,12 +1261,26 @@ target *get_current_target_stack(parser_context *context) {
 }
 
 bool stmt_stack_store(parser_context *context, reg_t src) {
+
+    // if (!streq(context->cur_token.data, "=["))
+    //     ps(first)
+    //     return false;
+    // reg_t out_reg;
+    // regable out_offset;
+    // if (!read_load_store_offset(context, context->cur_token.id, &out_reg, &out_offset)) {
+    //     ps(second)
+    //     return false;
+    // }
+    // emit_str(src, FP, (int)out_offset.value);
+
     int offset;
     bool ok = get_store_offset(context, &src, &offset);
     if (!ok) {
         return false;
     }
     emit_str(src, FP, -offset);
+
+    printf("%s\n", __func__);
     return true;
 }
 
