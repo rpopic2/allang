@@ -440,5 +440,13 @@ nested_3: (=>)
     [N] :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6} .. 0} =[]
     [N2] :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6}} =[]
     [N3] :: nested_3{.. 0} =[]
-    // feature: inner structs without explicit type
+
+zerofill: (=>)
+    struct small {
+        X i8
+    }
+    struct {
+        S small
+    }
+    [S] :: zerofill{.. 0} =[]
 

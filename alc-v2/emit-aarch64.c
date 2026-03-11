@@ -270,26 +270,29 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
 
 void emit_zerofill(reg_t dst, i64 offset, type_t *type) {
     const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8, .type = type};
-    const reg_t wzr = {.reg_type = RD_NONE, .rsize = 4, .type = type};
+    reg_t wzr = {.reg_type = RD_NONE, .rsize = 4, .type = type};
     size_t size = type->size;
 
     while (size >= 16) {
-        dst.rsize = 8;
         emit_stp(xzr, xzr, dst, offset);
         size -= 16;
         offset += 16;
     }
     while (size >= 8) {
-        dst.rsize = 8;
         emit_str(xzr, dst, (int)offset);
         size -= 8;
         offset += 8;
     }
-    while (size >= 4) {
-        dst.rsize = 4;
-        emit_str(wzr, dst, (int)offset);
-        size -= 4;
-        offset += 4;
+
+    reg_size rsize = 4;
+    while (size) {
+        if (size >= rsize) {
+            wzr.rsize = rsize;
+            emit_str(wzr, dst, (int)offset);
+            size -= rsize;
+            offset += rsize;
+        }
+        rsize /= 2;
     }
 }
 
@@ -494,7 +497,7 @@ void emit_lsl(reg_t dst, reg_t lhs, i64 rhs) {
 
 static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     const char *suffix = "";
-    size_t size = r0.type->size;
+    size_t size = r0.rsize;
     if (r0.addr) {
         size = 8;
     }
