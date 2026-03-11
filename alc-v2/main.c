@@ -868,15 +868,18 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
             return true;
         }
     } else if (isupper(next)) {
-        str name = *token_str;
-        name.data += 2;
-        name.end -= 1;
+        str full_name = *token_str;
+        full_name.data += 2;
+        full_name.end -= 1;
 
-        reg_t *t;
-        if (!find_id(&local_ids, name, token, &t, 0)) {
-            compile_err(token, "could not find identifier "), str_printerr(name);
+        reg_t *out_reg;
+        str name = dot_iter(&full_name);
+        if (!find_id(&local_ids, name, token, &out_reg, 0)) {
+            compile_err(token, "unknown id "), str_printerr(full_name);
+            return true;
         }
-        cur_target = &(target){.target_assigned = true, .reg = t};
+
+        cur_target = &(target){.target_assigned = true, .reg = out_reg};
 
     } else {
         compile_err(token, "store target expected\n");
@@ -1261,18 +1264,6 @@ target *get_current_target_stack(parser_context *context) {
 }
 
 bool stmt_stack_store(parser_context *context, reg_t src) {
-
-    // if (!streq(context->cur_token.data, "=["))
-    //     ps(first)
-    //     return false;
-    // reg_t out_reg;
-    // regable out_offset;
-    // if (!read_load_store_offset(context, context->cur_token.id, &out_reg, &out_offset)) {
-    //     ps(second)
-    //     return false;
-    // }
-    // emit_str(src, FP, (int)out_offset.value);
-
     int offset;
     bool ok = get_store_offset(context, &src, &offset);
     if (!ok) {
