@@ -114,7 +114,7 @@ retry:;
         if (src->cur[0] == '\n') {
             ++lineno;
         }
-        if (c == '}') {
+        if (c == '}' || c == '{') {
             if (src->cur == cur_token->data) {
                 src->cur++;
                 cur_token->end++;
@@ -129,7 +129,7 @@ retry:;
             break;
         }
         if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';'
-                || c == ')' || c == '(' || c == '{') {
+                || c == ')' || c == '(') {
             cur_token->end = src->cur++;
             break;
         }
@@ -747,6 +747,13 @@ bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_agg_member 
     return true;
 }
 
+bool expect(parser_context *context, str expected) {
+    if (!str_eq(context->cur_token.id, expected)) {
+        compile_err(&context->cur_token, "expected "), str_printerr(expected);
+        return false;
+    }
+    return true;
+}
 
 dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *type) {
     const token_t *token = &context->cur_token;
@@ -789,6 +796,11 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
             continue;
         }
         if (islower(s->data[0])) {
+            ps(recurse)
+            tok(context);
+            expect(context, STR("{"));
+        }
+        if (s->data[0] == '{') {
             dyn_agg_member *aggs = read_braces(alloc, context, mem->type);
             args->begin[index].tag = AGGREGATE;
             args->begin[index].agg = aggs;
@@ -1026,18 +1038,15 @@ bool expr_load(parser_context *context) {
     return true;
 }
 
-bool expect(parser_context *context, str expected) {
-    if (!str_eq(context->cur_token.id, expected)) {
-        compile_err(&context->cur_token, "expected "), str_printerr(expected);
-        return false;
-    }
-    return true;
-}
-
 bool expr(parser_context *context) {
     bool explicit_type = context->cur_token.end[0] == '{';
     if (explicit_type) {
+        ps(explicit)
+
         str id = context->cur_token.id;
+
+        tok(context);
+        expect(context, STR("{"));
 
         char *end_ptr = NULL;
         unsigned long long len = strtoull(id.data, &end_ptr, 0);
@@ -1210,6 +1219,8 @@ bool stmt_struct(parser_context *context) {
         compile_err(&context->cur_token, "struct with same name already exist: "), str_printerr(struct_name);
     }
     str *current = &context->cur_token.id;
+    tok(context);
+    expect(context, STR("{"));
     while (true) {
         tok(context);
         if (str_empty(current) || current->data[0] == '}')
