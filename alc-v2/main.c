@@ -779,7 +779,7 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
         member_name.data++;
 
         int index = find_member_index(&members, member_name);
-        member_t *it = &members.begin[index];
+        member_t *mem = &members.begin[index];
 
         if (!tok(context))
             break;
@@ -789,8 +789,7 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
             continue;
         }
         if (islower(s->data[0])) {
-            printd("aggs\n");
-            dyn_agg_member *aggs = read_braces(alloc, context, it->type);
+            dyn_agg_member *aggs = read_braces(alloc, context, mem->type);
             args->begin[index].tag = AGGREGATE;
             args->begin[index].agg = aggs;
             continue;
@@ -798,7 +797,7 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
 
         regable r = read_regable(*s, token);
         args->begin[index] = agg_member_from(&r);
-        typecheck_regable(token, it->type, &r);
+        typecheck_regable(token, mem->type, &r);
 
         if (s->end[-1] == '}')
             break;

@@ -268,6 +268,31 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
     buf_snprintf(fn_buf, ", #%"PRId64"]\n", offset);
 }
 
+void emit_zerofill(reg_t dst, i64 offset, type_t *type) {
+    const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8, .type = type};
+    const reg_t wzr = {.reg_type = RD_NONE, .rsize = 4, .type = type};
+    size_t size = type->size;
+
+    while (size >= 16) {
+        dst.rsize = 8;
+        emit_stp(xzr, xzr, dst, offset);
+        size -= 16;
+        offset += 16;
+    }
+    while (size >= 8) {
+        dst.rsize = 8;
+        emit_str(xzr, dst, (int)offset);
+        size -= 8;
+        offset += 8;
+    }
+    while (size >= 4) {
+        dst.rsize = 4;
+        emit_str(wzr, dst, (int)offset);
+        size -= 4;
+        offset += 4;
+    }
+}
+
 void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_member *args) {
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = members->cur - members->begin;
@@ -280,9 +305,15 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_member *args
         size_t member_off = size;
         int tmp_index = index;
 
-        if (args->begin[index].tag == AGGREGATE) {
-            type_t *type = members->begin[index].type;
-            emit_store_struct(dst, offset + (i64)size, type, args->begin[index].agg);
+        const member_t *mem = &members->begin[index];
+        if (mem->type->tag == TK_STRUCT) {
+            type_t *type = mem->type;
+            const agg_member *arg = args->begin + index;
+            if (arg->tag == AGGREGATE) {
+                emit_store_struct(dst, offset + (i64)size, type, args->begin[index].agg);
+            } else if (arg->tag == VALUE && arg->value == 0) {
+                emit_zerofill(dst, offset, type);
+            }
             size += type->size;
             index += 1;
             continue;

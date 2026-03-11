@@ -439,5 +439,6 @@ nested_3: (=>)
 
     [N] :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6} .. 0} =[]
     [N2] :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6}} =[]
-    // bug 1: doesn't compile without ..0 due to wrong end detection
-    // bug 2: doesn't compile if initialize all with .. 0 because it is treated as value
+    [N3] :: nested_3{.. 0} =[]
+    // feature: inner structs without explicit type
+
