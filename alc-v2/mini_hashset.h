@@ -86,8 +86,8 @@ static inline void arr_mini_hashset_init(arr_mini_hashset *arr) {
     arr->cur = arr->data;
 }
 static inline mini_hashset *arr_mini_hashset_push(arr_mini_hashset *arr) {
-    if (arr->cur == arr->data + MAX_DEPTH) {
-        fputs("arr was full", stderr);
+    if (arr->cur + 1 == arr->data + MAX_DEPTH) {
+        fputs("arr was full\n", stderr);
         abort();
     }
     arr->cur++;
