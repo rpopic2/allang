@@ -432,10 +432,12 @@ nested_3: (=>)
     struct point64 {
         X i64 Y i64
     }
+
     struct {
         A point64 B point64 C point64
     }
+
     [N] :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6} .. 0} =[]
-    [N] :: nested_3{.A {.X 1 .Y 2} .B {.X 3 .Y 4} .C {.X 5 .Y 6} .. 0} =[]
+    [N2] :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6}} =[]
     // bug 1: doesn't compile without ..0 due to wrong end detection
     // bug 2: doesn't compile if initialize all with .. 0 because it is treated as value

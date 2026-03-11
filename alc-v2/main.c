@@ -79,7 +79,7 @@ u32 next_pow2(u32 n) {
     return 1 << (32 - __builtin_clz(n - 1));
 }
 
-bool lex(parser_context *context) {
+bool tok(parser_context *context) {
 retry:;
     iter *src = context->src;
     token_t *cur_token = &context->cur_token;
@@ -386,7 +386,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     if (s.end[-1] == ']') {
         s.end -= 1;
     } else if (s.end[0] == ',') {
-        lex(context);
+        tok(context);
         str offset_str = cur_token->id;
         offset_str.end -= 1;
         offset_regable = read_regable(offset_str, cur_token);
@@ -528,7 +528,7 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     if (token->end[3] == ']')    // =[]. TODO need to merge this with stmt_stack_store? ->yes, after store api change
         return false;
 
-    lex(context);
+    tok(context);
     str s = token->id;
     s.data += 1;
     reg_t rhs;
@@ -571,10 +571,10 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
 
 void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t lhs_token = context->cur_token;
-    lex(context);
+    tok(context);
     token_t op_token = context->cur_token;
 
-    lex(context);
+    tok(context);
     token_t rhs_token = context->cur_token;
     regable rhs = read_regable(rhs_token.id, &rhs_token);
 
@@ -644,7 +644,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         else unreachable;
         if (is_id(rhs_token.end[1])) {
             // ternary operator.
-            lex(context);
+            tok(context);
             token_t jump_target = context->cur_token;
             if (!streq(jump_target.end - 2, "->")) {
                 compile_err(&jump_target, "-> expected at the end of a conditional branch");
@@ -655,7 +655,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             str name = STR_FROM("lbb");
             int index = context->unnamed_labels++;
             emit_branch_cond(COND_EQ, context->name, name, index);
-            lex(context);
+            tok(context);
             parse_block(context);
             emit_label(context->name, name, index);
         }
@@ -746,13 +746,13 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
     bool init_zero = false;
 
     while (true) {
-        if (!lex(context))
+        if (!tok(context))
             break;
         if (s->data[0] != '.') {
             compile_err(token, "'.' and member name expected in struct literal\n");
         }
         if (streq(s->data, ".. 0")){
-            lex(context);
+            tok(context);
             init_zero = true;
             if (s->end[-1] == '}')
                 break;
@@ -767,7 +767,7 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
 
         if (s->end[-1] == '}')
             break;
-        if (!lex(context))
+        if (!tok(context))
             break;
 
         if (index == -1) {
@@ -915,7 +915,7 @@ void expr_struct(parser_context *context, reg_t target, type_t *type) {
     struct_expr_report(args, type, 0);
 
     if (streq(token->end + 1, "=[")) {
-        lex(context);
+        tok(context);
         reg_t src = (reg_t){
             .type = type, .rsize = (reg_size)type->size
         };
@@ -1044,7 +1044,7 @@ bool expr(parser_context *context) {
             expr_struct(context, context->reg, type);
             return true;
         }
-        lex(context);
+        tok(context);
     }
 skip:;
 
@@ -1122,7 +1122,7 @@ int expr_line(parser_context *context) {
 
     while (token->end[0] == ',' && isspace(token->end[1])) {
         printd(", ");
-        lex(context);
+        tok(context);
         *token = context->cur_token;
         str_printd(token->id);
         ok = expr(context);
@@ -1176,7 +1176,7 @@ bool stmt_struct(parser_context *context) {
     }
     str struct_name;
     if (cur_token->end[1] != '{') {
-        lex(context);
+        tok(context);
         struct_name = cur_token->id;
     } else {
         struct_name = context->symbol->name;
@@ -1191,11 +1191,11 @@ bool stmt_struct(parser_context *context) {
     }
     str *current = &context->cur_token.id;
     while (true) {
-        lex(context);
+        tok(context);
         if (str_empty(current) || current->data[0] == '}')
             break;
         str name = *current;
-        lex(context);
+        tok(context);
         if (str_empty(current) || current->data[0] == '}')
             break;
         type_t *t = hashmap_type_t_tryfind(types, *current);
@@ -1260,12 +1260,12 @@ bool decl_vars(parser_context *context) {
 
     if (isupper(token->data[0])) {
         str name = token->id;
-        lex(context);
+        tok(context);
         bool one_liner = context->cur_token.end[0] != '\n';
         if (one_liner) {
             reg_t nreg = {.reg_type = NREG, .offset = context->nreg_count};
             context->reg = nreg;
-            lex(context);
+            tok(context);
             if (expr_line(context)) { }
             else {
                 symbol_t *fn = fn_call(context);
@@ -1314,13 +1314,13 @@ bool decl_vars(parser_context *context) {
         if (!isupper(name.data[0])) {
             compile_err(token, "name of stack objects must start with uppercase\n");
         }
-        lex(context);
+        tok(context);
         bool one_liner = context->cur_token.end[0] != '\n';
         context->reg.reg_type = SCRATCH;
         reg_t *reg = overwrite_id(*local_ids.cur, name, &(reg_t){.reg_type = STACK, .addr = 1});
         if (one_liner) {
             target *targ = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
-            lex(context);
+            tok(context);
             if (expr_line(context)) { }
             else {
                 symbol_t *fn = fn_call(context);
@@ -1332,7 +1332,7 @@ bool decl_vars(parser_context *context) {
                 }
             }
             if (!targ->target_assigned) {
-                lex(context);
+                tok(context);
                 reg_t last_reg = context->reg;
                 last_reg.offset -= 1;
                 if (!stmt_stack_store(context, last_reg)) {
@@ -1358,7 +1358,7 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
         reg_t *rets_it = rets->data;
 
         do {
-            lex(context);
+            tok(context);
             if (!expr(context))
                 break;
                     context->reg.rsize = get_rsize(context->reg);
@@ -1466,7 +1466,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
         indent += 4;
         arr_mini_hashset_push(&local_ids);
 
-        lex(context);
+        tok(context);
         _token = context->cur_token;
         bool parsing_arg = true;
         while (token->end < context->src->end) {
@@ -1486,7 +1486,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 u8 addr = 0;
                 while (str_eq_lit(cur_token->id, "addr")) {
                     addr += 1;
-                    lex(context);
+                    tok(context);
                     if (token->end[0] == ')') {
                         break_out = true;
                     }
@@ -1521,7 +1521,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
             if (break_out)
                 break;
 next:
-            lex(context);
+            tok(context);
             token = &context->cur_token;
         }
     }
@@ -1603,7 +1603,7 @@ bool directives(parser_context *context) {
 
     str token_str = { .data = token->id.data + 1, .end = token->id.end };
     if (str_eq_lit(token_str, "declare")) {
-        lex(context);
+        tok(context);
         symbol_t *symbol = label_meta(context, NULL);
         arr_mini_hashset_pop(&local_ids);
         if (symbol == NULL) {
@@ -1688,7 +1688,7 @@ symbol_t *fn_call(parser_context *context) {
     printd("found %d args\n", context->reg.offset);
 
     if (context->reg.offset > 0)
-        lex(context);
+        tok(context);
 
     const str *cur_token_str = &token->id;
 
@@ -1778,7 +1778,7 @@ void parse_block(parser_context *context) {
             start_of_block(context);
         }
 
-        lex(context);
+        tok(context);
         if (check_start) {
             check_start = false;
             if (cur_token->indent != start_indent + 4) {
@@ -1827,7 +1827,7 @@ void function(iter *src, FILE *object_file) {
     arr_target_init(&context->targets);
 
     if (!is_main) {
-        lex(context);
+        tok(context);
         if (!context->cur_token.data)
             return;
         stmt_label(context);
@@ -1840,7 +1840,7 @@ void function(iter *src, FILE *object_file) {
 
     TIMER_START(parse_while);
     while (src->cur < src->end) {
-        lex(context);
+        tok(context);
         token_t *cur_token = &context->cur_token;
         if (str_len(cur_token->id) == 0) {
             continue;
