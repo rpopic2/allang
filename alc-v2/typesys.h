@@ -45,7 +45,7 @@ enum dtype_kind {
 
 typedef struct delarator {
     enum dtype_kind tag : 2;
-    u32 amount : 30;
+    i32 amount : 30;
 } declarator_t;
 
 // derived type
@@ -91,7 +91,7 @@ static inline bool dtype_empty(const dtype_t *self) {
     return self->decl_len == 0;
 }
 
-static inline u32 dtype_tryget_arr(const dtype_t *self) {
+static inline i32 dtype_tryget_arr(const dtype_t *self) {
     declarator_t top = dtype_top(self);
     if (top.tag != DK_ARRAY)
         return 0;
@@ -106,7 +106,9 @@ static inline size_t dtype_size(dtype_t *self) {
     if (top.tag == DK_ADDR)
         return sizeof (void *);
     else if (top.tag == DK_ARRAY) {
-        return self->base->size * top.amount;
+        if (top.amount <= 0)
+            fprintf(stderr, "array length was <= 0 (%d)", top.amount);
+        return self->base->size * (usize)top.amount;
     } else {
         unreachable;
     }

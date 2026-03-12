@@ -1,16 +1,5 @@
-struct {
-    A i64 B i64
-}
-struct s2 {
-    M main
-}
+#declare printf: (Format addr u8 => Num_Printed i32!)
 
-Dummy :: 0
-Index :: 2
+printf "" => ! ret 1
 
-[S] :: s2{.M 234} =[]
-
-// [Arr] :: 10*main{.0 main{.A 1, .B 2} .. 0} =[]
-// Arrp :: Arr
-// [Arrp, Index]
 ret 0

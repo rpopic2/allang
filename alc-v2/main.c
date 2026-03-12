@@ -409,6 +409,13 @@ void check_unassigned(regable lhs, const parser_context *context) {
     }
 }
 
+bool peek_expect(parser_context *context, const char *s) {
+    if (!streq(context->cur_token.end + 1, s)) {
+        compile_err(&context->cur_token, "expected %s\n", s);
+        return false;
+    }
+    return true;
+}
 bool expect(parser_context *context, str expected) {
     if (!str_eq(context->cur_token.id, expected)) {
         compile_err(&context->cur_token, "expected "), str_printerr(expected);
@@ -417,7 +424,28 @@ bool expect(parser_context *context, str expected) {
     return true;
 }
 
-void check_bounds(parser_context *context, reg_t index, u32 len) {
+void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
+    if (decl.tag != DK_CHECK) {
+        return;
+    }
+    const token_t *cur_token = &context->cur_token;
+
+    if (!peek_expect(context, "!"))
+        return;
+    tok(context);
+
+    i32 against = decl.amount;
+    emit_cmp(*reg, (i64)against);
+
+    tok(context);
+    if (stmt_ret_cond(context, COND_EQ)) {
+
+    } else {
+        compile_err(cur_token, "expected ret\n");
+    }
+}
+
+void check_bounds(parser_context *context, reg_t index, i32 len) {
     const token_t *cur_token = &context->cur_token;
 
     if (cur_token->id.end[-1] != ']') {
@@ -958,12 +986,12 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
     struct_report(type);
     struct_expr_report(args, type, 0);
 
-    u32 arr = dtype_tryget_arr(dtype);
+    i32 arr = dtype_tryget_arr(dtype);
     if (streq(token->end + 1, "=[")) {
         tok(context);
         reg_t src = (reg_t){
             .type = type, .rsize = (reg_size)type->size,
-            .array = arr,
+            .array = (u32)arr,
         };
         int out_offset;
         get_store_offset(context, &src, &out_offset);
@@ -1004,7 +1032,7 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
     if (dtype_top(dtype).tag == DK_ADDR) {
         dtype_pop(dtype);
     }
-    u32 len = dtype_tryget_arr(dtype);
+    i32 len = dtype_tryget_arr(dtype);
     if (!len) {
         compile_err(&context->cur_token, "this is not an array\n");
     }
@@ -1100,7 +1128,7 @@ bool expr(parser_context *context) {
             context->reg.rsize = arr_size > 8 ? 8 : (reg_size)arr_size;
             context->reg.array = (u32)len;
             dtype_t decl = {.base = type};
-            dtype_push(&decl, (declarator_t){.tag = DK_ARRAY, .amount = (u32)len});
+            dtype_push(&decl, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
             expr_struct(context, context->reg, &decl);
             return true;
         } else if (type->tag == TK_STRUCT) {
@@ -1422,7 +1450,7 @@ bool decl_vars(parser_context *context) {
         if (reg->array) {
             // TODO is this the correct place to assign these?
             reg->dtype.base = reg->type;
-            dtype_push(&reg->dtype, (declarator_t){DK_ARRAY, reg->array});
+            dtype_push(&reg->dtype, (declarator_t){DK_ARRAY, (i32)reg->array});
         }
         return true;
     }
@@ -1469,16 +1497,16 @@ bool stmt_ret_pre(parser_context *context) {
     int expected = context->symbol->ret_airity;
 
     if (do_airity_check && arg_count != expected) {
-        if (islower(token->id.data[0])) {
-            symbol_t *fn = fn_call(context);
-            arg_count = fn->ret_airity;
-            if (arg_count != context->symbol->ret_airity) {
-                compile_err(token, "redirected function: expected to return %d values, but found %d\n",
-                        context->symbol->ret_airity, arg_count);
-            }
-        } else {
+        // if (islower(token->id.data[0])) {
+        //     symbol_t *fn = fn_call(context);
+        //     arg_count = fn->ret_airity;
+        //     if (arg_count != context->symbol->ret_airity) {
+        //         compile_err(token, "redirected function: expected to return %d values, but found %d\n",
+        //                 context->symbol->ret_airity, arg_count);
+        //     }
+        // } else {
             compile_err(token, "expected to return %d values (found %d)\n", expected, arg_count);
-        }
+        // }
     }
     if (context->cur_token.data == NULL
             || (start_of_line && context->indent == context->cur_token.indent)) {
@@ -1796,7 +1824,7 @@ symbol_t *fn_call(parser_context *context) {
     const str *cur_token_str = &token->id;
 
     if (!str_eq_lit(*cur_token_str, "=>")) {
-        compile_err(token, "function call '=>' is expected\n");
+        compile_err(token, "function call operator '=>' expected\n");
     }
 
     str fn_name = symbol->name;
@@ -1813,10 +1841,17 @@ symbol_t *fn_call(parser_context *context) {
     type_t *return_type = return_reg->type;
     context->reg.type = return_reg->type;
     context->reg.addr = return_reg->addr;
+    context->reg.dtype = return_reg->dtype;
     if (return_reg->addr)
         context->reg.rsize = sizeof (void *);
     else
         context->reg.rsize = (reg_size)return_type->size;
+
+    declarator_t top = dtype_top(&context->reg.dtype);
+    if (top.tag == DK_CHECK) {
+        check_err(context, &context->reg, top);
+    }
+
     context->calls_fn = true;
     return symbol;
 }
