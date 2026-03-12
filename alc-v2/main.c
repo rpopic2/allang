@@ -969,39 +969,39 @@ bool expr_load(parser_context *context) {
     if (token->data[0] != '[') {
         return false;
     }
-    reg_t *lhs = &context->reg;
-    reg_t rhs;
+    reg_t *dst = &context->reg;
+    reg_t src;
     regable offset;
-    if (!read_load_store_offset(context, token->id, &rhs, &offset))
+    if (!read_load_store_offset(context, token->id, &src, &offset))
         return true;
-    if (!rhs.type) {
+    if (!src.type) {
         compile_err(token, "compiler bug: type you are trying to load is null\n");
         return true;
     }
 
-    if (rhs.array) {
-        expr_load_array(context, lhs, rhs, offset);
+    if (src.array) {
+        expr_load_array(context, dst, src, offset);
         return true;
     }
-    if (rhs.type->size > MAX_REG_SIZE) {
+    if (src.type->size > MAX_REG_SIZE) {
         compile_err(
                 &context->cur_token,
                 "cannot load object of size bigger than 16 bytes to register\n"
                 );
-        printd("array: %d, type_size: %zd, rsize: %d\n", rhs.array, rhs.type->size, rhs.rsize);
-        dyn_member_t *members = &rhs.type->struct_t.members;
+        printd("array: %d, type_size: %zd, rsize: %d\n", src.array, src.type->size, src.rsize);
+        dyn_member_t *members = &src.type->struct_t.members;
         (void)members;
         printd("memb_cnt: %zd\n", members->cur - members->begin);
-        str_printd(rhs.type->name);
+        str_printd(src.type->name);
     }
-    lhs->rsize = (reg_size)rhs.type->size;
-    lhs->type = rhs.type;
+    dst->rsize = (reg_size)src.type->size;
+    dst->type = src.type;
     if (offset.tag == VALUE) {
-        emit_ldr(*lhs, rhs, (int)offset.value);
+        emit_ldr(*dst, src, (int)offset.value);
     } else {
-        emit_ldr_reg(*lhs, rhs, offset.reg);
+        emit_ldr_reg(*dst, src, offset.reg);
     }
-    context->reg.type = rhs.type;
+    context->reg.type = src.type;
     printd(__func__);
     return true;
 }

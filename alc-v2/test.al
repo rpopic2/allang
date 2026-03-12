@@ -455,5 +455,7 @@ zerofill: (=>)
 array: (=>)
     [Arr] :: 8*i32{.0 2 .. 0} =[]
     A :: 2*i32{.0 1 .1 2}
+    Arrp :: Arr
+    [Arrp, 2]
     // TODO fix w20 zeroed
 

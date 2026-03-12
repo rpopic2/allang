@@ -21,7 +21,6 @@ typedef u8 type_kind;
 typedef struct type_t {
     size_t size;
     u8 align;
-    u8 addr;
     type_kind tag;
     sign_t sign;
     str name;
