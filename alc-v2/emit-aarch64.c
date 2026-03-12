@@ -342,7 +342,14 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
         if (mem_type->tag == TK_STRUCT) {
             const agg_member *arg = args->begin + index;
             if (arg->tag == AGGREGATE) {
-                emit_store_struct(dst, offset + (i64)size, dtype, args->begin[index].agg);
+                dtype_t inner;
+                if (decl_empty(dtype)) {
+                    inner = (dtype_t){.base = mem_type};
+                } else {
+                    inner = *dtype;
+                    decl_pop(&inner);
+                }
+                emit_store_struct(dst, offset + (i64)size, &inner, args->begin[index].agg);
             } else if (arg->tag == VALUE && arg->value == 0) {
                 emit_zerofill(dst, offset, mem_type);
             }
