@@ -401,7 +401,8 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     s.data += 1;
     if (s.end[-1] == ']') {
         s.end -= 1;
-    } else if (s.end[0] == ',') {
+    } else if (streq(s.end, " *")) {
+        tok(context);
         tok(context);
         str offset_str = cur_token->id;
         offset_str.end -= 1;
