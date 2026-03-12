@@ -17,8 +17,8 @@ void compile_err(const token_t *token, const char *format, ...);
 #define str_printdnl(S) str_fprintnl(S, stdout)
 #define p(...) printf(__VA_ARGS__), putc('\n', stdout);
 #define ps(s) printf(#s), putc('\n', stdout);
-#define pi(i) printf(#i": %lld\n", (long long)i);
-#define pp(i) printf(#i": %p\n", (void *)i);
+#define pi(i) printf(#i": %lld\n", (long long)(i));
+#define pp(i) printf(#i": %p\n", (void *)(i));
 #define pstr(s) printf(#s": "), str_print(s);
 #endif
 

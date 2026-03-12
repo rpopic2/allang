@@ -322,6 +322,10 @@ member_t *find_member(dyn_member_t *members, str name) {
 }
 
 int find_member_index(const dyn_member_t *members, str name) {
+    if (isdigit(name.data[0])) {
+        i64 number = strtoll(name.data, NULL, 0);
+        return (int)number;
+    }
     member_t *it = members->begin;
     int index = 0;
     for (; it != members->cur; ++it, ++index) {
@@ -336,8 +340,6 @@ int find_member_index(const dyn_member_t *members, str name) {
 regable read_regable(str s, const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE};
     if (isupper(s.data[0]) || s.data[0] == '^') {
-        // if (s.end[-1] == '}')
-        //     s.end--;
         int scope_up = extrat_scope_up(&s);
         reg_t *e;
 
@@ -679,74 +681,6 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     printd("binary_op\n");
 }
 
-
-bool stmt_stack_store_struct(parser_context *context, reg_t src, dyn_agg_member *args) {
-    const token_t *token = &context->cur_token;
-    const str *token_str = &token->id;
-
-    if (!streq(token_str->data, "=["))
-        return false;
-
-    char next = token_str->data[2];
-    target *cur_target;
-    if (next == ']') {
-        cur_target = arr_target_top(&context->targets);
-        if (cur_target == NULL) {
-            compile_err(token, "nothing to store to\n");
-            return true;
-        } else if (cur_target->reg->reg_type != STACK) {
-            compile_err(token, "target is not a stack variable\n");
-            return true;
-        }
-    } else if (isupper(next)) {
-        str name = *token_str;
-        name.data += 2;
-        name.end -= 1;
-
-        reg_t *t;
-        if (!find_id(&local_ids, name, token, &t, 0)) {
-            compile_err(token, "could not find identifier "), str_printerr(name);
-        }
-        cur_target = &(target){.target_assigned = true, .reg = t};
-
-    } else {
-        compile_err(token, "store target expected\n");
-        return true;
-    }
-    reg_t *target_reg = cur_target->reg;
-
-    target_reg->rsize = src.rsize;
-    target_reg->array = src.array;
-
-    if (src.type == type_comptime_int || src.type == NULL) {
-        src.type = type_i32;
-        src.rsize = (reg_size)type_i32->size;
-    }
-    if (target_reg->type == NULL) {
-        target_reg->type = src.type;
-    }
-
-    int offset;
-    if (!cur_target->target_assigned) {
-        assert(src.type);
-        assert(src.type->size);
-
-        size_t size = next_pow2(src.rsize);
-        offset = context->stack_size + (int)src.type->size;
-        context->stack_size += size;
-    } else {
-        offset = target_reg->offset;
-    }
-
-    target_reg->offset = offset;
-
-    assert(src.rsize);
-    emit_store_struct(FP, -offset, src.type, args);
-    cur_target->target_assigned = true;
-
-    return true;
-}
-
 bool expect(parser_context *context, str expected) {
     if (!str_eq(context->cur_token.id, expected)) {
         compile_err(&context->cur_token, "expected "), str_printerr(expected);
@@ -755,15 +689,30 @@ bool expect(parser_context *context, str expected) {
     return true;
 }
 
-dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *type) {
+dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *dtype) {
+    ps(rb)
     const token_t *token = &context->cur_token;
     const str *s = &context->cur_token.id;
 
-    dyn_member_t members = type->struct_t.members;
-    ptrdiff_t member_count = members.cur - members.begin;
-
+    dyn_member_t members;
+    ptrdiff_t member_count;
+    bool is_arr = false;
+    if (decl_empty(dtype)) {
+        members = dtype->base->struct_t.members;
+        member_count = members.cur - members.begin;
+    } else if (decl_top(dtype).tag == DK_ARRAY) {
+        members = (dyn_member_t){0};
+        member_count = decl_top(dtype).amount;
+        is_arr = true;
+        ps(array)
+        pi(member_count)
+    } else {
+        unreachable;
+    }
     dyn_agg_member *args = allocator_alloc(alloc, sizeof (dyn_agg_member));
     dyn_agg_member_reserve(args, member_count + 1);
+    args->cur = args->begin + member_count;
+    pi(args->cur - args->begin)
     bool init_zero = false;
 
     while (true) {
@@ -786,7 +735,12 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
         member_name.data++;
 
         int index = find_member_index(&members, member_name);
-        member_t *mem = &members.begin[index];
+        type_t *mem_type;
+        if (is_arr) {
+            mem_type = dtype->base;
+        } else {
+            mem_type = members.begin[index].type;
+        }
 
         if (!tok(context))
             break;
@@ -801,7 +755,14 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
             expect(context, STR("{"));
         }
         if (s->data[0] == '{') {
-            dyn_agg_member *aggs = read_braces(alloc, context, mem->type);
+            dtype_t inner;
+            if (decl_empty(dtype)) {
+                inner = (dtype_t){.base = mem_type};
+            } else {
+                inner = *dtype;
+                decl_pop(&inner);
+            }
+            dyn_agg_member *aggs = read_braces(alloc, context, &inner);
             args->begin[index].tag = AGGREGATE;
             args->begin[index].agg = aggs;
             continue;
@@ -809,7 +770,7 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, type_t *t
 
         regable r = read_regable(*s, token);
         args->begin[index] = agg_member_from(&r);
-        typecheck_regable(token, mem->type, &r);
+        typecheck_regable(token, mem_type, &r);
 
         if (s->end[-1] == '}')
             break;
@@ -837,7 +798,7 @@ void struct_expr_report(dyn_agg_member *args, type_t *type, int depth) {
 
     if (depth == 0)
         printd("\n");
-    printd("struct expr: "), str_printd(type->name);
+    printd("struct expr report: "), str_printd(type->name);
     for (ptrdiff_t i = 0; i < member_count; ++i) {
         agg_member *r = &args->begin[i];
         for (int i = 0; i < depth; ++i) {
@@ -914,6 +875,9 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
         assert(src->type->size);
 
         size_t size = next_pow2((u32)src->type->size);
+        if (src->array) {
+            size *= src->array;
+        }
         context->stack_size += size;
         if (size > 8) {
             context->stack_size = ALIGN_TO(context->stack_size, 8);
@@ -930,26 +894,29 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
     return true;
 }
 
-void expr_struct(parser_context *context, reg_t target, type_t *type) {
+void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
     const token_t *token = &context->cur_token;
 
     char buffer[1 << 17];
     allocator alloc;
     allocator_init(&alloc, buffer, sizeof buffer);
 
-    dyn_agg_member *args = read_braces(&alloc, context, type);
+    dyn_agg_member *args = read_braces(&alloc, context, dtype);
 
+    type_t *type = dtype->base;
     struct_report(type);
     struct_expr_report(args, type, 0);
 
+    u32 arr = decl_tryget_arr(dtype);
     if (streq(token->end + 1, "=[")) {
         tok(context);
         reg_t src = (reg_t){
-            .type = type, .rsize = (reg_size)type->size
+            .type = type, .rsize = (reg_size)type->size,
+            .array = arr,
         };
         int out_offset;
         get_store_offset(context, &src, &out_offset);
-        emit_store_struct(FP, -out_offset, type, args);
+        emit_store_struct(FP, -out_offset, dtype, args);
     } else {
         if (type->size > MAX_REG_SIZE) {
             compile_err(token, "type exceeds max reg size (maybe you might want to store it)\n");
@@ -1070,11 +1037,14 @@ bool expr(parser_context *context) {
         if (len) {
             unsigned long long arr_size = context->reg.rsize * len;
             context->reg.rsize = arr_size > 8 ? 8 : (reg_size)arr_size;
-            abort();
-            // expr_array(context, context->reg, type);
+            context->reg.array = (u32)len;
+            dtype_t decl = {.base = type};
+            decl_push(&decl, (declarator_t){.tag = DK_ARRAY, .amount = (u32)len});
+            expr_struct(context, context->reg, &decl);
             return true;
         } else if (type->tag == TK_STRUCT) {
-            expr_struct(context, context->reg, type);
+            dtype_t decl = {.base = type};
+            expr_struct(context, context->reg, &decl);
             return true;
         }
         tok(context);

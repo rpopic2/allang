@@ -32,6 +32,58 @@ typedef struct type_t {
     };
 } type_t;
 
+enum dtype_kind {
+    DK_ADDR, DK_ARRAY
+};
+
+typedef struct delarator {
+    enum dtype_kind tag : 1;    // enum dtype_kind
+    u32 amount : 31;
+} declarator_t;
+
+// derived type
+#define DECLARATOR_MAX 8
+typedef struct dtype {
+    type_t *base;
+    declarator_t decl[DECLARATOR_MAX];
+    usize deco_len;
+} dtype_t;
+
+static inline void decl_push(dtype_t *self, declarator_t decl) {
+    if (self->deco_len >= DECLARATOR_MAX) {
+#define XSTR(X) #X
+#define DECL_ERROR_STR(X) "there can be only max "XSTR(X)" declarators\n"
+        fputs(DECL_ERROR_STR(DECLARATOR_MAX), stderr);
+        return;
+    }
+#undef DECL_ERROR_STR
+    self->decl[self->deco_len++] = decl;
+}
+
+static inline declarator_t decl_top(dtype_t *self) {
+    if (self->deco_len == 0) {
+        return (declarator_t){0};
+    }
+    return self->decl[self->deco_len - 1];
+}
+
+static inline declarator_t decl_pop(dtype_t *self) {
+    if (self->deco_len == 0) {
+        return (declarator_t){0};
+    }
+    return self->decl[--self->deco_len];
+}
+
+static inline bool decl_empty(dtype_t *self) {
+    return self->deco_len == 0;
+}
+
+static inline u32 decl_tryget_arr(dtype_t *self) {
+    declarator_t top = decl_top(self);
+    if (top.tag != DK_ARRAY)
+        return 0;
+    else return top.amount;
+}
 
 enum tag {
     NONE, VALUE, REG, AGGREGATE

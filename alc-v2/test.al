@@ -452,3 +452,6 @@ zerofill: (=>)
     [S] :: zerofill{.. 0} =[]
     [S2] :: zerofill{.S {.X 1}} =[]
 
+array: (=>)
+    [Arr] :: 8*i32{.0 2 .. 0} =[]
+

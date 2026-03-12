@@ -129,17 +129,28 @@ void buf_putreg(buf *buffer, reg_t reg) {
     }
 }
 
-bool eightbyte_make_struct(reg_t dst, type_t *type, dyn_agg_member *args, int *index, size_t *size) {
+bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int *index, size_t *size) {
+    type_t *type = dtype->base;
     const dyn_member_t *members = &type->struct_t.members;
-    ptrdiff_t member_count = members->cur - members->begin;
+    ptrdiff_t member_count = args->cur - args->begin;
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
+
+    bool is_arr = false;
+    if (decl_top(dtype).tag == DK_ARRAY) {
+        is_arr = true;
+    }
 
     bool cleared = false;
     size_t size_acc = 0;
     size_t base_offset_bits = 0;
 
     for (ptrdiff_t i = *index; i < member_count; ++i, *index = (int)i) {
-        member_t *memb = &members->begin[i];
+        member_t *memb = NULL;
+        if (is_arr) {
+            memb = &(member_t){.type = type, .offset = (size_t)index * type->size};
+        } else {
+            memb = &members->begin[i];
+        }
         type_t *memb_type = memb->type;
         size_t memb_size = memb_type->size;
         size_t offset_bits = memb->offset * 8;
@@ -246,7 +257,9 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_agg_member *args) {
 
     int index = 0;
     size_t size = 0;
-    bool cleared = eightbyte_make_struct(dst, type, args, &index, &size);
+    // TODO TMP
+    dtype_t *dtype = &(dtype_t){.base = type};
+    bool cleared = eightbyte_make_struct(dst, dtype, args, &index, &size);
     if (!cleared) {
         emit_mov(dst, 0);
     }
@@ -254,7 +267,7 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_agg_member *args) {
     size_t remaining_size = type->size - size;
     if (remaining_size >= 8) {
         dst.offset++;
-        bool cleared = eightbyte_make_struct(dst, type, args, &index, &size);
+        bool cleared = eightbyte_make_struct(dst, dtype, args, &index, &size);
         if (!cleared) {
             emit_mov(dst, 0);
         }
@@ -296,11 +309,23 @@ void emit_zerofill(reg_t dst, i64 offset, type_t *type) {
     }
 }
 
-void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_member *args) {
+void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *args) {
+    type_t *type = dtype->base;
     const dyn_member_t *members = &type->struct_t.members;
-    ptrdiff_t member_count = members->cur - members->begin;
+    ptrdiff_t member_count = args->cur - args->begin;
+    p(__func__)
+    pi(args->cur - args->begin)
     int index = 0;
     size_t size = 0;
+
+    bool is_arr = false;
+    if (decl_empty(dtype)) {
+
+    } else if (decl_top(dtype).tag == DK_ARRAY) {
+        is_arr = true;
+    } else {
+        unreachable;
+    }
 
     reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
     while (index < member_count) {
@@ -308,32 +333,37 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_member *args
         size_t member_off = size;
         int tmp_index = index;
 
-        const member_t *mem = &members->begin[index];
-        if (mem->type->tag == TK_STRUCT) {
-            type_t *type = mem->type;
+        type_t *mem_type;
+        if (is_arr) {
+            mem_type = type;
+        } else {
+            mem_type = members->begin[index].type;
+        }
+        if (mem_type->tag == TK_STRUCT) {
             const agg_member *arg = args->begin + index;
             if (arg->tag == AGGREGATE) {
-                emit_store_struct(dst, offset + (i64)size, type, args->begin[index].agg);
+                emit_store_struct(dst, offset + (i64)size, dtype, args->begin[index].agg);
             } else if (arg->tag == VALUE && arg->value == 0) {
-                emit_zerofill(dst, offset, type);
+                emit_zerofill(dst, offset, mem_type);
             }
-            size += type->size;
+            size += mem_type->size;
             index += 1;
             continue;
         }
-        bool cleared = eightbyte_make_struct(tmp, type, args, &index, &size);
+        bool cleared = eightbyte_make_struct(tmp, dtype, args, &index, &size);
         if (tmp_index == index) {
-            compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", members->begin[index].type->size);
-            str_printerr(members->begin[index].type->name);
+            compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", mem_type->size);
+            str_printerr(mem_type->name);
             break;
         }
 
         size_t remaining_size = type->size - size;
         if (remaining_size >= 8
                 && args->begin[index].tag != AGGREGATE) {
+            tmp.rsize = 8;
             reg_t tmp2 = tmp;
             tmp2.offset++;
-            bool cleared2 = eightbyte_make_struct(tmp2, type, args, &index, &size);
+            bool cleared2 = eightbyte_make_struct(tmp2, dtype, args, &index, &size);
             remaining_size = type->size - size;
 
             if (!cleared) {
@@ -342,6 +372,7 @@ void emit_store_struct(reg_t dst, i64 offset, type_t *type, dyn_agg_member *args
             if (!cleared2) {
                 tmp2.reg_type = RD_NONE;
             }
+            pi(tmp.rsize)
             emit_stp(tmp, tmp2, dst, offset + (i64)member_off);
             continue;
         }
