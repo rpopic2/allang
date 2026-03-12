@@ -592,7 +592,7 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
             top = decl_top(&dst.dtype);
         }
         if (top.tag == DK_ARRAY) {
-            emit_array_access(dst, src, offset.reg, true);
+            emit_array_access(dst, src, offset.reg, STORE);
         } else {
             emit_str_reg(dst, src, offset.reg);
         }
@@ -983,7 +983,7 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
     dst->type = elem_type;
     dst->rsize = (reg_size)elem_type->size;
     dst->dtype = decl_dup_strip(dtype);
-    emit_array_access(*dst, src, off, false);
+    emit_array_access(*dst, src, off, LOAD);
 }
 
 bool expr_load(parser_context *context) {

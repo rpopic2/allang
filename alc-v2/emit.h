@@ -21,11 +21,15 @@ void emit_cstr(FILE *out);
 
 bool emit_need_escaping(void);
 
+typedef enum load_store {
+    LOAD, STORE,
+} load_store_t;
+
 void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args);
 void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *args);
 void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args);
 void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args);
-void emit_array_access(reg_t dst, reg_t src, reg_t offset, bool is_store);
+void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store);
 
 void emit_mov(reg_t dst, i64 value);
 void emit_mov_reg(reg_t dst, reg_t src);

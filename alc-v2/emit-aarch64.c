@@ -585,7 +585,7 @@ void ldr_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
     buf_snprintf(fn_buf, ("x%d, lsl #%d]\n"), get_regoff(offset), lsl);
 }
 
-void emit_array_access(reg_t dst, reg_t src, reg_t offset, bool is_store) {
+void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store) {
     dtype_t *dtype = &src.dtype;
     size_t array_size = dtype_size(dtype);
     size_t elem_size = dtype->base->size;
@@ -611,12 +611,20 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, bool is_store) {
         }
     }
 
-    reg_t size = {.reg_type = SCRATCH, .offset = 1};
-    emit_mov(size, (i64)array_size);
+    reg_t size;
+    if (array_size) {
+        size = (reg_t){.reg_type = SCRATCH, .offset = 1};
+        emit_mov(size, (i64)array_size);
+    } else {
+        size = (reg_t){.reg_type = RD_NONE,};
+    }
+
 
     reg_t index = {.reg_type = SCRATCH, .offset = 2};
-    buf_snprintf(fn_buf, ("\tsmull x%d, w%d, w%d\n"),
-            get_regoff(index), get_regoff(index), get_regoff(size));
+    buf_snprintf(fn_buf, ("\tsmull x%d, w%d, "),
+            get_regoff(index), get_regoff(index));
+    buf_putreg(fn_buf, size);
+    buf_snprintf(fn_buf, "\n");
 
     if (is_store)
         emit_str_reg(dst, src, offset);
