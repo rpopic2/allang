@@ -1578,14 +1578,15 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 }
             } else if (islower(cur_token->data[0])) {
                 u8 addr = 0;
+                dtype_t dtype = {0};
                 while (str_eq_lit(cur_token->id, "addr")) {
                     addr += 1;
+                    dtype_push(&dtype, (declarator_t){DK_ADDR, .amount = 1});
                     tok(context);
                     if (token->end[0] == ')') {
                         break_out = true;
                     }
                 }
-                dtype_t dtype = {0};
                 str typename = cur_token->id;
                 if (typename.end[-1] == '!') {
                     typename.end--;
