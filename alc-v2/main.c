@@ -548,40 +548,56 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     tok(context);
     str s = token->id;
     s.data += 1;
-    reg_t rhs;
+    reg_t dst;
     regable offset;
-    if (!read_load_store_offset(context, s, &rhs, &offset))
+    if (!read_load_store_offset(context, s, &dst, &offset))
         return true;
 
-    reg_t reg_to_store;
+    reg_t src;
     if (lhs->tag == VALUE) {
-        reg_to_store = (reg_t){
+        src = (reg_t){
             .reg_type = SCRATCH, .offset = context->reg.offset,
             .rsize = context->reg.rsize, .type = context->reg.type,
+            .dtype = {.base = context->reg.type},
         };
-        emit_mov(reg_to_store, lhs->value);
-        if (rhs.type->tag == TK_FUND && reg_to_store.type == type_comptime_int) {
-            reg_to_store.type = rhs.type;
-            if (rhs.type->size > MAX_REG_SIZE) {
+        emit_mov(src, lhs->value);
+
+        if (dst.type->tag == TK_FUND && src.type == type_comptime_int) {
+            src.type = dst.type;
+            src.dtype = dst.dtype;
+
+            if (dst.type->size > MAX_REG_SIZE) {
                 compile_err(NULL, "compiler bug: this register size exceeds max register size\n");
-                reg_to_store.rsize = 4;
+                src.rsize = 4;
             } else {
-                reg_to_store.rsize = (reg_size)rhs.type->size;
+                src.rsize = (reg_size)dst.type->size;
             }
         }
     } else if (lhs->tag == REG) {
-        reg_to_store = lhs->reg;
-        rhs.type = lhs->reg.type;
+        src = lhs->reg;
+        dst.type = lhs->reg.type;
     } else {
         unreachable;
     }
-    typecheck(token, rhs.type, reg_to_store.type);
+    typecheck(token, dst.type, src.type);
+    pi(dst.dtype.decl_len)
+    pi(decl_top(&dst.dtype).amount)
 
     printd("binary_op:store\n");
     if (offset.tag == REG) {
-        emit_str_reg(reg_to_store, rhs, offset.reg);
+        declarator_t top = decl_top(&dst.dtype);
+        // TODO tmp solution
+        if (top.tag == DK_ADDR) {
+            decl_pop(&dst.dtype);
+            top = decl_top(&dst.dtype);
+        }
+        if (top.tag == DK_ARRAY) {
+            emit_array_access(dst, src, offset.reg, true);
+        } else {
+            emit_str_reg(dst, src, offset.reg);
+        }
     } else {
-        emit_str(reg_to_store, rhs, (int)offset.value);
+        emit_str(dst, src, (int)offset.value);
     }
     return true;
 }
@@ -967,7 +983,7 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
     dst->type = elem_type;
     dst->rsize = (reg_size)elem_type->size;
     dst->dtype = decl_dup_strip(dtype);
-    emit_array_access(*dst, src, off);
+    emit_array_access(*dst, src, off, false);
 }
 
 bool expr_load(parser_context *context) {
@@ -1257,7 +1273,7 @@ bool stmt_stack_store(parser_context *context, reg_t src) {
     if (!ok) {
         return false;
     }
-    emit_str(src, FP, -offset);
+    emit_str(FP, src, -offset);
 
     printf("%s\n", __func__);
     return true;

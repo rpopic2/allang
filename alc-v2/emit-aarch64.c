@@ -289,7 +289,7 @@ void emit_zerofill(reg_t dst, i64 offset, type_t *type) {
         offset += 16;
     }
     while (size >= 8) {
-        emit_str(xzr, dst, (int)offset);
+        emit_str(dst, xzr, (int)offset);
         size -= 8;
         offset += 8;
     }
@@ -298,7 +298,7 @@ void emit_zerofill(reg_t dst, i64 offset, type_t *type) {
     while (size) {
         if (size >= rsize) {
             wzr.rsize = rsize;
-            emit_str(wzr, dst, (int)offset);
+            emit_str(dst, wzr, (int)offset);
             size -= rsize;
             offset += rsize;
         }
@@ -382,7 +382,7 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
         if (!cleared) {
             tmp.reg_type = RD_NONE;
         }
-        emit_str(tmp, dst, (int)offset + (int)member_off);
+        emit_str(dst, tmp, (int)offset + (int)member_off);
     }
 }
 
@@ -560,7 +560,7 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     buf_snprintf(fn_buf, ", ");
 }
 
-void emit_str(reg_t src, reg_t dst, int offset) {
+void emit_str(reg_t dst, reg_t src, int offset) {
     load_store_x("str", src, dst);
     buf_snprintf(fn_buf, ("#%d]\n"), offset);
 }
@@ -570,28 +570,43 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
     buf_snprintf(fn_buf, ("#%d]\n"), offset);
 }
 
-void emit_str_reg(reg_t src, reg_t dst, reg_t offset) {
+void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
     load_store_x("str", src, dst);
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
 }
 
-// static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
-void emit_array_access(reg_t dst, reg_t src, reg_t offset) {
-    // reg_t base = {.reg_type = SCRATCH, .offset = 0};
-    // emit_sub(base, FP, src.offset);
+void str_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
+    load_store_x("str", src, dst);
+    buf_snprintf(fn_buf, ("x%d, lsl #%d]\n"), get_regoff(offset), lsl);
+}
 
+void ldr_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
+    load_store_x("ldr", dst, src);
+    buf_snprintf(fn_buf, ("x%d, lsl #%d]\n"), get_regoff(offset), lsl);
+}
+
+void emit_array_access(reg_t dst, reg_t src, reg_t offset, bool is_store) {
     dtype_t *dtype = &src.dtype;
     size_t array_size = dtype_size(dtype);
     size_t elem_size = dtype->base->size;
+    if (elem_size == 0) {
+        compile_err(NULL, "element size was zero\n");
+        return;
+    }
     if (elem_size == 1) {
-        emit_ldr_reg(dst, src, offset);
+        if (is_store)
+            emit_str_reg(dst, src, offset);
+        else
+            emit_ldr_reg(dst, src, offset);
         return;
     }
     if (elem_size <= 8) {
         int exp = power_of_two_exponent(elem_size);
         if (exp) {
-            load_store_x("ldr", dst, src);
-            buf_snprintf(fn_buf, ("x%d, lsl #%d]\n"), get_regoff(offset), exp);
+            if (is_store)
+                str_lsl(dst, src, offset, exp);
+            else
+                ldr_lsl(dst, src, offset, exp);
             return;
         }
     }
@@ -602,7 +617,11 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset) {
     reg_t index = {.reg_type = SCRATCH, .offset = 2};
     buf_snprintf(fn_buf, ("\tsmull x%d, w%d, w%d\n"),
             get_regoff(index), get_regoff(index), get_regoff(size));
-    emit_ldr_reg(dst, src, offset);
+
+    if (is_store)
+        emit_str_reg(dst, src, offset);
+    else
+        emit_ldr_reg(dst, src, offset);
 }
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {

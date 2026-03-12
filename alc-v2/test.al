@@ -450,5 +450,5 @@ array: (=>)
     [Arr] :: 8*i32{.0 2 .. 0} =[]
     Arrp :: Arr
     I :: 2
-    [Arrp * I]
+    3 =[Arrp * I]
 
