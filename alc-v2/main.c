@@ -1485,7 +1485,6 @@ bool stmt_ret_pre(parser_context *context) {
             context->ended = true;
         }
         context->last_line_ret = true;
-        p(ret);
         return true;
     }
     return true;
@@ -1588,7 +1587,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 type_t *type = hashmap_type_t_tryfind(types, cur_token->id);
                 if (!type) {
                     compile_err(cur_token, "unknown type "), str_printerr(cur_token->id);
-                    goto next;
+                    type = type_comptime_int;
                 }
                 reg_size regsize = (reg_size)type->size;
                 if (type->size > MAX_REG_SIZE) {
@@ -1614,7 +1613,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
             }
             if (break_out)
                 break;
-next:
+// next:
             tok(context);
             token = &context->cur_token;
         }

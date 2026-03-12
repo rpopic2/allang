@@ -1,5 +1,5 @@
 #declare foo: (X i32, Y i32 => A i32)
-#declare printf: (Format addr u8 => Num_Printed i32)
+#declare printf: (Format addr u8 => Num_Printed i32!)
 #declare get_hi: (=> Hi addr u8)
 #declare get_hi_redirected: (=> Hi addr u8)
 
