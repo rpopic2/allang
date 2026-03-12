@@ -310,8 +310,7 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
     type_t *type = dtype->base;
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = args->cur - args->begin;
-    p(__func__)
-    pi(args->cur - args->begin)
+    printd("%s\n", __func__);
     int index = 0;
     size_t size = 0;
 
@@ -376,7 +375,6 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
             if (!cleared2) {
                 tmp2.reg_type = RD_NONE;
             }
-            pi(tmp.rsize)
             emit_stp(tmp, tmp2, dst, offset + (i64)member_off);
             continue;
         }
@@ -582,8 +580,9 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset) {
     // reg_t base = {.reg_type = SCRATCH, .offset = 0};
     // emit_sub(base, FP, src.offset);
 
-    size_t array_size = src.type->size;
-    size_t elem_size = src.type->struct_t.members.begin[0].type->size;
+    dtype_t *dtype = &src.dtype;
+    size_t array_size = dtype_size(dtype);
+    size_t elem_size = dtype->base->size;
     if (elem_size == 1) {
         emit_ldr_reg(dst, src, offset);
         return;

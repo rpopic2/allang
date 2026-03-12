@@ -690,7 +690,6 @@ bool expect(parser_context *context, str expected) {
 }
 
 dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *dtype) {
-    ps(rb)
     const token_t *token = &context->cur_token;
     const str *s = &context->cur_token.id;
 
@@ -704,15 +703,12 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
         members = (dyn_member_t){0};
         member_count = decl_top(dtype).amount;
         is_arr = true;
-        ps(array)
-        pi(member_count)
     } else {
         unreachable;
     }
     dyn_agg_member *args = allocator_alloc(alloc, sizeof (dyn_agg_member));
     dyn_agg_member_reserve(args, member_count + 1);
     args->cur = args->begin + member_count;
-    pi(args->cur - args->begin)
     bool init_zero = false;
 
     while (true) {
@@ -750,7 +746,6 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
             continue;
         }
         if (islower(s->data[0])) {
-            ps(recurse)
             tok(context);
             expect(context, STR("{"));
         }
@@ -945,10 +940,20 @@ reg_size get_rsize(reg_t reg) {
     return (reg_size)next_pow2((u32)size);
 }
 
-void expr_load_array(parser_context *context, reg_t *lhs, reg_t rhs, regable offset) {
-    dyn_member_t *mem = &rhs.type->struct_t.members;
-    ptrdiff_t len = dyn_member_t_len(mem);
-    type_t *elem_type = mem->begin[0].type;
+void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable offset) {
+    printd("%s\n", __func__);
+    dtype_t *dtype = &src.dtype;
+
+        // TODO tmp poppin'
+    if (decl_top(dtype).tag == DK_ADDR) {
+        decl_pop(dtype);
+    }
+    u32 len = decl_tryget_arr(dtype);
+    if (!len) {
+        compile_err(&context->cur_token, "this is not an array\n");
+    }
+
+    type_t *elem_type = dtype->base;
     if (offset.tag == VALUE) {
         compile_err(&context->cur_token, "use static bound checked syntax\n");
         return;
@@ -956,11 +961,12 @@ void expr_load_array(parser_context *context, reg_t *lhs, reg_t rhs, regable off
     if (len <= 0) {
         compile_err(&context->cur_token, "array access out of bounds\n");
     }
+
     reg_t off = offset.reg;
-    lhs->type = elem_type;
-    lhs->rsize = (reg_size)elem_type->size;
-    emit_array_access(*lhs, rhs, off);
-    printd(__func__);
+    dst->type = elem_type;
+    dst->rsize = (reg_size)elem_type->size;
+    dst->dtype = decl_dup_strip(dtype);
+    emit_array_access(*dst, src, off);
 }
 
 bool expr_load(parser_context *context) {
@@ -1009,8 +1015,6 @@ bool expr_load(parser_context *context) {
 bool expr(parser_context *context) {
     bool explicit_type = context->cur_token.end[0] == '{';
     if (explicit_type) {
-        ps(explicit)
-
         str id = context->cur_token.id;
 
         tok(context);
@@ -1103,6 +1107,8 @@ skip:;
                 }
                 context->reg.type = nreg->type;
                 context->reg.array = nreg->array;
+                context->reg.dtype = nreg->dtype;
+                decl_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
                 emit_sub(context->reg, FP, nreg->offset);
             } else {
                 unreachable;
@@ -1294,8 +1300,11 @@ bool decl_vars(parser_context *context) {
             .rsize = context->reg.rsize,
             .addr = context->reg.addr, .type = context->reg.type,
             .array = context->reg.array,
+            .dtype = context->reg.dtype,
         };
+
         reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
+
         context->nreg_count += 1;
 #define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
         UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
@@ -1322,6 +1331,7 @@ bool decl_vars(parser_context *context) {
         bool one_liner = context->cur_token.end[0] != '\n';
         context->reg.reg_type = SCRATCH;
         reg_t *reg = overwrite_id(*local_ids.cur, name, &(reg_t){.reg_type = STACK, .addr = 1});
+
         if (one_liner) {
             target *targ = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
             tok(context);
@@ -1351,6 +1361,11 @@ bool decl_vars(parser_context *context) {
                 compile_err(&context->cur_token, "this block must store\n");
             }
             arr_target_pop(&context->targets);
+        }
+        if (reg->array) {
+            // TODO is this the correct place to assign these?
+            reg->dtype.base = reg->type;
+            decl_push(&reg->dtype, (declarator_t){DK_ARRAY, reg->array});
         }
         return true;
     }

@@ -26,7 +26,6 @@ enum sign_t {
 };
 typedef u8 sign_t;
 
-
 typedef struct type_t {
     size_t size;
     u8 align;
@@ -54,39 +53,45 @@ typedef struct delarator {
 typedef struct dtype {
     type_t *base;
     declarator_t decl[DECLARATOR_MAX];
-    usize deco_len;
+    usize decl_len;
 } dtype_t;
 
 static inline void decl_push(dtype_t *self, declarator_t decl) {
-    if (self->deco_len >= DECLARATOR_MAX) {
+    if (self->decl_len >= DECLARATOR_MAX) {
 #define XSTR(X) #X
 #define DECL_ERROR_STR(X) "there can be only max "XSTR(X)" declarators\n"
         fputs(DECL_ERROR_STR(DECLARATOR_MAX), stderr);
         return;
     }
 #undef DECL_ERROR_STR
-    self->decl[self->deco_len++] = decl;
+    self->decl[self->decl_len++] = decl;
 }
 
-static inline declarator_t decl_top(dtype_t *self) {
-    if (self->deco_len == 0) {
+static inline declarator_t decl_top(const dtype_t *self) {
+    if (self->decl_len == 0) {
         return (declarator_t){0};
     }
-    return self->decl[self->deco_len - 1];
+    return self->decl[self->decl_len - 1];
 }
 
 static inline declarator_t decl_pop(dtype_t *self) {
-    if (self->deco_len == 0) {
+    if (self->decl_len == 0) {
         return (declarator_t){0};
     }
-    return self->decl[--self->deco_len];
+    return self->decl[--self->decl_len];
 }
 
-static inline bool decl_empty(dtype_t *self) {
-    return self->deco_len == 0;
+static inline dtype_t decl_dup_strip(dtype_t *self) {
+    dtype_t ret = *self;
+    decl_pop(&ret);
+    return ret;
 }
 
-static inline u32 decl_tryget_arr(dtype_t *self) {
+static inline bool decl_empty(const dtype_t *self) {
+    return self->decl_len == 0;
+}
+
+static inline u32 decl_tryget_arr(const dtype_t *self) {
     declarator_t top = decl_top(self);
     if (top.tag != DK_ARRAY)
         return 0;
