@@ -27,8 +27,8 @@ enum register_dst {
 };
 
 typedef enum cond {
-    COND_EQ,
-} cond;
+    COND_EQ, COND_GE,
+} cond_t;
 
 #define unreachable (printf("unreachable %s:%s:%d\n", __FILE__, __func__, __LINE__), __builtin_unreachable())
 #define malloc_failed() (printf("malloc failed %s:%s:%d\n", __FILE__, __func__, __LINE__), abort())

@@ -83,7 +83,7 @@ reg_off: (=>)
     [X] ::
         3 + 2, 4 =[]
     Y :: X
-    [Y * O]
+    [Y * O unchecked]
     3 =[Y]
 
 copy: (=>)
@@ -111,9 +111,6 @@ short_lit: (=>)
     u64{7} =[S]
     K =[S]
     ret
-
-ret_int: (=> I i32)
-    ret 1
 
 assign_vals: (=>)
     I :: 1
@@ -453,9 +450,13 @@ big_array: (=>)
     [Arr] :: 2*big{.. 0} =[]
     I :: 1
 
+ret_int: (=> I i32)
+    ret 1
+
 array: (=>)
     [Arr] :: 8*i32{.0 2 .. 0} =[]
     I :: 2
     // 3 =[Arrp * I]
-    [Arr * I]
+    [Arr * I] ! ret
 
+    [Arr * I unchecked]

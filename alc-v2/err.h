@@ -15,11 +15,12 @@ void compile_err(const token_t *token, const char *format, ...);
 #define print(category, ...) if (category) printf(__VA_ARGS__)
 #define str_printd(...) str_print(__VA_ARGS__)
 #define str_printdnl(S) str_fprintnl(S, stdout)
-#define p(...) printf(__VA_ARGS__), putc('\n', stdout);
-#define ps(s) printf(#s), putc('\n', stdout);
+#define pf(...) printf(__VA_ARGS__), putc('\n', stdout);
+#define p(s) printf(#s), putc('\n', stdout);
 #define pi(i) printf(#i": %lld\n", (long long)(i));
 #define pp(i) printf(#i": %p\n", (void *)(i));
-#define pstr(s) printf(#s": "), str_print(s);
+#define pc(i) printf(#i": '%c'\n", i);
+#define ps(s) printf(#s": "), str_print(s);
 #endif
 
 #if DEBUG_TIMER

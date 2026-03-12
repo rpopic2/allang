@@ -48,7 +48,7 @@ void emit_str_reg(reg_t dst, reg_t src, reg_t offset);
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset);
 
 void emit_branch(str fn_name, str label, int index);
-bool emit_branch_cond(cond condition, str fn_name, str label, int index);
+bool emit_branch_cond(cond_t condition, str fn_name, str label, int index);
 void emit_label(str fn_name, str label, int index);
 void emit_fn_prologue_epilogue(const parser_context *context);
 void emit_fn_call(const str *s);

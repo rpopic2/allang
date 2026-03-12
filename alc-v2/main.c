@@ -26,6 +26,7 @@ bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
+bool stmt_ret_cond(parser_context *context, cond_t cond);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -142,13 +143,26 @@ retry:;
     }
     if (str_len(cur_token->id) == 0)
         goto retry;
-// skip:
+
+    if (context->start_of_line) {
+        context->start_of_line = false;
+    }
+    if (context->end_of_line) {
+        context->start_of_line = true;
+    }
+
+    bool end_of_line = src->cur[-1] == '\n';
+    if (src->cur[-1] == ')') { // TODO make ')' into a separate token
+        end_of_line = src->cur[0] == '\n';
+    }
     printd("line %d, indent %d: |", cur_token->lineno, cur_token->indent);
     str_printdnl(cur_token->id);
-    printd("|\n");
+    printd("|, eol %d, sol %d\n", end_of_line, context->start_of_line);
 
-    if (src->cur[-1] == '\n') {
+    context->end_of_line = end_of_line;
+    if (end_of_line) {
         unsigned char new_indent = 0;
+        context->end_of_line = true;
         while (src->cur[0] == '\n') {
             ++lineno;
             src->cur++;
@@ -395,18 +409,49 @@ void check_unassigned(regable lhs, const parser_context *context) {
     }
 }
 
+bool expect(parser_context *context, str expected) {
+    if (!str_eq(context->cur_token.id, expected)) {
+        compile_err(&context->cur_token, "expected "), str_printerr(expected);
+        return false;
+    }
+    return true;
+}
+
+void check_bounds(parser_context *context, reg_t index, u32 len) {
+    const token_t *cur_token = &context->cur_token;
+
+    if (cur_token->id.end[-1] != ']') {
+        compile_err(cur_token, "closing ']' expected\n");
+    }
+
+    tok(context);
+    expect(context, STR("!"));
+
+    emit_cmp(index, len);
+
+    tok(context);
+    if (stmt_ret_cond(context, COND_GE)) {
+
+    } else {
+        compile_err(cur_token, "expected ret\n");
+    }
+}
+
 bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, regable *out_offset) {
     const token_t *cur_token = &context->cur_token;
     regable offset_regable = {.tag = VALUE, .value = 0};
     s.data += 1;
+
     if (s.end[-1] == ']') {
         s.end -= 1;
     } else if (streq(s.end, " *")) {
         tok(context);
         tok(context);
         str offset_str = cur_token->id;
-        offset_str.end -= 1;
+        if (offset_str.end[-1] == ']')
+            offset_str.end -= 1;
         offset_regable = read_regable(offset_str, cur_token);
+
         if (offset_regable.tag == NONE) {
             return false;
         } else if (offset_regable.tag == VALUE) {
@@ -415,9 +460,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
 
         } else {
             compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
-        }
-        if (cur_token->id.end[-1] != ']') {
-            compile_err(cur_token, "closing ']' expected\n");
         }
     } else if (s.end[-1] != ']') {
         compile_err(cur_token, "closing ']' expected\n");
@@ -471,8 +513,18 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             };
         }
     } else if (offset_regable.tag == REG) {
-
+        if (streq(cur_token->end + 1, "unchecked")) {
+            tok(context);
+        } else if (offset_regable.tag == REG) {
+            declarator_t decl = decl_top(&reg.dtype);
+            if (decl.tag != DK_ARRAY) {
+                compile_err(cur_token, "register was not an array\n");
+            } else {
+                check_bounds(context, offset_regable.reg, decl.amount);
+            }
+        }
     } else unreachable;
+
     *out_offset = offset_regable;
     *out_reg = reg;
     return true;
@@ -577,8 +629,6 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
         unreachable;
     }
     typecheck(token, dst.type, src.type);
-    pi(dst.dtype.decl_len)
-    pi(decl_top(&dst.dtype).amount)
 
     printd("binary_op:store\n");
     if (offset.tag == REG) {
@@ -693,14 +743,6 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
     }
     printd("binary_op\n");
-}
-
-bool expect(parser_context *context, str expected) {
-    if (!str_eq(context->cur_token.id, expected)) {
-        compile_err(&context->cur_token, "expected "), str_printerr(expected);
-        return false;
-    }
-    return true;
 }
 
 dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *dtype) {
@@ -1272,7 +1314,7 @@ bool stmt_stack_store(parser_context *context, reg_t src) {
     }
     emit_str(FP, src, -offset);
 
-    printf("%s\n", __func__);
+    printd("%s\n", __func__);
     return true;
 }
 
@@ -1409,9 +1451,10 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
         } while (token->end[0] == ',' && isspace(token->end[1]));
 }
 
-bool stmt_ret(parser_context *context) {
+bool stmt_ret_pre(parser_context *context) {
     const token_t *token = &context->cur_token;
 
+    bool start_of_line = context->start_of_line;
     if (!str_eq_lit(token->id, "ret"))
         return false;
 
@@ -1423,6 +1466,7 @@ bool stmt_ret(parser_context *context) {
         arg_count = context->reg.offset;
     }
     int expected = context->symbol->ret_airity;
+
     if (do_airity_check && arg_count != expected) {
         if (islower(token->id.data[0])) {
             symbol_t *fn = fn_call(context);
@@ -1436,13 +1480,30 @@ bool stmt_ret(parser_context *context) {
         }
     }
     if (context->cur_token.data == NULL
-            || context->indent == context->cur_token.indent) {
-        context->ended = true;
+            || (start_of_line && context->indent == context->cur_token.indent)) {
+        if (start_of_line) {
+            context->ended = true;
+        }
         context->last_line_ret = true;
+        p(ret);
         return true;
     }
+    return true;
+}
+
+bool stmt_ret(parser_context *context) {
+    if (!stmt_ret_pre(context))
+        return false;
     context->has_branched_ret = true;
     emit_branch(context->symbol->name, STR_FROM("ret"), 0);
+    return true;
+}
+
+bool stmt_ret_cond(parser_context *context, cond_t cond) {
+    if (!stmt_ret_pre(context))
+        return false;
+    context->has_branched_ret = true;
+    emit_branch_cond(cond, context->symbol->name, STR_FROM("ret"), 0);
     return true;
 }
 

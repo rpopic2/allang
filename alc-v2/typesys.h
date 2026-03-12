@@ -216,6 +216,7 @@ typedef struct parser_context {
     iter *src;
     reg_t reg;
     int stack_size;
+    u16 unnamed_labels;
     bool calls_fn;
     bool ended;
     bool has_branched_ret;
@@ -223,7 +224,8 @@ typedef struct parser_context {
     u8 indent;
     u8 nreg_count;
     u8 max_nreg_count;
-    u16 unnamed_labels;
+    bool end_of_line;
+    bool start_of_line;
     symbol_t *last_fn_call;
     str name;
     token_t cur_token;
