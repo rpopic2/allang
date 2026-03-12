@@ -7,78 +7,11 @@
 #include "str.h"
 #include "types.h"
 
-// end of a block, start of a block
-typedef enum {
-    EOB_NONE, EOB, SOB
-} eob_t;
-
-typedef struct {
-    union {
-        struct {
-            const char *data;
-            const char *end;
-        };
-        str id;
-    };
-    unsigned short lineno;
-    unsigned char indent;
-    eob_t eob;   // end of block
-} token_t;
-
-inline str str_from_token(const token_t *token) {
-    return (str){ token->data, token->end };
-}
-
-typedef struct {
-    reg_t *reg;
-    bool target_assigned;
-    str name;
-} target;
-
-#define MAX_PARAMS 8
-ARR_GENERIC(reg_t, MAX_PARAMS)
-typedef struct {
-    str name;
-    u8 airity;
-    u8 ret_airity;
-    bool is_fn;
-    arr_reg_t params;
-    arr_reg_t rets;
-} symbol_t;
-
-#define MAX_BLOCK_DEPTH 10
-ARR_GENERIC(target, MAX_BLOCK_DEPTH)
-ARR_GENERIC(u16, MAX_BLOCK_DEPTH)
-ARR_GENERIC(u8, MAX_BLOCK_DEPTH)
-
-typedef struct {
-    iter *src;
-    reg_t reg;
-    int stack_size;
-    bool calls_fn;
-    bool ended;
-    bool has_branched_ret;
-    bool last_line_ret;
-    u8 indent;
-    u8 nreg_count;
-    u8 max_nreg_count;
-    u16 unnamed_labels;
-    symbol_t *last_fn_call;
-    str name;
-    token_t cur_token;
-    arr_target targets;
-    arr_u16 deferred_unnamed_br;
-    arr_u8 nreg_mark;
-    symbol_t *symbol;
-} parser_context;
-#define DEFERRED_NONE 0
-
-#define PARAMS_MAX 16
-ARR_GENERIC(str, PARAMS_MAX)
-
-typedef struct dyn_regable dyn_regable;
-typedef struct dyn_agg_member dyn_agg_member;
+typedef struct reg reg_t;
 typedef struct dtype dtype_t;
+typedef struct dyn_agg_member dyn_agg_member;
+typedef struct dyn_regable dyn_regable;
+typedef struct parser_context parser_context;
 
 void emit_init(void);
 void emit_reset_fn(void);
@@ -87,6 +20,7 @@ void emit_text(FILE *out);
 void emit_cstr(FILE *out);
 
 bool emit_need_escaping(void);
+
 void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args);
 void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *args);
 void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args);

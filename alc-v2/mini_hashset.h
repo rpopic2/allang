@@ -1,9 +1,10 @@
 #pragma once
 
-#include "err.h"
-#include "types.h"
-#include "str.h"
 #include "arr.h"
+#include "err.h"
+#include "str.h"
+#include "types.h"
+#include "typesys.h"
 
 // hash entry
 

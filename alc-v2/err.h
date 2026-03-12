@@ -1,6 +1,6 @@
 #pragma once
 
-#include "emit.h"
+typedef struct token token_t;
 void compile_err(const token_t *token, const char *format, ...);
 
 #if NDEBUG

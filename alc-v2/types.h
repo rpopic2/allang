@@ -3,14 +3,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-enum register_dst {
-    RD_NONE, RET, PARAM, SCRATCH, NREG, STACK, FRAME
-};
-
-typedef enum {
-    COND_EQ,
-} cond;
-
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -30,20 +22,13 @@ typedef u8 reg_size;
 
 typedef struct type_t type_t;
 
-enum sign_t {
-    S_UNSIGNED, S_SIGNED
+enum register_dst {
+    RD_NONE, RET, PARAM, SCRATCH, NREG, STACK, FRAME
 };
-typedef u8 sign_t;
 
-typedef struct {
-    i32 offset;
-    u32 array;
-    reg_size rsize;
-    register_dst reg_type : 3; // enum register_dst
-    u8 addr : 2;
-    type_t *type;
-} reg_t;
-
+typedef enum cond {
+    COND_EQ,
+} cond;
 
 #define unreachable (printf("unreachable %s:%s:%d\n", __FILE__, __func__, __LINE__), __builtin_unreachable())
 #define malloc_failed() (printf("malloc failed %s:%s:%d\n", __FILE__, __func__, __LINE__), abort())
@@ -54,10 +39,4 @@ typedef struct {
 #define CSI_RED "\x1b[31m"
 #define CSI_GREEN "\x1b[32m"
 #define CSI_RESET "\x1b[0m"
-
-static int/*?*/ power_of_two_exponent(size_t n) {
-    if (!n || (n & (n - 1)))
-        return 0;
-    return __builtin_ctzll(n);
-}
 
