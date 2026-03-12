@@ -85,6 +85,20 @@ static inline u32 decl_tryget_arr(dtype_t *self) {
     else return top.amount;
 }
 
+static inline size_t dtype_size(dtype_t *self) {
+    if (decl_empty(self)) {
+        return self->base->size;
+    }
+    declarator_t top = decl_top(self);
+    if (top.tag == DK_ADDR)
+        return sizeof (void *);
+    else if (top.tag == DK_ARRAY) {
+        return self->base->size * top.amount;
+    } else {
+        unreachable;
+    }
+}
+
 enum tag {
     NONE, VALUE, REG, AGGREGATE
 };

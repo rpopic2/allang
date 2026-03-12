@@ -240,15 +240,13 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
         }
     }
 
-    // if (!cleared) {
-    //     emit_mov(dst, 0);
-    // }
     *size += size_acc;
     return cleared;
 }
 
-void emit_make_struct(reg_t dst, type_t *type, dyn_agg_member *args) {
-    size_t type_size = type->size;
+void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args) {
+    type_t *type = dtype->base;
+    size_t type_size = dtype_size(dtype);
     if (type_size > MAX_REG_SIZE) {
         compile_err(NULL, "compiler bug: type exceeds max reg size\n");
     }
@@ -257,14 +255,13 @@ void emit_make_struct(reg_t dst, type_t *type, dyn_agg_member *args) {
 
     int index = 0;
     size_t size = 0;
-    // TODO TMP
-    dtype_t *dtype = &(dtype_t){.base = type};
+
     bool cleared = eightbyte_make_struct(dst, dtype, args, &index, &size);
     if (!cleared) {
         emit_mov(dst, 0);
     }
 
-    size_t remaining_size = type->size - size;
+    size_t remaining_size = type_size - size;
     if (remaining_size >= 8) {
         dst.offset++;
         bool cleared = eightbyte_make_struct(dst, dtype, args, &index, &size);

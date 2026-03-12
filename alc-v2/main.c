@@ -918,13 +918,14 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
         get_store_offset(context, &src, &out_offset);
         emit_store_struct(FP, -out_offset, dtype, args);
     } else {
-        if (type->size > MAX_REG_SIZE) {
+        size_t dsize = dtype_size(dtype);
+        if (dsize > MAX_REG_SIZE) {
             compile_err(token, "type exceeds max reg size (maybe you might want to store it)\n");
         }
-        if (type->size > default_register_size) {
+        if (dsize > default_register_size) {
             context->nreg_count += 1;
         }
-        emit_make_struct(target, type, args);
+        emit_make_struct(target, dtype, args);
     }
 
     dyn_agg_member_free(args);

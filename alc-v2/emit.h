@@ -87,7 +87,7 @@ void emit_text(FILE *out);
 void emit_cstr(FILE *out);
 
 bool emit_need_escaping(void);
-void emit_make_struct(reg_t dst, type_t *type, dyn_agg_member *args);
+void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args);
 void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *args);
 void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args);
 void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args);
