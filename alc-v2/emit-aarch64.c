@@ -136,7 +136,7 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
 
     bool is_arr = false;
-    if (decl_top(dtype).tag == DK_ARRAY) {
+    if (dtype_top(dtype).tag == DK_ARRAY) {
         is_arr = true;
     }
 
@@ -315,9 +315,9 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
     size_t size = 0;
 
     bool is_arr = false;
-    if (decl_empty(dtype)) {
+    if (dtype_empty(dtype)) {
 
-    } else if (decl_top(dtype).tag == DK_ARRAY) {
+    } else if (dtype_top(dtype).tag == DK_ARRAY) {
         is_arr = true;
     } else {
         unreachable;
@@ -339,11 +339,11 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
             const agg_member *arg = args->begin + index;
             if (arg->tag == AGGREGATE) {
                 dtype_t inner;
-                if (decl_empty(dtype)) {
+                if (dtype_empty(dtype)) {
                     inner = (dtype_t){.base = mem_type};
                 } else {
                     inner = *dtype;
-                    decl_pop(&inner);
+                    dtype_pop(&inner);
                 }
                 emit_store_struct(dst, offset + (i64)size, &inner, args->begin[index].agg);
             } else if (arg->tag == VALUE && arg->value == 0) {
@@ -599,7 +599,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
             tmp_src.offset = 3;
             tmp_src.rsize = 8;
             tmp_src.addr = 1;
-            decl_push(&tmp_src.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            dtype_push(&tmp_src.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
             emit_sub(tmp_src, FP, src.offset);
             src = tmp_src;
         }

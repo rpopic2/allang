@@ -40,12 +40,12 @@ typedef struct type_t {
 } type_t;
 
 enum dtype_kind {
-    DK_ADDR, DK_ARRAY
+    DK_ADDR, DK_ARRAY, DK_CHECK
 };
 
 typedef struct delarator {
-    enum dtype_kind tag : 1;    // enum dtype_kind
-    u32 amount : 31;
+    enum dtype_kind tag : 2;
+    u32 amount : 30;
 } declarator_t;
 
 // derived type
@@ -56,7 +56,7 @@ typedef struct dtype {
     usize decl_len;
 } dtype_t;
 
-static inline void decl_push(dtype_t *self, declarator_t decl) {
+static inline void dtype_push(dtype_t *self, declarator_t decl) {
     if (self->decl_len >= DECLARATOR_MAX) {
 #define XSTR(X) #X
 #define DECL_ERROR_STR(X) "there can be only max "XSTR(X)" declarators\n"
@@ -67,42 +67,42 @@ static inline void decl_push(dtype_t *self, declarator_t decl) {
     self->decl[self->decl_len++] = decl;
 }
 
-static inline declarator_t decl_top(const dtype_t *self) {
+static inline declarator_t dtype_top(const dtype_t *self) {
     if (self->decl_len == 0) {
         return (declarator_t){0};
     }
     return self->decl[self->decl_len - 1];
 }
 
-static inline declarator_t decl_pop(dtype_t *self) {
+static inline declarator_t dtype_pop(dtype_t *self) {
     if (self->decl_len == 0) {
         return (declarator_t){0};
     }
     return self->decl[--self->decl_len];
 }
 
-static inline dtype_t decl_dup_strip(dtype_t *self) {
+static inline dtype_t dtype_dup_strip(dtype_t *self) {
     dtype_t ret = *self;
-    decl_pop(&ret);
+    dtype_pop(&ret);
     return ret;
 }
 
-static inline bool decl_empty(const dtype_t *self) {
+static inline bool dtype_empty(const dtype_t *self) {
     return self->decl_len == 0;
 }
 
-static inline u32 decl_tryget_arr(const dtype_t *self) {
-    declarator_t top = decl_top(self);
+static inline u32 dtype_tryget_arr(const dtype_t *self) {
+    declarator_t top = dtype_top(self);
     if (top.tag != DK_ARRAY)
         return 0;
     else return top.amount;
 }
 
 static inline size_t dtype_size(dtype_t *self) {
-    if (decl_empty(self)) {
+    if (dtype_empty(self)) {
         return self->base->size;
     }
-    declarator_t top = decl_top(self);
+    declarator_t top = dtype_top(self);
     if (top.tag == DK_ADDR)
         return sizeof (void *);
     else if (top.tag == DK_ARRAY) {

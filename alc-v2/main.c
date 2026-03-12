@@ -516,7 +516,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         if (streq(cur_token->end + 1, "unchecked")) {
             tok(context);
         } else if (offset_regable.tag == REG) {
-            declarator_t decl = decl_top(&reg.dtype);
+            declarator_t decl = dtype_top(&reg.dtype);
             if (decl.tag != DK_ARRAY) {
                 compile_err(cur_token, "register was not an array\n");
             } else {
@@ -632,11 +632,11 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
 
     printd("binary_op:store\n");
     if (offset.tag == REG) {
-        declarator_t top = decl_top(&dst.dtype);
+        declarator_t top = dtype_top(&dst.dtype);
         // TODO tmp solution
         if (top.tag == DK_ADDR) {
-            decl_pop(&dst.dtype);
-            top = decl_top(&dst.dtype);
+            dtype_pop(&dst.dtype);
+            top = dtype_top(&dst.dtype);
         }
         if (top.tag == DK_ARRAY) {
             emit_array_access(dst, src, offset.reg, STORE);
@@ -752,12 +752,12 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
     dyn_member_t members;
     ptrdiff_t member_count;
     bool is_arr = false;
-    if (decl_empty(dtype)) {
+    if (dtype_empty(dtype)) {
         members = dtype->base->struct_t.members;
         member_count = members.cur - members.begin;
-    } else if (decl_top(dtype).tag == DK_ARRAY) {
+    } else if (dtype_top(dtype).tag == DK_ARRAY) {
         members = (dyn_member_t){0};
-        member_count = decl_top(dtype).amount;
+        member_count = dtype_top(dtype).amount;
         is_arr = true;
     } else {
         unreachable;
@@ -807,11 +807,11 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
         }
         if (s->data[0] == '{') {
             dtype_t inner;
-            if (decl_empty(dtype)) {
+            if (dtype_empty(dtype)) {
                 inner = (dtype_t){.base = mem_type};
             } else {
                 inner = *dtype;
-                decl_pop(&inner);
+                dtype_pop(&inner);
             }
             dyn_agg_member *aggs = read_braces(alloc, context, &inner);
             args->begin[index].tag = AGGREGATE;
@@ -958,7 +958,7 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
     struct_report(type);
     struct_expr_report(args, type, 0);
 
-    u32 arr = decl_tryget_arr(dtype);
+    u32 arr = dtype_tryget_arr(dtype);
     if (streq(token->end + 1, "=[")) {
         tok(context);
         reg_t src = (reg_t){
@@ -1001,10 +1001,10 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
     dtype_t *dtype = &src.dtype;
 
         // TODO tmp poppin'
-    if (decl_top(dtype).tag == DK_ADDR) {
-        decl_pop(dtype);
+    if (dtype_top(dtype).tag == DK_ADDR) {
+        dtype_pop(dtype);
     }
-    u32 len = decl_tryget_arr(dtype);
+    u32 len = dtype_tryget_arr(dtype);
     if (!len) {
         compile_err(&context->cur_token, "this is not an array\n");
     }
@@ -1021,7 +1021,7 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
     reg_t off = offset.reg;
     dst->type = elem_type;
     dst->rsize = (reg_size)elem_type->size;
-    dst->dtype = decl_dup_strip(dtype);
+    dst->dtype = dtype_dup_strip(dtype);
     emit_array_access(*dst, src, off, LOAD);
 }
 
@@ -1100,7 +1100,7 @@ bool expr(parser_context *context) {
             context->reg.rsize = arr_size > 8 ? 8 : (reg_size)arr_size;
             context->reg.array = (u32)len;
             dtype_t decl = {.base = type};
-            decl_push(&decl, (declarator_t){.tag = DK_ARRAY, .amount = (u32)len});
+            dtype_push(&decl, (declarator_t){.tag = DK_ARRAY, .amount = (u32)len});
             expr_struct(context, context->reg, &decl);
             return true;
         } else if (type->tag == TK_STRUCT) {
@@ -1164,7 +1164,7 @@ skip:;
                 context->reg.type = nreg->type;
                 context->reg.array = nreg->array;
                 context->reg.dtype = nreg->dtype;
-                decl_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+                dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
                 emit_sub(context->reg, FP, nreg->offset);
             } else {
                 unreachable;
@@ -1262,9 +1262,10 @@ bool stmt_struct(parser_context *context) {
         tok(context);
         if (str_empty(current) || current->data[0] == '}')
             break;
-        type_t *t = hashmap_type_t_tryfind(types, *current);
+        str typename = *current;
+        type_t *t = hashmap_type_t_tryfind(types, typename);
         if (t == NULL) {
-            compile_err(&context->cur_token, "unknown type "), str_printerr(*current);
+            compile_err(&context->cur_token, "unknown type "), str_printerr(typename);
             continue;
         }
         member_t m = {
@@ -1421,7 +1422,7 @@ bool decl_vars(parser_context *context) {
         if (reg->array) {
             // TODO is this the correct place to assign these?
             reg->dtype.base = reg->type;
-            decl_push(&reg->dtype, (declarator_t){DK_ARRAY, reg->array});
+            dtype_push(&reg->dtype, (declarator_t){DK_ARRAY, reg->array});
         }
         return true;
     }
@@ -1584,11 +1585,18 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                         break_out = true;
                     }
                 }
-                type_t *type = hashmap_type_t_tryfind(types, cur_token->id);
+                dtype_t dtype = {0};
+                str typename = cur_token->id;
+                if (typename.end[-1] == '!') {
+                    typename.end--;
+                    dtype_push(&dtype, (declarator_t){DK_CHECK, .amount = 0});
+                }
+                type_t *type = hashmap_type_t_tryfind(types, typename);
                 if (!type) {
-                    compile_err(cur_token, "unknown type "), str_printerr(cur_token->id);
+                    compile_err(cur_token, "unknown type "), str_printerr(typename);
                     type = type_comptime_int;
                 }
+                dtype.base = type;
                 reg_size regsize = (reg_size)type->size;
                 if (type->size > MAX_REG_SIZE) {
                     compile_err(cur_token, "sizeof the type (%zd) exceeds max register size limit\n", type->size);
@@ -1599,6 +1607,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                     .offset = symbol.airity,
                     .type = type,
                     .addr = addr,
+                    .dtype = dtype,
                 };
                 if (parsing_arg) {
                     arr_reg_t_push(&symbol.params, reg);
@@ -1613,7 +1622,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
             }
             if (break_out)
                 break;
-// next:
+
             tok(context);
             token = &context->cur_token;
         }
