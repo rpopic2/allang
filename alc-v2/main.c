@@ -471,10 +471,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             };
         }
     } else if (offset_regable.tag == REG) {
-        if (reg.reg_type == STACK) {
-            compile_err(&context->cur_token, "offset of stack variable by register is not allowed\n");
-            printf("offset info: type: %d, off: %d\n", offset_regable.reg.reg_type, offset_regable.reg.offset);
-        }
+
     } else unreachable;
     *out_offset = offset_regable;
     *out_reg = reg;

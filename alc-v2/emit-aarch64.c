@@ -585,10 +585,26 @@ void ldr_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
     buf_snprintf(fn_buf, ("x%d, lsl #%d]\n"), get_regoff(offset), lsl);
 }
 
+const reg_t FP = { .reg_type = FRAME, .rsize = sizeof (void *) };
+
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store) {
     dtype_t *dtype = &src.dtype;
     size_t array_size = dtype_size(dtype);
     size_t elem_size = dtype->base->size;
+
+    if (src.reg_type == STACK) {
+        if (src.offset) {
+            reg_t tmp_src = src;
+            tmp_src.reg_type = SCRATCH;
+            tmp_src.offset = 3;
+            tmp_src.rsize = 8;
+            tmp_src.addr = 1;
+            decl_push(&tmp_src.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            emit_sub(tmp_src, FP, src.offset);
+            src = tmp_src;
+        }
+    }
+
     if (elem_size == 0) {
         compile_err(NULL, "element size was zero\n");
         return;

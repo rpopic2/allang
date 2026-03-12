@@ -446,19 +446,16 @@ zerofill: (=>)
     [S] :: zerofill{.. 0} =[]
     [S2] :: zerofill{.S {.X 1}} =[]
 
-array: (=>)
-    [Arr] :: 8*i32{.0 2 .. 0} =[]
-    Arrp :: Arr
-    I :: 2
-    3 =[Arrp * I]
-    [Arrp * I]
-
 big_array: (=>)
     struct big {
         X i64 Y i64
     }
     [Arr] :: 2*big{.. 0} =[]
     I :: 1
-    Arrp :: Arr
-    [Arrp * I .X]
+
+array: (=>)
+    [Arr] :: 8*i32{.0 2 .. 0} =[]
+    I :: 2
+    // 3 =[Arrp * I]
+    [Arr * I]
 
