@@ -312,12 +312,12 @@ int extrat_scope_up(str *s) {
     return scope_up;
 }
 
-str dot_iter(str *s) {
+str dot_iter(str *s, char c) {
     const char *begin = s->data;
-    if (*begin == '.')
+    if (*begin == c)
         ++begin;
     while (s->data < s->end) {
-        if ((++s->data)[0] == '.')
+        if ((++s->data)[0] == c)
             break;
     }
     return (str){begin, s->data};
@@ -357,7 +357,7 @@ regable read_regable(str s, const token_t *token) {
         int scope_up = extrat_scope_up(&s);
         reg_t *e;
 
-        str name = dot_iter(&s);
+        str name = dot_iter(&s, '.');
         if (!find_id(&local_ids, name, token, &e, scope_up)
             || e->reg_type == RD_NONE) {
             compile_err(token, "unknown id "), str_printerr(s);
@@ -368,7 +368,7 @@ regable read_regable(str s, const token_t *token) {
         member_t *mem = NULL;
         type_t *t = e->type;
         while (true) {
-            str mem_name = dot_iter(&s);
+            str mem_name = dot_iter(&s, '.');
             if (str_empty(&mem_name))
                 break;
             member_t *mem = find_member(&t->struct_t.members, mem_name);
@@ -924,7 +924,7 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
         full_name.end -= 1;
 
         reg_t *out_reg;
-        str name = dot_iter(&full_name);
+        str name = dot_iter(&full_name, '.');
         if (!find_id(&local_ids, name, token, &out_reg, 0)) {
             compile_err(token, "unknown id "), str_printerr(full_name);
             return true;
@@ -1568,6 +1568,40 @@ bool stmt(parser_context *context) {
     return decl_vars(context);
 }
 
+bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
+    bool break_out = false;
+    const token_t *cur_token = &context->cur_token;
+    *out = (dtype_t){0};
+
+    while (str_eq_lit(cur_token->id, "addr")) {
+        dtype_push(out, (declarator_t){DK_ADDR, .amount = 1});
+        tok(context);
+        if (cur_token->end[0] == ')') {
+            break_out = true;
+        }
+    }
+
+    str iter = cur_token->id;
+    str typename = dot_iter(&iter, '!');
+    if (!str_empty(&iter)) {
+        str value = dot_iter(&iter, '!');
+        long long amount = strtoll(value.data, NULL, 0);
+        pi(amount);
+        dtype_push(out, (declarator_t){DK_CHECK, .amount = (int)amount});
+    }
+    if (cur_token->end[0] == ')') {
+        break_out = true;
+    }
+
+    type_t *type = hashmap_type_t_tryfind(types, typename);
+    if (!type) {
+        compile_err(cur_token, "unknown type "), str_printerr(typename);
+        type = type_comptime_int;
+    }
+    out->base = type;
+    return break_out;
+}
+
 // out_param_names: set to NULL if not needed
 symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
     token_t _token = context->cur_token;
@@ -1605,39 +1639,13 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                     symbol.ret_airity += 1;
                 }
             } else if (islower(cur_token->data[0])) {
-                u8 addr = 0;
-                dtype_t dtype = {0};
-                while (str_eq_lit(cur_token->id, "addr")) {
-                    addr += 1;
-                    dtype_push(&dtype, (declarator_t){DK_ADDR, .amount = 1});
-                    tok(context);
-                    if (token->end[0] == ')') {
-                        break_out = true;
-                    }
-                }
-                str typename = cur_token->id;
-                if (typename.end[-1] == '!') {
-                    typename.end--;
-                    dtype_push(&dtype, (declarator_t){DK_CHECK, .amount = 0});
-                }
-                type_t *type = hashmap_type_t_tryfind(types, typename);
-                if (!type) {
-                    compile_err(cur_token, "unknown type "), str_printerr(typename);
-                    type = type_comptime_int;
-                }
-                dtype.base = type;
-                reg_size regsize = (reg_size)type->size;
-                if (type->size > MAX_REG_SIZE) {
-                    compile_err(cur_token, "sizeof the type (%zd) exceeds max register size limit\n", type->size);
-                    regsize = MAX_REG_SIZE;
-                }
                 reg_t reg = {
-                    .rsize = regsize,
                     .offset = symbol.airity,
-                    .type = type,
-                    .addr = addr,
-                    .dtype = dtype,
                 };
+                break_out = parse_dtype(context, &reg.dtype);
+                reg.type = reg.dtype.base;
+                reg.addr = (u8)dtype_tryget_addr(&reg.dtype);
+                reg.rsize = get_rsize(reg);
                 if (parsing_arg) {
                     arr_reg_t_push(&symbol.params, reg);
                 } else {

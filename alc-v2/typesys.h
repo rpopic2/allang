@@ -98,6 +98,13 @@ static inline i32 dtype_tryget_arr(const dtype_t *self) {
     else return top.amount;
 }
 
+static inline i32 dtype_tryget_addr(const dtype_t *self) {
+    declarator_t top = dtype_top(self);
+    if (top.tag != DK_ADDR)
+        return 0;
+    else return top.amount;
+}
+
 static inline size_t dtype_size(dtype_t *self) {
     if (dtype_empty(self)) {
         return self->base->size;
