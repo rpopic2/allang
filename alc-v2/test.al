@@ -1,13 +1,8 @@
 #declare foo: (X i32, Y i32 => A i32)
 #declare printf: (Format addr u8 => Num_Printed i32)
 #declare get_hi: (=> Hi addr u8)
-#declare get_hi_redirected: (=> Hi addr u8)
 
 printf "Hello World\n" =>
-
-redirect:
-Redirect :: get_hi_redirected =>
-printf Redirect =>
 
 V ::
     3 + 2 =
@@ -73,10 +68,6 @@ fn_assign: (=> R i32)
 stack_var: (=> R i32)
     [X] :: 3 =[]
     ret [X]
-
-get_hi_redirected: (=> Hi addr u8)
-    ret get_hi =>
-
 
 reg_off: (=>)
     O :: 2

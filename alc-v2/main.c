@@ -1586,7 +1586,6 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
     if (!str_empty(&iter)) {
         str value = dot_iter(&iter, '!');
         long long amount = strtoll(value.data, NULL, 0);
-        pi(amount);
         dtype_push(out, (declarator_t){DK_CHECK, .amount = (int)amount});
     }
     if (cur_token->end[0] == ')') {
