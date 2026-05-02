@@ -1586,7 +1586,6 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
     if (!str_empty(&iter)) {
         str value = dot_iter(&iter, '!');
         long long amount = strtoll(value.data, NULL, 0);
-        pi(amount);
         dtype_push(out, (declarator_t){DK_CHECK, .amount = (int)amount});
     }
     if (cur_token->end[0] == ')') {
@@ -1839,7 +1838,8 @@ symbol_t *fn_call(parser_context *context) {
 
     int arg_counts = context->reg.offset;
     if (do_airity_check && arg_counts != symbol->airity) {
-        compile_err(token, "expected argument count %d, but found %d\n", symbol->airity, arg_counts);
+        compile_err(token, "expected argument count %d, but found %d: function ", symbol->airity, arg_counts);
+        str_printerr(fn_name);
     }
     emit_fn_call(&fn_name);
 

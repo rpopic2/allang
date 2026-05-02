@@ -7,6 +7,7 @@
 '@' : macro. replaces something.
 '#' : directive. tells compiler something
 '*' : multiplication. can be used for arithmetic, and also for arrays, as arrays means multiple same data.
+'&' : mutable
 '()' : expression. inside this parenthesis are considered as one expression.
 '-' : minus. used for arithmetic.
 '+' : plus. used for arithmetic.
@@ -15,7 +16,7 @@
 '[]' : memory opetation. load and store to memory.
 '=>' : call. branch to function.
 '->' : jump. branch to location.
-'>>' : jump to matching << in scope
+'>>' : jump to matching << in scope. may be depricated in future.
 ',' : next register. also implies dependency break, as these comma seperated expressions cannot refer to each other.
 '.' : offset. X.Y.Z means hierarchy, and is never interpreted as multiple expression.
 ':' : right to left. inverts assignment directions. when used solo, binds static location to a name.
@@ -27,6 +28,7 @@
 '`' : formatting string.
 '>' '<' '>=' '<=' : comparison. sets flag.
 ':' and compound : (e.g. ':=' ':+') operates to the left hand side.
+'_' : private. don't use this unless you understand internals. these symbols are not exported.
 
 // punctuations, not fixed
 '$' : explicit register. 
@@ -34,15 +36,13 @@
 '~' : owned address annotation
 '~>' : ownership transfer
 '%' : move to matching %
-'&' : alias
-'_' : discard
 ';' : end of line
 '|' : pararrel
 '^' : outer scope
-'\' : escaping
+'\' : escaping | cast
 
 
-// reserved keywordd
+// reserved keywords
 
 ret : returns from function.
 struct : declares a struct.
