@@ -134,6 +134,7 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = args->cur - args->begin;
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
+    size_t dsize = dtype_size(dtype);
 
     bool is_arr = false;
     if (dtype_top(dtype).tag == DK_ARRAY) {
@@ -147,11 +148,11 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
     for (ptrdiff_t i = *index; i < member_count; ++i, *index = (int)i) {
         member_t *memb = NULL;
         if (is_arr) {
-            memb = &(member_t){.type = type, .offset = (size_t)index * type->size};
+            memb = &(member_t){.type = *dtype, .offset = (size_t)index * dsize};
         } else {
             memb = &members->begin[i];
         }
-        type_t *memb_type = memb->type;
+        type_t *memb_type = memb->type.base;
         size_t memb_size = memb_type->size;
         size_t offset_bits = memb->offset * 8;
 
@@ -180,12 +181,13 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
                         break;
                     }
                     member_t *memb = &members->begin[i];
-                    if (size + memb->type->size > 2) {
+                    size_t memb_size = dtype_size(&memb->type);
+                    if (size + memb_size > 2) {
                         --i;
                         break;
                     }
-                    size += memb->type->size;
-                    value |= r->value << memb->type->size * 8;
+                    size += memb_size;
+                    value |= r->value << memb_size * 8;
                 }
             }
 
@@ -223,7 +225,13 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
                     reg_t tmp_dst = dst;
                     if (reg.rsize < tmp_dst.rsize) // no need to emit mov?
                         tmp_dst.rsize = reg.rsize;
+                    tmp_dst.rsize = (u8)dtype_size(&tmp_dst.dtype);
                     emit_rr(STR_FROM("mov"), tmp_dst, reg);
+
+                    printd("mov %d, %d\n", get_regoff(tmp_dst), get_regoff(reg));
+                    printd("size: %d\n", tmp_dst.rsize);
+                    str_printd(tmp_dst.dtype.base->name);
+                    str_printd(tmp_dst.type->name);
                 }
             } else {
                 if (reg.rsize < dst.rsize)
@@ -278,10 +286,10 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
     buf_snprintf(fn_buf, ", #%"PRId64"]\n", offset);
 }
 
-void emit_zerofill(reg_t dst, i64 offset, type_t *type) {
-    const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8, .type = type};
-    reg_t wzr = {.reg_type = RD_NONE, .rsize = 4, .type = type};
-    size_t size = type->size;
+void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
+    const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8, .type = type->base};
+    reg_t wzr = {.reg_type = RD_NONE, .rsize = 4, .type = type->base};
+    size_t size = dtype_size(type);
 
     while (size >= 16) {
         emit_stp(xzr, xzr, dst, offset);
@@ -329,18 +337,18 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
         size_t member_off = size;
         int tmp_index = index;
 
-        type_t *mem_type;
+        dtype_t *mem_type;
         if (is_arr) {
-            mem_type = type;
+            mem_type = dtype;
         } else {
-            mem_type = members->begin[index].type;
+            mem_type = &members->begin[index].type;
         }
-        if (mem_type->tag == TK_STRUCT) {
+        if (mem_type->base->tag == TK_STRUCT) {
             const agg_member *arg = args->begin + index;
             if (arg->tag == AGGREGATE) {
                 dtype_t inner;
                 if (dtype_empty(dtype)) {
-                    inner = (dtype_t){.base = mem_type};
+                    inner = *mem_type;
                 } else {
                     inner = *dtype;
                     dtype_pop(&inner);
@@ -349,14 +357,14 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
             } else if (arg->tag == VALUE && arg->value == 0) {
                 emit_zerofill(dst, offset, mem_type);
             }
-            size += mem_type->size;
+            size += dtype_size(mem_type);
             index += 1;
             continue;
         }
         bool cleared = eightbyte_make_struct(tmp, dtype, args, &index, &size);
         if (tmp_index == index) {
-            compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", mem_type->size);
-            str_printerr(mem_type->name);
+            compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", dtype_size(mem_type));
+            str_printerr(mem_type->base->name);
             break;
         }
 
@@ -450,7 +458,7 @@ void type_conv(reg_t dst, reg_t src) {
 
 void emit_mov_reg(reg_t dst, reg_t src) {
     const char *format;
-    if (dst.addr) {
+    if (dst.addr || dtype_tryget_addr(&dst.dtype)) {
         dst.rsize = 8;
     }
     if (dst.rsize > src.rsize) {

@@ -451,3 +451,14 @@ array: (=> I i32)
     [Arr * I] ! ret 0
     ret 1
 
+slice: (=>)
+    struct {
+        Begin addr u32,
+        Size usize,
+    }
+
+    [Data] :: 1 =[]
+    Data
+    Slice :: slice{.Begin Data .Size 1}
+    ret
+

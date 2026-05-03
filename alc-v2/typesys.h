@@ -8,13 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct member {
-    type_t *type;
-    str name;
-    size_t offset;
-} member_t;
-
-DYN_GENERIC(member_t)
+typedef struct dtype dtype_t;
 
 enum type_kind {
     TK_NONE, TK_FUND, TK_STRUCT, TK_UNION,
@@ -25,6 +19,30 @@ enum sign_t {
     S_UNSIGNED, S_SIGNED
 };
 typedef u8 sign_t;
+
+enum dtype_kind {
+    DK_ADDR, DK_ARRAY, DK_CHECK
+};
+
+typedef struct delarator {
+    enum dtype_kind tag : 2;
+    i32 amount : 30;
+} declarator_t;
+
+#define DECLARATOR_MAX 8
+typedef struct dtype {
+    type_t *base;
+    declarator_t decl[DECLARATOR_MAX];
+    usize decl_len;
+} dtype_t;
+
+typedef struct member {
+    dtype_t type;
+    str name;
+    size_t offset;
+} member_t;
+
+DYN_GENERIC(member_t)
 
 typedef struct type_t {
     size_t size;
@@ -39,22 +57,7 @@ typedef struct type_t {
     };
 } type_t;
 
-enum dtype_kind {
-    DK_ADDR, DK_ARRAY, DK_CHECK
-};
-
-typedef struct delarator {
-    enum dtype_kind tag : 2;
-    i32 amount : 30;
-} declarator_t;
-
 // derived type
-#define DECLARATOR_MAX 8
-typedef struct dtype {
-    type_t *base;
-    declarator_t decl[DECLARATOR_MAX];
-    usize decl_len;
-} dtype_t;
 
 static inline void dtype_push(dtype_t *self, declarator_t decl) {
     if (self->decl_len >= DECLARATOR_MAX) {
@@ -105,7 +108,7 @@ static inline i32 dtype_tryget_addr(const dtype_t *self) {
     else return top.amount;
 }
 
-static inline size_t dtype_size(dtype_t *self) {
+static inline size_t dtype_size(const dtype_t *self) {
     if (dtype_empty(self)) {
         return self->base->size;
     }

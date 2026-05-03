@@ -376,12 +376,13 @@ regable read_regable(str s, const token_t *token) {
                 compile_err(token, "member not found: "), str_printerr(mem_name);
                 break;
             }
-            result.reg.type = mem->type;
+            result.reg.dtype = mem->type;
+            result.reg.type = mem->type.base;
             result.reg.offset -= mem->offset;
-            t = mem->type;
+            t = mem->type.base;
         }
         if (mem) {
-            size_t mem_size = mem->type->size;
+            size_t mem_size = dtype_size(&mem->type);
             if (mem_size > MAX_REG_SIZE) {
                 compile_err(token, "this member does not fit in register\n");
             }
@@ -819,7 +820,7 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
         if (is_arr) {
             mem_type = dtype->base;
         } else {
-            mem_type = members.begin[index].type;
+            mem_type = members.begin[index].type.base;
         }
 
         if (!tok(context))
@@ -890,7 +891,7 @@ void struct_expr_report(dyn_agg_member *args, type_t *type, int depth) {
         } else if (r->tag == REG) {
             printd("reg off: %d\n", r->reg.offset);
         } else if (r->tag == AGGREGATE) {
-            struct_expr_report(r->agg, members.begin[i].type, depth + 1);
+            struct_expr_report(r->agg, members.begin[i].type.base, depth + 1);
         } else {
             printd("error tag %d\n", r->tag);
         }
@@ -1123,17 +1124,17 @@ bool expr(parser_context *context) {
         context->reg.type = type;
         context->reg.addr = 0;
         context->reg.rsize = (reg_size)type->size;
+        context->reg.dtype = (dtype_t){.base = type};
+        dtype_t *decl = &context->reg.dtype;
         if (len) {
             unsigned long long arr_size = context->reg.rsize * len;
             context->reg.rsize = arr_size > 8 ? 8 : (reg_size)arr_size;
             context->reg.array = (u32)len;
-            dtype_t decl = {.base = type};
-            dtype_push(&decl, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
-            expr_struct(context, context->reg, &decl);
+            dtype_push(decl, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
+            expr_struct(context, context->reg, decl);
             return true;
         } else if (type->tag == TK_STRUCT) {
-            dtype_t decl = {.base = type};
-            expr_struct(context, context->reg, &decl);
+            expr_struct(context, context->reg, decl);
             return true;
         }
         tok(context);
@@ -1249,15 +1250,49 @@ void struct_report(type_t *type) {
         printd("\tmember %d: ", ko++);
         str_printdnl(mem->name);
         printd(" ");
-        str_printdnl(mem->type->name);
+        str_printdnl(mem->type.base->name);
         printd("\toffset: %zd, size: %zd\n",
-                mem->offset, mem->type->size);
+                mem->offset, dtype_size(&mem->type));
     }
     printd(CSI_GREEN"end report\n\n"CSI_RESET);
 #else
     (void)type;
 #endif
 }
+
+bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
+    bool break_out = false;
+    const token_t *cur_token = &context->cur_token;
+    *out = (dtype_t){0};
+
+    while (str_eq_lit(cur_token->id, "addr")) {
+        dtype_push(out, (declarator_t){DK_ADDR, .amount = 1});
+        tok(context);
+        if (cur_token->end[0] == ')') {
+            break_out = true;
+        }
+    }
+
+    str iter = cur_token->id;
+    str typename = dot_iter(&iter, '!');
+    if (!str_empty(&iter)) {
+        str value = dot_iter(&iter, '!');
+        long long amount = strtoll(value.data, NULL, 0);
+        dtype_push(out, (declarator_t){DK_CHECK, .amount = (int)amount});
+    }
+    if (cur_token->end[0] == ')') {
+        break_out = true;
+    }
+
+    type_t *type = hashmap_type_t_tryfind(types, typename);
+    if (!type) {
+        compile_err(cur_token, "unknown type "), str_printerr(typename);
+        type = type_comptime_int;
+    }
+    out->base = type;
+    return break_out;
+}
+
 
 bool stmt_struct(parser_context *context) {
     const token_t *cur_token = &context->cur_token;
@@ -1290,16 +1325,12 @@ bool stmt_struct(parser_context *context) {
         tok(context);
         if (str_empty(current) || current->data[0] == '}')
             break;
-        str typename = *current;
-        type_t *t = hashmap_type_t_tryfind(types, typename);
-        if (t == NULL) {
-            compile_err(&context->cur_token, "unknown type "), str_printerr(typename);
-            continue;
-        }
         member_t m = {
-            .name = name, .type = t,
-            .offset = ALIGN_TO(s->size, (size_t)t->align),
+            .name = name,
         };
+        parse_dtype(context, &m.type);
+        type_t *t = m.type.base;
+        m.offset = ALIGN_TO(s->size, (size_t)t->align),
         s->size = m.offset + t->size;
         s->align = t->align > s->align ? t->align : s->align;
         dyn_member_t_push(&s->struct_t.members, &m);
@@ -1566,39 +1597,6 @@ bool stmt(parser_context *context) {
     }
 
     return decl_vars(context);
-}
-
-bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
-    bool break_out = false;
-    const token_t *cur_token = &context->cur_token;
-    *out = (dtype_t){0};
-
-    while (str_eq_lit(cur_token->id, "addr")) {
-        dtype_push(out, (declarator_t){DK_ADDR, .amount = 1});
-        tok(context);
-        if (cur_token->end[0] == ')') {
-            break_out = true;
-        }
-    }
-
-    str iter = cur_token->id;
-    str typename = dot_iter(&iter, '!');
-    if (!str_empty(&iter)) {
-        str value = dot_iter(&iter, '!');
-        long long amount = strtoll(value.data, NULL, 0);
-        dtype_push(out, (declarator_t){DK_CHECK, .amount = (int)amount});
-    }
-    if (cur_token->end[0] == ')') {
-        break_out = true;
-    }
-
-    type_t *type = hashmap_type_t_tryfind(types, typename);
-    if (!type) {
-        compile_err(cur_token, "unknown type "), str_printerr(typename);
-        type = type_comptime_int;
-    }
-    out->base = type;
-    return break_out;
 }
 
 // out_param_names: set to NULL if not needed
