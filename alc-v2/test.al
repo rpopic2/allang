@@ -457,7 +457,7 @@ slice: (=>)
         Size usize,
     }
 
-    [Data] :: 1 =[]
+    [Data] :: u32{1} =[]
     Data
     Slice :: slice{.Begin Data .Size 1}
     ret

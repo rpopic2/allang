@@ -41,7 +41,7 @@ extern type_t *type_comptime_int;
 void str_printerr(str s);
 
 const char *const cond_str[] = {
-    "eq", "ge"
+    "eq", "ne", "ge", "lt",
 };
 
 const size_t default_register_size = 8;
@@ -670,7 +670,7 @@ void emit_branch(str fn_name, str label, int index) {
 bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
     buf_puts(fn_buf, STR_FROM("\tb."));
     if (condition >= (cond_t)(sizeof (cond_str) / sizeof cond_str[0])) {
-        fprintf(stderr, "unknown condition %d", condition);
+        fprintf(stderr, CSI_RED"unknown condition %d\n", condition);
         return false;
     }
     buf_puts(fn_buf, STR_FROM(cond_str[condition]));

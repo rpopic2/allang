@@ -80,6 +80,14 @@ u32 next_pow2(u32 n) {
     return 1 << (32 - __builtin_clz(n - 1));
 }
 
+enum cond cond_flip(enum cond cond) {
+    if (cond % 2 == 0) {
+        return cond + 1;
+    } else {
+        return cond - 1;
+    }
+}
+
 bool tok(parser_context *context) {
 retry:;
     iter *src = context->src;
@@ -462,7 +470,7 @@ void check_bounds(parser_context *context, reg_t index, i32 len) {
     if (stmt_ret_cond(context, COND_GE)) {
 
     } else {
-        compile_err(cur_token, "expected ret\n");
+        compile_err(cur_token, "expected to handle check operator\n");
     }
 }
 
