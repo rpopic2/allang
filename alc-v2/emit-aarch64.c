@@ -102,7 +102,7 @@ static const char *get_wx(reg_size reg_size) {
     } else if (reg_size <= 8) {
         format = "x";
     } else {
-        compile_err(NULL, CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg_size);
+        report_error(CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg_size);
         format = "x";
     }
     return format;
@@ -122,8 +122,8 @@ void buf_putreg(buf *buffer, reg_t reg) {
         } else if (reg.rsize <= 8) {
             format = "x%d";
         } else {
-            compile_err(NULL, CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg.rsize);
-			return;
+            report_error(CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg.rsize);
+            return;
         }
         buf_snprintf(buffer, format, get_regoff(reg));
     }
@@ -817,7 +817,7 @@ void emit_ret(void) {
 __attribute__((format(printf, 1, 2)))
 #endif
 void report_error(const char *format, ...) {
-    int size = 0x100;
+    int size = 0x1000;
     void *array[size];
     size = backtrace(array, size);
 
