@@ -1,148 +1,42 @@
-# allang: a programming language for modern hardwares
+# allang: a programming language for modern hardware
 by rpopic2
 
 ```
 - low level as assembly, but simple as python
 - explicit error handling, but not verbose
-- write optimized code without optimizers, and compiles fast
+- write optimized code without optimizers, and compile fast
 ```
 
 
 ### why allang?
-- when it comes to performance tuning, you have to look assembly anyways, and just hope that compiler will generate the code you want.
+- interoperates with c.
+- when it comes to performance tuning, you have to look at assembly anyway, and just hope that the compiler will generate the code you want.
 - some languages like c++ and rust are so complex that learning how the actual computers work is simpler and beneficial
-- we only target for x86_64, aarch64, linux, macos, windows. which makes abstracting the real hardware much easier. (not targeting some ancient systems like 10-bit machine)
-- known footguns are allowed but needs to be explicitly requested. (use unchecked to remove bound checking, undefined to use uninitialised value)
-- c compiler's model and the compilation pipeline is based on the good ol' days' hardwares and constraints. we need a language that respects modern hardwares
+- we only target x86_64, aarch64, linux, macos and windows. which makes abstracting the real hardware much easier. (not targeting some ancient systems like 10-bit machines)
+- known footguns are allowed but needs to be explicitly requested. (use unchecked to remove bounds checking, undefined to use uninitialized value)
+- c compiler model and the compilation pipeline is based on the good ol' days' hardwares and constraints. we need a language that respects modern hardwares
 - it is easy to write a simple program, like python. easily spin up a shell script.
 - ergonomic design. type less, type easy.
 
 
 
-other features:
-
-
-
 hello.al
 ```
-std:print "Hello World!"\n =>
+"Hello World!"n .print_to std.Out =>
 ```
 
-
-ex) dead simple todo list interoperrating with c standard library
+format.al
+```
+Number :: 1234
+`This prints `Number` to the `std.Out .name @`!`n
+.print_to std.Out =>
+// result: "This prints 1234 to the std.Out!"
 
 ```
-#import stdio.h
-#import stdlib.h
-#import string.h
 
-main: (i32 Argc, addr addr c8 Argv =>Error?)
-
-    @inline NO_ARGS = Argc is 1
-    NO_ARGS ->
-        File :: 'filemode' "r" @flie.open
-        ~ fclose=>
-
-        File Length :: *File @file.len
-
-        Buffer :: File Length @buffer.new
-        ~ free=>
-
-        *Buffer, #sizeof c8, File Length, *File
-        fread=>
-
-        :: print_file
-            Buffer =[#va_arg]
-            "todo: \n%s" printf=>
-
-        Ok ret
-
-    Argc isnt 3 ->
-        usage=> Error ret
-
-    Command ::
-        Arg_1 :: [Argv, 1 addr c8]
-        Arg_1 strlen=> isnt 2 -> usage=> Error ret
-        [Arg_1, 1 c8]
-
-    Command is
-        'c' create->
-        'd' delete->
-
-create:
-    File :: 'filemode' "a" @file.open
-    ~ fclose=>
-
-    File, [Argv, 2 addr c8], fwrite=>
-
-
-#allow_loop
-@inline read_until_newline: (code, iter c8 *Iter =>code)
-    @loop
-        [*Iter++, 0 c8] isnt '\n' continue->
-
-delete:
-    Buffer ::
-        File :: 'filemode' "r" @flie.open
-        ~ fclose=>
-        File Length :: *File @file.len
-        File Length @buffer.new
-
-        Self, #sizeof c8, File Length *File
-        fread=>
-    ~ free=>
-
-    Index To Delete :: [Argv, 2 addr] atoi=>
-
-    File :: 'filemode' "w" @file.open
-    ~ fclose=>
-
-    Iter :: Buffer as iter c8
-
-        Line Index :: i32 0
-        @loop
-            Line Index is Index To Delete break->
-            @read_until_newline
-            Line Index++
-
-        Iter++
-
-    Buffer, #sizeof c8, Iter - Buffer, *File
-    fwrite=>
-
-    *Iter @read_untile_newline
-    *Iter++
-
-    Write_Length ::
-        Iter - Buffer =$
-        File_Length - $
-
-    Iter, 1, Write_Length, *File
-    fwrite=>
-
-usage: (=>)
-    "" EOF
-        usage:
-        create entry test: -c test
-        delete entry at 0: -d 0
-    EOF
-    printf=>
-
-file:
-    @inline open: (cstr 'filemode' Mode =>File~)
-        "todo.txt", Mode fopen=> =Self
-        Self isnt pointing -> "File does not exist", Error panic
-        Self
-
-    @inline len: (addr FILE *File =>i32)
-        *File 1 fseek=>
-        File ftell=> =Self
-        *File 0 fseek=>
-        Self
-
-buffer:
-    @inline new: (usize Size)
-        Size malloc=> =Self
-        Self isnt pointing -> "malloc failed", Error panic
-
+error.al
 ```
+get_third_elem: Slice slice i32 => option i32
+    [Slice. 2] ! eret  // zero-indexed. ! operator checks bound. eret statement returns error.
+```
+
