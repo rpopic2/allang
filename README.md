@@ -1,17 +1,26 @@
-# allang: alvin's assembly like language
+# allang: a programming language for modern hardwares
 by rpopic2
 
-why allang?
+```
+- low level as assembly, but simple as python
+- explicit error handling, but not verbose
+- write optimized code without optimizers, and compiles fast
+```
 
-- if you know how modern computer works, then you know how to code in allang. stop learning languages.
-- compiles fast, runs fast. write optimized code without optimizers.
-- explicit but not verbose.
+
+### why allang?
+- when it comes to performance tuning, you have to look assembly anyways, and just hope that compiler will generate the code you want.
+- some languages like c++ and rust are so complex that learning how the actual computers work is simpler and beneficial
+- we only target for x86_64, aarch64, linux, macos, windows. which makes abstracting the real hardware much easier. (not targeting some ancient systems like 10-bit machine)
+- known footguns are allowed but needs to be explicitly requested. (use unchecked to remove bound checking, undefined to use uninitialised value)
+- c compiler's model and the compilation pipeline is based on the good ol' days' hardwares and constraints. we need a language that respects modern hardwares
+- it is easy to write a simple program, like python. easily spin up a shell script.
+- ergonomic design. type less, type easy.
+
+
 
 other features:
 
-- compatibility with c
-- safety features are opt-out, footguns are opt-in
-- metaprogramming in the same syntax
 
 
 hello.al
