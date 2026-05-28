@@ -5,6 +5,7 @@ alc-v2/*.s
 alc-v2/hello
 alc-v2/hello_out
 alc-v2/test
+alc-v2/test_bin
 
 .DS_Store
 compile_commands.json
