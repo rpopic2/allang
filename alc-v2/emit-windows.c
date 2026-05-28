@@ -2,6 +2,9 @@
 
 const char *text_section_header = ("\t.text\n");
 const char *string_section_header = ("");
+const char *fn_prefix = "";
+const char *mainfn_annotation = "";
+const char *local_string_prefix = ".Lstr.%d";
 
 // x64 abi
 
