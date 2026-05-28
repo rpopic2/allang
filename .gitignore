@@ -1,5 +1,9 @@
 a.out
 *.dSYM
+alc-v2/alc
+alc-v2/*.s
+alc-v2/hello_out
+alc-v2/test
 
 .DS_Store
 compile_commands.json
