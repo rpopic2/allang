@@ -1,10 +1,10 @@
 #include <inttypes.h>
 
 #include "emit.h"
+#include "typesys.h"
 #include "buffer.h"
 #include "err.h"
 #include "emit_helper.h"
-#include "typesys.h"
 
 #define DECL_PTR(T, X) T _##X; T *X = &_##X
 #define INSTR(s) "\t"s"\n"
