@@ -129,127 +129,111 @@ void buf_putreg(buf *buffer, reg_t reg) {
     }
 }
 
+// Pack consecutive sub-byte VALUE members into a single immediate.
+// Advances *i past any members it consumes; caller's loop will re-increment.
+static void pack_small_values(const dyn_member_t *members, dyn_agg_member *args,
+                               ptrdiff_t *i, ptrdiff_t member_count,
+                               size_t first_size, i64 *value) {
+    size_t packed = first_size;
+    while (packed < 2) {
+        if (++(*i) >= member_count) break;
+        agg_member *next_r = args->begin + *i;
+        if (next_r->tag != VALUE) { --(*i); break; }
+        member_t *next = &members->begin[*i];
+        size_t next_size = dtype_size(&next->type);
+        if (packed + next_size > 2) { --(*i); break; }
+        packed += next_size;
+        *value |= next_r->value << (next_size * 8);
+    }
+}
+
+static void emit_member_value(reg_t dst, const dyn_member_t *members, dyn_agg_member *args,
+                               ptrdiff_t *i, ptrdiff_t member_count,
+                               size_t memb_size, size_t offset_bits,
+                               bool *dst_initialized) {
+    i64 value = args->begin[*i].value;
+    if (offset_bits % 16 == 0)
+        pack_small_values(members, args, i, member_count, memb_size, &value);
+    if (value == 0) return;
+
+    if (offset_bits % 16 != 0) {
+        if (!*dst_initialized) { emit_ri(STR_FROM("mov"), dst, value << offset_bits); unreachable; }
+        emit_rri(STR_FROM("orr"), dst, dst, value << offset_bits);
+        return;
+    }
+    if (!*dst_initialized)
+        emit_risi(STR_FROM("movz"), dst, value, STR_FROM("lsl"), (i64)offset_bits);
+    else
+        emit_risi(STR_FROM("movk"), dst, value, STR_FROM("lsl"), (i64)offset_bits);
+    *dst_initialized = true;
+}
+
+static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offset_bits,
+                             bool dst_initialized) {
+    if (offset_bits == 0) {
+        if (memb_size < 4) {
+            int mask = 0xff;
+            for (size_t j = 1; j < memb_size; ++j)
+                mask |= 0xff << (j * 8);
+            if (reg.rsize < dst.rsize) reg.rsize = dst.rsize;
+            emit_rri(STR_FROM("and"), dst, reg, mask);
+        } else {
+            reg_t tmp_dst = dst;
+            if (reg.rsize < tmp_dst.rsize) tmp_dst.rsize = reg.rsize; // no need to emit mov?
+            tmp_dst.rsize = (u8)memb_size;
+            emit_rr(STR_FROM("mov"), tmp_dst, reg);
+            printd("mov %d, %d\n", get_regoff(tmp_dst), get_regoff(reg));
+            printd("size: %d\n", tmp_dst.rsize);
+            str_printd(tmp_dst.dtype.base->name);
+            str_printd(tmp_dst.type->name);
+        }
+    } else {
+        if (reg.rsize < dst.rsize) reg.rsize = dst.rsize;
+        i64 width = (i64)memb_size * 8;
+        if (dst_initialized)
+            emit_rrii(STR_FROM("bfi"),   dst, reg, (i64)offset_bits, width);
+        else
+            emit_rrii(STR_FROM("ubfiz"), dst, reg, (i64)offset_bits, width);
+    }
+}
+
 bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int *index, size_t *size) {
     type_t *type = dtype->base;
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = args->cur - args->begin;
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
-    size_t dsize = dtype_size(dtype);
 
-    bool is_arr = false;
-    if (dtype_top(dtype).tag == DK_ARRAY) {
-        is_arr = true;
-    }
-
-    bool cleared = false;
+    bool is_arr = dtype_top(dtype).tag == DK_ARRAY;
+    bool dst_initialized = false;
     size_t size_acc = 0;
     size_t base_offset_bits = 0;
 
     for (ptrdiff_t i = *index; i < member_count; ++i, *index = (int)i) {
-        member_t *memb = NULL;
-        if (is_arr) {
-            memb = &(member_t){.type = *dtype, .offset = (size_t)index * dsize};
-        } else {
-            memb = &members->begin[i];
-        }
-        type_t *memb_type = memb->type.base;
-        size_t memb_size = memb_type->size;
+        member_t *memb = is_arr
+            ? &(member_t){.type = *dtype, .offset = (size_t)index * dtype_size(dtype)}
+            : &members->begin[i];
+        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->type);
         size_t offset_bits = memb->offset * 8;
 
-        if (size_acc == 0) {
-            base_offset_bits = offset_bits;
-        }
+        if (size_acc == 0) base_offset_bits = offset_bits;
         offset_bits -= base_offset_bits;
+
+        if (size_acc + memb_size > 8) break;
         size_acc += memb_size;
-        if (size_acc > 8) {
-            size_acc -= memb_size;
-            *index = (int)i;
-            break;
-        }
 
         agg_member *r = &args->begin[i];
         if (r->tag == VALUE) {
-            i64 value = r->value;
-            if (offset_bits % 16 == 0) {
-                size_t size = memb_size;
-                while (size < 2) {
-                    if (++i >= member_count)
-                        break;
-                    agg_member *r = args->begin + i;
-                    if (r->tag != VALUE) {
-                        --i;
-                        break;
-                    }
-                    member_t *memb = &members->begin[i];
-                    size_t memb_size = dtype_size(&memb->type);
-                    if (size + memb_size > 2) {
-                        --i;
-                        break;
-                    }
-                    size += memb_size;
-                    value |= r->value << memb_size * 8;
-                }
-            }
-
-            if (value == 0)
-                continue;
-
-            if (offset_bits % 16 != 0) {
-                if (!cleared) {
-                    emit_ri(STR_FROM("mov"), dst, value << offset_bits);
-                    unreachable;
-                }
-                emit_rri(STR_FROM("orr"), dst, dst, value << offset_bits);
-                continue;
-            } else {
-                if (!cleared) {
-                    emit_risi(STR("movz"), dst, value, STR("lsl"), (i64)offset_bits);
-                } else {
-                    emit_risi(STR("movk"), dst, value, STR("lsl"), (i64)offset_bits);
-                }
-            }
-            cleared = true;
+            emit_member_value(dst, members, args, &i, member_count, memb_size, offset_bits, &dst_initialized);
         } else if (r->tag == REG) {
-            reg_t reg = r->reg;
-
-            if (offset_bits == 0) {
-                if (memb_size < 4) {
-                    int mask = 0xff;
-                    for (size_t i = 1; i < memb_size; ++i) {
-                        mask |= 0xff << i * 8;
-                    }
-                    if (reg.rsize < dst.rsize)
-                        reg.rsize = dst.rsize;
-                    emit_rri(STR_FROM("and"), dst, reg, mask);
-                } else {
-                    reg_t tmp_dst = dst;
-                    if (reg.rsize < tmp_dst.rsize) // no need to emit mov?
-                        tmp_dst.rsize = reg.rsize;
-                    tmp_dst.rsize = (u8)dtype_size(&memb->type);
-                    emit_rr(STR_FROM("mov"), tmp_dst, reg);
-
-                    printd("mov %d, %d\n", get_regoff(tmp_dst), get_regoff(reg));
-                    printd("size: %d\n", tmp_dst.rsize);
-                    str_printd(tmp_dst.dtype.base->name);
-                    str_printd(tmp_dst.type->name);
-                }
-            } else {
-                if (reg.rsize < dst.rsize)
-                    reg.rsize = dst.rsize;
-                i64 width = (i64)memb_size * 8;
-                if (cleared)
-                    emit_rrii(STR_FROM("bfi"), dst, reg, (i64)offset_bits, width);
-                else
-                    emit_rrii(STR("ubfiz"), dst, reg, (i64)offset_bits, width);
-            }
-            cleared = true;
+            emit_member_reg(dst, r->reg, memb_size, offset_bits, dst_initialized);
+            dst_initialized = true;
         } else {
             unreachable;
         }
     }
 
     *size += size_acc;
-    return cleared;
+    return dst_initialized;
 }
 
 void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args) {
