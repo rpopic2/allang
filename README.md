@@ -10,6 +10,7 @@ by rpopic2
 
 ### why allang?
 - interoperates with c.
+- all variables are immutable outside declaration scope
 - when it comes to performance tuning, you have to look at assembly anyway, and just hope that the compiler will generate the code you want.
 - some languages like c++ and rust are so complex that learning how the actual computers work is simpler and beneficial
 - we only target x86_64, aarch64, linux, macos and windows. which makes abstracting the real hardware much easier. (not targeting some ancient systems like 10-bit machines)
@@ -40,3 +41,10 @@ get_third_elem: Slice slice i32 => option i32
     [Slice. 2] ! eret  // zero-indexed. ! operator checks bound. eret statement returns error.
 ```
 
+vectorization.al
+```
+Array :: <1, 2, 3, 4, 5, 6, 7, 8, 9>
+
+Sum :: 0 sum [Array 0..]
+Sum2 :: 0 sum [Array 0..4]
+```
