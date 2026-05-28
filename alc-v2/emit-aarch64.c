@@ -225,7 +225,7 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
                     reg_t tmp_dst = dst;
                     if (reg.rsize < tmp_dst.rsize) // no need to emit mov?
                         tmp_dst.rsize = reg.rsize;
-                    tmp_dst.rsize = (u8)dtype_size(&tmp_dst.dtype);
+                    tmp_dst.rsize = (u8)dtype_size(&memb->type);
                     emit_rr(STR_FROM("mov"), tmp_dst, reg);
 
                     printd("mov %d, %d\n", get_regoff(tmp_dst), get_regoff(reg));
