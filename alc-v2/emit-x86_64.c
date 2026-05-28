@@ -22,7 +22,7 @@ extern const size_t rname_param_len;
 extern const size_t rname_ret_len;
 
 extern const char *fn_prefix;
-extern const char *mainfn_annotation;
+extern const char *fn_annotation_fmt;
 extern const char *local_string_prefix;
 
 DECL_PTR(static buf, text_buf);
@@ -681,8 +681,9 @@ void emit_fn(str fn_name) {
     buf_puts(fn_header_buf, STR_FROM(fn_prefix));
     buf_puts(fn_header_buf, fn_name);
     buf_puts(fn_header_buf, STR_FROM("\n\t.p2align 4\n"));
-    if (str_eq_lit(fn_name, "main") && *mainfn_annotation) {
-        buf_puts(fn_header_buf, STR_FROM(mainfn_annotation));
+    if (*fn_annotation_fmt) {
+        buf_snprintf(fn_header_buf, fn_annotation_fmt,
+                     (int)str_len(fn_name), fn_name.data);
     }
     buf_puts(fn_header_buf, STR_FROM(fn_prefix));
     buf_puts(fn_header_buf, fn_name);
