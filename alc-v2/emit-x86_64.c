@@ -342,7 +342,7 @@ static bool x86_eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member 
         } else {
             memb = &type->struct_t.members.begin[i];
         }
-        size_t memb_size = memb->type.base->size;
+        size_t memb_size = dtype_size(&memb->type);
         size_t offset_bits = memb->offset * 8;
         size_t local_offset_bits = offset_bits % 64;
 
@@ -370,6 +370,12 @@ static bool x86_eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member 
             }
         } else if (arg->tag == REG) {
             reg_t reg = arg->reg;
+            if (reg.reg_type == STACK) {
+                /* STACK reg is a variable at rbp-offset; compute its address first */
+                const reg_t frame = {.reg_type = FRAME, .rsize = 8};
+                emit_sub(shift_tmp, frame, (i64)reg.offset);
+                reg = shift_tmp;
+            }
             reg.rsize = memb_size < 4 ? (reg_size)memb_size : (memb_size <= 4 ? 4 : 8);
 
             if (local_offset_bits == 0 && reg.rsize == dst.rsize) {
