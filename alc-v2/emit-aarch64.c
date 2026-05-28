@@ -826,6 +826,7 @@ void report_error(const char *format, ...) {
     fprintf(stderr, CSI_RED"error: "CSI_RESET);
     vfprintf(stderr, format, args);
     va_end(args);
+    compile_err(NULL, "");
 
     backtrace_symbols_fd(array, size, STDERR_FILENO);
 }
@@ -836,5 +837,6 @@ void report_error(const char *format, ...) {
     fprintf(stderr, CSI_RED"error: "CSI_RESET);
     vfprintf(stderr, format, args);
     va_end(args);
+    compile_err(NULL, "");
 }
 #endif

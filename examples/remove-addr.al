@@ -13,6 +13,7 @@ rationale:
     foo .
         3,
         [Arr * I] ! ret 0
+        [Arr . I]
         . =>
 
 kaz: Number i32 =>  // value
