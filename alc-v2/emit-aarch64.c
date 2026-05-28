@@ -136,12 +136,19 @@ static void pack_small_values(const dyn_member_t *members, dyn_agg_member *args,
                                size_t first_size, i64 *value) {
     size_t packed = first_size;
     while (packed < 2) {
-        if (++(*i) >= member_count) break;
+        if (++(*i) >= member_count)
+            break;
         agg_member *next_r = args->begin + *i;
-        if (next_r->tag != VALUE) { --(*i); break; }
+        if (next_r->tag != VALUE) {
+            --(*i);
+            break;
+        }
         member_t *next = &members->begin[*i];
         size_t next_size = dtype_size(&next->type);
-        if (packed + next_size > 2) { --(*i); break; }
+        if (packed + next_size > 2) {
+            --(*i);
+            break;
+        }
         packed += next_size;
         *value |= next_r->value << (next_size * 8);
     }
@@ -152,19 +159,25 @@ static void emit_member_value(reg_t dst, const dyn_member_t *members, dyn_agg_me
                                size_t memb_size, size_t offset_bits,
                                bool *dst_initialized) {
     i64 value = args->begin[*i].value;
-    if (offset_bits % 16 == 0)
+    if (offset_bits % 16 == 0) {
         pack_small_values(members, args, i, member_count, memb_size, &value);
-    if (value == 0) return;
+    }
+    if (value == 0)
+        return;
 
     if (offset_bits % 16 != 0) {
-        if (!*dst_initialized) { emit_ri(STR_FROM("mov"), dst, value << offset_bits); unreachable; }
+        if (!*dst_initialized) {
+            emit_ri(STR_FROM("mov"), dst, value << offset_bits);
+            unreachable;
+        }
         emit_rri(STR_FROM("orr"), dst, dst, value << offset_bits);
         return;
     }
-    if (!*dst_initialized)
+    if (!*dst_initialized) {
         emit_risi(STR_FROM("movz"), dst, value, STR_FROM("lsl"), (i64)offset_bits);
-    else
+    } else {
         emit_risi(STR_FROM("movk"), dst, value, STR_FROM("lsl"), (i64)offset_bits);
+    }
     *dst_initialized = true;
 }
 
@@ -173,13 +186,19 @@ static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offse
     if (offset_bits == 0) {
         if (memb_size < 4) {
             int mask = 0xff;
-            for (size_t j = 1; j < memb_size; ++j)
+            for (size_t j = 1; j < memb_size; ++j) {
                 mask |= 0xff << (j * 8);
-            if (reg.rsize < dst.rsize) reg.rsize = dst.rsize;
+            }
+            if (reg.rsize < dst.rsize) {
+                reg.rsize = dst.rsize;
+            }
             emit_rri(STR_FROM("and"), dst, reg, mask);
         } else {
             reg_t tmp_dst = dst;
-            if (reg.rsize < tmp_dst.rsize) tmp_dst.rsize = reg.rsize; // no need to emit mov?
+            // no need to emit mov?
+            if (reg.rsize < tmp_dst.rsize) {
+                tmp_dst.rsize = reg.rsize;
+            }
             tmp_dst.rsize = (u8)memb_size;
             emit_rr(STR_FROM("mov"), tmp_dst, reg);
             printd("mov %d, %d\n", get_regoff(tmp_dst), get_regoff(reg));
@@ -188,12 +207,15 @@ static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offse
             str_printd(tmp_dst.type->name);
         }
     } else {
-        if (reg.rsize < dst.rsize) reg.rsize = dst.rsize;
+        if (reg.rsize < dst.rsize) {
+            reg.rsize = dst.rsize;
+        }
         i64 width = (i64)memb_size * 8;
-        if (dst_initialized)
+        if (dst_initialized) {
             emit_rrii(STR_FROM("bfi"),   dst, reg, (i64)offset_bits, width);
-        else
+        } else {
             emit_rrii(STR_FROM("ubfiz"), dst, reg, (i64)offset_bits, width);
+        }
     }
 }
 
@@ -215,10 +237,13 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
         size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->type);
         size_t offset_bits = memb->offset * 8;
 
-        if (size_acc == 0) base_offset_bits = offset_bits;
+        if (size_acc == 0) {
+            base_offset_bits = offset_bits;
+        }
         offset_bits -= base_offset_bits;
 
-        if (size_acc + memb_size > 8) break;
+        if (size_acc + memb_size > 8)
+            break;
         size_acc += memb_size;
 
         agg_member *r = &args->begin[i];
