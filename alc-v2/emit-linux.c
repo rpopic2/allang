@@ -14,18 +14,17 @@ const char *local_string_prefix = ".L.str.%d";
 // system-v abi
 
 const char * const rname_scratch[] = {
-	"ax", "cx", "dx", "si", "di", "r8", "r9", "r10", "r11"
+	"ax", "cx", "dx", "si", "di", "r8", "r9"
 };
 const size_t rname_scratch_len = sizeof rname_scratch / sizeof (char *);
 
 const char * const rname_callee[] = {
-	"bx", "r12", "r13", "r14", "r15"
+	"bx", "r12", "r13", "r14", "r15", "r10", "r11"
 };
 const size_t rname_callee_len = sizeof rname_callee / sizeof (char *);
 
 const char * const rname_param[] = {
 	"di", "si", "dx", "cx", "r8", "r9", // end of abi
-	"r10", "r11",
 };
 const size_t rname_param_len = sizeof rname_param / sizeof (char *);
 
