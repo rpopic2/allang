@@ -1,4 +1,4 @@
-alc
+*
+!*.*
 *.s
-test
 compile_commands.json

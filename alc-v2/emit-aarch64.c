@@ -34,7 +34,7 @@ unsigned string_lit_counts = 0;
 extern const char *addrgen_adrp;
 extern const char *addrgen_add;
 extern const char *fn_prefix;
-extern const char *mainfn_annotation;
+extern const char *fn_annotation_fmt;
 extern const char *local_string_prefix;
 extern type_t *type_comptime_int;
 
@@ -809,8 +809,9 @@ void emit_fn(str fn_name) {
     buf_puts(fn_header_buf, STR_FROM(fn_prefix));
 	buf_puts(fn_header_buf, fn_name);
     buf_puts(fn_header_buf, STR_FROM("\n\t.p2align 2\n"));
-    if (str_eq_lit(fn_name, "main")) {
-        buf_puts(fn_header_buf, STR_FROM(mainfn_annotation));
+    if (*fn_annotation_fmt) {
+        buf_snprintf(fn_header_buf, fn_annotation_fmt,
+                     (int)str_len(fn_name), fn_name.data);
     }
     buf_puts(fn_header_buf, STR_FROM(fn_prefix));
 	buf_puts(fn_header_buf, fn_name);
