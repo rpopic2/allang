@@ -232,7 +232,7 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
 
     for (ptrdiff_t i = *index; i < member_count; ++i, *index = (int)i) {
         member_t *memb = is_arr
-            ? &(member_t){.type = *dtype, .offset = (size_t)index * dtype_size(dtype)}
+            ? &(member_t){.type = *dtype, .offset = (size_t)i * dtype->base->size}
             : &members->begin[i];
         size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->type);
         size_t offset_bits = memb->offset * 8;
