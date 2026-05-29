@@ -529,7 +529,23 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     reg_t reg = regable_target.reg;
     i32 addr = dtype_tryget_addr(&reg.dtype);
     if (reg.reg_type != STACK && addr <= 0) {
-        compile_err(cur_token, "a register conatining addr is expected\n");
+        member_t *first = NULL;
+        const dtype_t *dtype = &reg.dtype;
+        const type_t *type = dtype->base;
+        if (dtype_empty(dtype) && type
+                && type->tag == TK_STRUCT) {
+            const dyn_member_t *m = &type->struct_t.members;
+            if (m->begin != m->cur && dtype_tryget_addr(&m->begin->type) > 0) {
+                first = m->begin;
+            }
+        }
+        if (first) {
+            reg.dtype  = first->type;
+            reg.offset -= (i32)first->offset;
+            reg.rsize  = (reg_size)dtype_size(&first->type);
+        } else {
+            compile_err(cur_token, "a register conatining addr is expected\n");
+        }
     }
     if (offset_regable.tag == VALUE) {
         size_t stride;

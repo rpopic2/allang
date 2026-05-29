@@ -32,9 +32,14 @@ The compiler is a single-pass compiler entirely in `alc-v2/`:
 allang uses indentation-sensitive scoping. Key syntax elements:
 - `::` — variable declaration (all variables are immutable outside declaration scope)
 - `=>` — function call (postfix: `arg .fn_name =>`)
-- `[]` — memory load/store
+- `[S]` — memory load (load from S)
+- `X =[S]` — memory store (store X to S)
 - `!` — bounds check operator
 - `->` — branch/jump
 - `@` — macros, `#` — directives
 
 See `specs-v4/` for the full language spec.
+
+## Code Conventions
+
+- Use comments sparingly.
