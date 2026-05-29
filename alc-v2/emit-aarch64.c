@@ -209,10 +209,6 @@ static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offse
             }
             tmp_dst.rsize = (u8)memb_size;
             emit_rr(STR_FROM("mov"), tmp_dst, reg);
-            printd("mov %d, %d\n", get_regoff(tmp_dst), get_regoff(reg));
-            printd("size: %d\n", tmp_dst.rsize);
-            str_printd(tmp_dst.dtype.base->name);
-            str_printd(tmp_dst.type->name);
         }
     } else {
         if (reg.rsize < dst.rsize) {
@@ -304,8 +300,8 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
 }
 
 void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
-    const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8, .type = type->base};
-    reg_t wzr = {.reg_type = RD_NONE, .rsize = 4, .type = type->base};
+    const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8, .dtype = {.base = type->base}};
+    reg_t wzr = {.reg_type = RD_NONE, .rsize = 4, .dtype = {.base = type->base}};
     size_t size = dtype_size(type);
 
     while (size >= 16) {
@@ -350,7 +346,7 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
 
     reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
     while (index < member_count) {
-        reg_t tmp = {.reg_type = SCRATCH, .type = type, .rsize = rsize};
+        reg_t tmp = {.reg_type = SCRATCH, .dtype = {.base = type}, .rsize = rsize};
         size_t member_off = size;
         int tmp_index = index;
 
@@ -414,7 +410,7 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
 
 void emit_mov(reg_t dst, i64 value) {
     int regidx = get_regoff(dst);
-    if (dst.type == type_comptime_int) {
+    if (dst.dtype.base == type_comptime_int) {
         if (value <= INT32_MAX) {
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId32), get_wx(dst.rsize), regidx, (i32)value);
         } else if (value <= INT64_MAX) {
@@ -428,7 +424,7 @@ void emit_mov(reg_t dst, i64 value) {
             compile_err(NULL, "literal was too big");
         }
     } else {
-        if (!dst.type || !dst.type->sign)
+        if (!dst.dtype.base || !dst.dtype.base->sign)
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIx64), get_wx(dst.rsize), regidx, value);
         else
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIi64), get_wx(dst.rsize), regidx, value);
@@ -437,7 +433,7 @@ void emit_mov(reg_t dst, i64 value) {
 }
 
 void type_conv(reg_t dst, reg_t src) {
-    type_t *srct = src.type;
+    type_t *srct = src.dtype.base;
     if (!srct) // TODO is it okay to ignore?
         return;
 
@@ -475,7 +471,7 @@ void type_conv(reg_t dst, reg_t src) {
 
 void emit_mov_reg(reg_t dst, reg_t src) {
     const char *format;
-    if (dst.addr || dtype_tryget_addr(&dst.dtype)) {
+    if (dtype_tryget_addr(&dst.dtype)) {
         dst.rsize = 8;
     }
     if (dst.rsize > src.rsize) {
@@ -556,7 +552,7 @@ void emit_lsl(reg_t dst, reg_t lhs, i64 rhs) {
 static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     const char *suffix = "";
     size_t size = r0.rsize;
-    if (r0.addr) {
+    if (dtype_tryget_addr(&r0.dtype)) {
         size = 8;
     }
     if (r0.rsize <= 0) {
@@ -565,17 +561,17 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
         printd("dump r0 | size: %d, reg_type: %d, offset: %d\n", r0.rsize, r0.reg_type, r0.offset);
         report_error("");
     } else if (size <= 1) {
-        if (*op == 'l' && r0.type->sign)
+        if (*op == 'l' && r0.dtype.base->sign)
             suffix = "sb";
         else
             suffix = "b";
     } else if (size <= 2) {
-        if (*op == 'l' && r0.type->sign)
+        if (*op == 'l' && r0.dtype.base->sign)
             suffix = "sh";
         else
             suffix = "h";
     } else if (*op == 'l' && size == 8 && size == 4) {
-        if (*op == 'l' && r0.type->sign)
+        if (*op == 'l' && r0.dtype.base->sign)
             suffix = "sw";
     }
     buf_snprintf(fn_buf, ("\t%s%s "), op, suffix);
@@ -621,7 +617,6 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
             tmp_src.reg_type = SCRATCH;
             tmp_src.offset = 3;
             tmp_src.rsize = 8;
-            tmp_src.addr = 1;
             dtype_push(&tmp_src.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
             emit_sub(tmp_src, FP, src.offset);
             src = tmp_src;

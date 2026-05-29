@@ -126,11 +126,8 @@ static inline size_t dtype_size(const dtype_t *self) {
 
 typedef struct reg {
     i32 offset;
-    u32 array;
     reg_size rsize;
     register_dst reg_type : 3; // enum register_dst
-    u8 addr : 2;
-    type_t *type;
     dtype_t dtype;
 } reg_t;
 
@@ -252,4 +249,3 @@ inline static int/*?*/ power_of_two_exponent(size_t n) {
         return 0;
     return __builtin_ctzll(n);
 }
-

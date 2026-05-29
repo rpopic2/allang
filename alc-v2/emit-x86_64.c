@@ -158,7 +158,7 @@ void emit_mov(reg_t dst, i64 value) {
 void emit_mov_reg(reg_t dst, reg_t src) {
     const char *op = "mov";
     if (dst.rsize && src.rsize && dst.rsize > src.rsize) {
-        if (src.type && src.type->sign) {
+        if (src.dtype.base && src.dtype.base->sign) {
             if (dst.rsize == 8 && src.rsize == 4) {
                 op = "movsxd";
             } else {
@@ -293,8 +293,8 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
     buf_snprintf(fn_buf, " + %d]\n", offset);
 }
 
-const reg_t rax = {.rsize = sizeof (void *), .reg_type = SCRATCH, .addr = 1};
-const reg_t rbp = {.rsize = sizeof (void *), .reg_type = FRAME, .addr = 1};
+const reg_t rax = {.rsize = sizeof (void *), .reg_type = SCRATCH, .dtype = {.decl = {{.tag = DK_ADDR, .amount = 1}}, .decl_len = 1}};
+const reg_t rbp = {.rsize = sizeof (void *), .reg_type = FRAME, .dtype = {.decl = {{.tag = DK_ADDR, .amount = 1}}, .decl_len = 1}};
 
 /* emit.h: emit_str_reg(dst=memory_base, src=value, offset=index_reg) */
 void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
@@ -438,7 +438,7 @@ void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args) {
 
 static void emit_zerofill_x86(reg_t base, i64 offset, const dtype_t *dtype) {
     size_t size = dtype_size(dtype);
-    reg_t zero = {.reg_type = SCRATCH, .offset = 1, .rsize = 8, .type = dtype->base};
+    reg_t zero = {.reg_type = SCRATCH, .offset = 1, .rsize = 8, .dtype = {.base = dtype->base}};
     emit_rr(STR("xor"), zero, zero);
 
     reg_size rsize = 8;
@@ -495,7 +495,7 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
             continue;
         }
 
-        reg_t scratch = {.reg_type = SCRATCH, .offset = 0, .rsize = rsize, .type = type};
+        reg_t scratch = {.reg_type = SCRATCH, .offset = 0, .rsize = rsize, .dtype = {.base = type}};
         bool cleared = x86_eightbyte_make_struct(scratch, dtype, args, &index, &size);
         if (tmp_index == index) {
             compile_err(NULL, "member size expected less than 16\n");
@@ -538,7 +538,6 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
             tmp_src.reg_type = SCRATCH;
             tmp_src.offset = 2;
             tmp_src.rsize = 8;
-            tmp_src.addr = 1;
             const reg_t frame = {.reg_type = FRAME, .rsize = 8};
             emit_sub(tmp_src, frame, src.offset);
             src = tmp_src;
