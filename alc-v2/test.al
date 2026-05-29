@@ -463,14 +463,8 @@ slice: (=>)
     ret
 
 slice2: (=>)
-    struct {
-        Dummy u32,
-        Size usize,
-    }
-
     [Data] :: u32{1} =[]
     Data
-    Slice :: slice2{.Begin Data .Size 1}
-    [Slice.Begin]
+    [Slice] :: slice{.Begin Data .Size 1} =[]
     ret
 
