@@ -824,6 +824,12 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
         member_name.data++;
 
         int index = find_member_index(&members, member_name);
+        if (index == -1) {
+            compile_err(token, "member not found: "), str_printerr(member_name);
+            if (!tok(context)) break;
+            continue;
+        }
+
         type_t *mem_type;
         if (is_arr) {
             mem_type = dtype->base;
@@ -834,10 +840,6 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
         if (!tok(context))
             break;
 
-        if (index == -1) {
-            compile_err(token, "member not found: "), str_printerr(member_name);
-            continue;
-        }
         if (islower(s->data[0])) {
             tok(context);
             expect(context, STR("{"));
