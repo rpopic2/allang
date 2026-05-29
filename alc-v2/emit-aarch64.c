@@ -159,6 +159,8 @@ static void emit_member_value(reg_t dst, const dyn_member_t *members, dyn_agg_me
                                size_t memb_size, size_t offset_bits,
                                bool *dst_initialized) {
     i64 value = args->begin[*i].value;
+    if (offset_bits >= 32 && dst.rsize < 8)
+        dst.rsize = 8;
     if (offset_bits % 16 == 0) {
         pack_small_values(members, args, i, member_count, memb_size, &value);
     }
