@@ -3,9 +3,3 @@ a.out
 
 .DS_Store
 compile_commands.json
-
-macho-reloc
-machoreloc
-machoreloc.out
-machoexe.out
-
