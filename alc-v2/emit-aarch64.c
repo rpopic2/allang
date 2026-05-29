@@ -83,6 +83,8 @@ bool emit_need_escaping(void) {
     return false;
 }
 
+const reg_t FP = { .reg_type = FRAME, .rsize = sizeof (void *) };
+
 static int get_regoff(reg_t e) {
     if (e.reg_type == SCRATCH)
         e.offset += 8;
@@ -185,6 +187,10 @@ static void emit_member_value(reg_t dst, const dyn_member_t *members, dyn_agg_me
 
 static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offset_bits,
                              bool dst_initialized) {
+    if (reg.reg_type == STACK) {
+        emit_sub(dst, FP, reg.offset);
+        return;
+    }
     if (offset_bits == 0) {
         if (memb_size < 4) {
             int mask = 0xff;
@@ -603,8 +609,6 @@ void ldr_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
     load_store_x("ldr", dst, src);
     buf_snprintf(fn_buf, ("x%d, lsl #%d]\n"), get_regoff(offset), lsl);
 }
-
-const reg_t FP = { .reg_type = FRAME, .rsize = sizeof (void *) };
 
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store) {
     dtype_t *dtype = &src.dtype;
