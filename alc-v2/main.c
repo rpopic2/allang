@@ -381,7 +381,7 @@ regable read_regable(str s, const token_t *token) {
             str mem_name = dot_iter(&s, '.');
             if (str_empty(&mem_name))
                 break;
-            member_t *mem = find_member(&t->struct_t.members, mem_name);
+            mem = find_member(&t->struct_t.members, mem_name);
             if (mem == NULL) {
                 compile_err(token, "member not found: "), str_printerr(mem_name);
                 break;
@@ -527,7 +527,8 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         return false;
     }
     reg_t reg = regable_target.reg;
-    if (reg.reg_type != STACK && reg.addr <= 0) {
+    i32 addr = dtype_tryget_addr(&reg.dtype);
+    if (reg.reg_type != STACK && addr <= 0) {
         compile_err(cur_token, "a register conatining addr is expected\n");
     }
     if (offset_regable.tag == VALUE) {
