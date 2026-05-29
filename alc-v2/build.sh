@@ -1,9 +1,7 @@
-if [[ "$(uname -s)" != MINGW* ]]; then
-    if clang -fsanitize=undefined -x c /dev/null -o /dev/null 2>/dev/null; then
-        EXTRA_FLAGS+=" -fsanitize=undefined"
-    else
-        EXTRA_FLAGS+=" -fsanitize=undefined -fno-sanitize-link-runtime -lubsan"
-    fi
+if [[ "$(uname -s)" = Linux ]]; then
+    EXTRA_FLAGS+=" -fsanitize=undefined -fno-sanitize-link-runtime -lubsan"
+elif [[ "$(uname -s)" != MINGW* ]]; then
+    EXTRA_FLAGS+=" -fsanitize=undefined"
 fi
 if [ "$(uname -o)" = Android ]; then
     EXTRA_FLAGS+=" -lexecinfo -rdynamic -fno-omit-frame-pointer"
