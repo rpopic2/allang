@@ -384,6 +384,7 @@ regable read_regable(str s, const token_t *token) {
             mem = find_member(&t->struct_t.members, mem_name);
             if (mem == NULL) {
                 compile_err(token, "member not found: "), str_printerr(mem_name);
+                result.tag = NONE;
                 break;
             }
             result.reg.dtype = mem->type;
@@ -872,10 +873,9 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
             if (!init_zero) {
                 compile_err(token, "a field is not initialized: ");
                 str_printerr(members.begin[i].name);
-            } else {
-                r->tag = VALUE;
-                r->value = 0;
             }
+            r->tag = VALUE;
+            r->value = 0;
         }
     }
 
