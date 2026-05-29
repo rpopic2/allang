@@ -221,6 +221,15 @@ ARR_GENERIC(target, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u16, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u8, MAX_BLOCK_DEPTH)
 
+// record of a stack-allocated local, kept for the stack visualizer
+typedef struct {
+    str name;
+    str type_name;
+    size_t offset; // distance below the frame pointer of the slot's top byte + size
+    size_t size;   // bytes reserved on the stack
+} stack_slot_t;
+#define MAX_STACK_SLOTS 64
+
 typedef struct parser_context {
     iter *src;
     reg_t reg;
@@ -242,6 +251,8 @@ typedef struct parser_context {
     arr_u16 deferred_unnamed_br;
     arr_u8 nreg_mark;
     symbol_t *symbol;
+    stack_slot_t stack_slots[MAX_STACK_SLOTS];
+    int stack_slot_count;
 } parser_context;
 
 inline static int/*?*/ power_of_two_exponent(size_t n) {

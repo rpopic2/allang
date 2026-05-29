@@ -26,6 +26,7 @@ bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
+void stack_report(parser_context *context);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
@@ -990,6 +991,14 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
             context->stack_size = ALIGN_TO(context->stack_size, 8);
         }
         *out_offset = context->stack_size;
+
+        if (context->stack_slot_count < MAX_STACK_SLOTS) {
+            stack_slot_t *slot = &context->stack_slots[context->stack_slot_count++];
+            slot->name = cur_target->name;
+            slot->type_name = src->dtype.base ? src->dtype.base->name : str_null;
+            slot->offset = (size_t)*out_offset;
+            slot->size = size;
+        }
     } else {
         *out_offset = target_reg->offset;
     }
@@ -1252,26 +1261,193 @@ int expr_line(parser_context *context) {
 }
 
 
+#if !NDEBUG
+// vertical memory-layout box for the ascii visualizers below.
+// the byte range [lo, hi) grows downward (low address on top).
+typedef struct {
+    str name;
+    str type_name;
+    long lo;
+    long hi;
+    bool pad;
+} mem_box;
+
+#define MEM_BOX_GUTTER 7   // columns reserved for the address labels
+#define MEM_BOX_MAX_ROWS 16 // cap content rows so huge objects stay readable
+
+static void mem_box_label(char *buf, size_t cap, long addr, bool fp_relative) {
+    if (!fp_relative) {
+        snprintf(buf, cap, "+%ld", addr);
+    } else if (addr == 0) {
+        snprintf(buf, cap, "fp");
+    } else if (addr < 0) {
+        snprintf(buf, cap, "fp-%ld", -addr);
+    } else {
+        snprintf(buf, cap, "fp+%ld", addr);
+    }
+}
+
+// prints a horizontal divider carrying its address on the left.
+static void mem_box_divider(long addr, bool fp_relative, int width,
+                            const char *l, const char *mid, const char *r) {
+    char buf[32];
+    mem_box_label(buf, sizeof buf, addr, fp_relative);
+    printd("%*s %s%s", MEM_BOX_GUTTER, buf, "─", l);
+    for (int i = 0; i < width; ++i)
+        printd("%s", mid);
+    printd("%s\n", r);
+}
+
+static void mem_box_blank(int width) {
+    printd("%*s │%*s│\n", MEM_BOX_GUTTER, "", width, "");
+}
+
+// boxes must be sorted ascending by lo, with padding gaps already inserted.
+static void draw_mem_layout(const mem_box *boxes, int n, bool fp_relative) {
+    if (n == 0) {
+        printd("\t<empty>\n");
+        return;
+    }
+
+    char namebuf[64], rightbuf[96];
+    int width = 0;
+    for (int i = 0; i < n; ++i) {
+        const mem_box *b = &boxes[i];
+        int left_len = b->pad ? (int)sizeof "(padding)" - 1
+                              : (int)str_len(b->name);
+        int right_len = b->pad
+            ? snprintf(rightbuf, sizeof rightbuf, "%ld bytes", b->hi - b->lo)
+            : snprintf(rightbuf, sizeof rightbuf, "%.*s (%ld)",
+                       (int)str_len(b->type_name), b->type_name.data, b->hi - b->lo);
+        int need = left_len + right_len + 3;
+        if (need > width)
+            width = need;
+    }
+
+    printd("\n");
+    mem_box_divider(boxes[0].lo, fp_relative, width, "┌", "─", "┐");
+    for (int i = 0; i < n; ++i) {
+        const mem_box *b = &boxes[i];
+        long bytes = b->hi - b->lo;
+
+        const char *name = "(padding)";
+        if (!b->pad) {
+            size_t nlen = str_len(b->name);
+            if (nlen >= sizeof namebuf) nlen = sizeof namebuf - 1;
+            memcpy(namebuf, b->name.data, nlen);
+            namebuf[nlen] = '\0';
+            name = namebuf;
+        }
+        if (b->pad)
+            snprintf(rightbuf, sizeof rightbuf, "%ld bytes", bytes);
+        else
+            snprintf(rightbuf, sizeof rightbuf, "%.*s (%ld)",
+                     (int)str_len(b->type_name), b->type_name.data, bytes);
+
+        int gap = width - (int)strlen(name) - (int)strlen(rightbuf) - 2;
+        if (gap < 1) gap = 1;
+        const char *color = b->pad ? CSI_RED : CSI_GREEN;
+        printd("%*s │ %s%s%s%*s%s │\n", MEM_BOX_GUTTER, "",
+               color, name, CSI_RESET, gap, "", rightbuf);
+
+        long rows = bytes > MEM_BOX_MAX_ROWS ? MEM_BOX_MAX_ROWS : bytes;
+        for (long r = 1; r < rows; ++r) {
+            if (bytes > MEM_BOX_MAX_ROWS && r == rows - 1)
+                printd("%*s │%*s⋮%*s│\n", MEM_BOX_GUTTER, "",
+                       (width - 1) / 2, "", width - 1 - (width - 1) / 2, "");
+            else
+                mem_box_blank(width);
+        }
+
+        const char *l = i + 1 == n ? "└" : "├";
+        const char *r = i + 1 == n ? "┘" : "┤";
+        mem_box_divider(b->hi, fp_relative, width, l, "─", r);
+    }
+}
+#endif
+
 void struct_report(type_t *type) {
 #if !NDEBUG
     printd(CSI_GREEN"struct report for "), str_printd(type->name);
-    printd("=================\n"CSI_RESET);
-    printd("\tsize: %zd, align %d\n", type->size, type->align);
+    printd(CSI_RESET" (size: %zd, align: %d)\n", type->size, type->align);
 
+    mem_box boxes[MAX_STACK_SLOTS];
+    int n = 0;
+    long prev_end = 0;
     dyn_member_t *members = &type->struct_t.members;
-    int ko = 0;
-    for (const member_t *it = members->begin; it != members->cur; ++it) {
-        const member_t *mem = it;
-        printd("\tmember %d: ", ko++);
-        str_printdnl(mem->name);
-        printd(" ");
-        str_printdnl(mem->type.base->name);
-        printd("\toffset: %zd, size: %zd\n",
-                mem->offset, dtype_size(&mem->type));
+    for (const member_t *mem = members->begin; mem != members->cur; ++mem) {
+        long off = (long)mem->offset;
+        long size = (long)dtype_size(&mem->type);
+        if (off > prev_end && n < MAX_STACK_SLOTS)
+            boxes[n++] = (mem_box){.lo = prev_end, .hi = off, .pad = true};
+        if (n < MAX_STACK_SLOTS)
+            boxes[n++] = (mem_box){
+                .name = mem->name,
+                .type_name = mem->type.base->name,
+                .lo = off,
+                .hi = off + size,
+            };
+        prev_end = off + size;
     }
+    if ((long)type->size > prev_end && n < MAX_STACK_SLOTS)
+        boxes[n++] = (mem_box){.lo = prev_end, .hi = (long)type->size, .pad = true};
+
+    draw_mem_layout(boxes, n, false);
     printd(CSI_GREEN"end report\n\n"CSI_RESET);
 #else
     (void)type;
+#endif
+}
+
+void stack_report(parser_context *context) {
+#if !NDEBUG
+    if (context->stack_slot_count == 0)
+        return;
+
+    printd(CSI_GREEN"stack report for "), str_printd(context->name);
+    printd(CSI_RESET" (frame size: %d)\n", context->stack_size);
+
+    // each slot lives at [fp - offset, fp - offset + size); low address on top
+    mem_box raw[MAX_STACK_SLOTS];
+    int rn = 0;
+    for (int i = 0; i < context->stack_slot_count; ++i) {
+        const stack_slot_t *s = &context->stack_slots[i];
+        raw[rn++] = (mem_box){
+            .name = s->name,
+            .type_name = s->type_name,
+            .lo = -(long)s->offset,
+            .hi = -(long)s->offset + (long)s->size,
+        };
+    }
+    // insertion sort ascending by lo (top = lowest address)
+    for (int i = 1; i < rn; ++i) {
+        mem_box key = raw[i];
+        int j = i - 1;
+        while (j >= 0 && raw[j].lo > key.lo) {
+            raw[j + 1] = raw[j];
+            --j;
+        }
+        raw[j + 1] = key;
+    }
+
+    // weave in padding boxes for alignment gaps between slots
+    mem_box boxes[MAX_STACK_SLOTS];
+    int n = 0;
+    long prev_end = raw[0].lo;
+    for (int i = 0; i < rn; ++i) {
+        if (raw[i].lo > prev_end && n < MAX_STACK_SLOTS)
+            boxes[n++] = (mem_box){.lo = prev_end, .hi = raw[i].lo, .pad = true};
+        if (n < MAX_STACK_SLOTS)
+            boxes[n++] = raw[i];
+        prev_end = raw[i].hi;
+    }
+    if (prev_end < 0 && n < MAX_STACK_SLOTS)
+        boxes[n++] = (mem_box){.lo = prev_end, .hi = 0, .pad = true};
+
+    draw_mem_layout(boxes, n, true);
+    printd(CSI_GREEN"end report\n\n"CSI_RESET);
+#else
+    (void)context;
 #endif
 }
 
@@ -2030,6 +2206,7 @@ void function(iter *src, FILE *object_file) {
             compile_err(&context->cur_token, "expected to return %d value(s)\n", context->symbol->ret_airity);
         }
     }
+    stack_report(context);
     emit_fn_prologue_epilogue(context);
     emit_ret();
     emit_fnbuf(object_file);
