@@ -26,7 +26,7 @@ bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
-bool stmt_ret_cond(parser_context *context, cond_t cond);
+bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -37,6 +37,8 @@ unsigned char indent = 0;
 bool eof = false;
 bool has_compile_err = false;
 bool do_airity_check = true;
+bool import_all = true;
+bool symbols_any = false;
 
 type_t *type_i32;
 type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR_FROM("comptime int")};
@@ -444,10 +446,9 @@ void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
     tok(context);
 
     i32 against = decl.amount;
-    emit_cmp(*reg, (i64)against);
 
     tok(context);
-    if (stmt_ret_cond(context, COND_EQ)) {
+    if (stmt_ret_cond(context, COND_EQ, *reg, (i64)against)) {
 
     } else {
         compile_err(cur_token, "expected ret\n");
@@ -464,10 +465,8 @@ void check_bounds(parser_context *context, reg_t index, i32 len) {
     tok(context);
     expect(context, STR("!"));
 
-    emit_cmp(index, len);
-
     tok(context);
-    if (stmt_ret_cond(context, COND_GE)) {
+    if (stmt_ret_cond(context, COND_GE, index, len)) {
 
     } else {
         compile_err(cur_token, "expected to handle check operator\n");
@@ -1566,9 +1565,10 @@ bool stmt_ret(parser_context *context) {
     return true;
 }
 
-bool stmt_ret_cond(parser_context *context, cond_t cond) {
+bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm) {
     if (!stmt_ret_pre(context))
         return false;
+    emit_cmp(cmp_reg, cmp_imm);
     context->has_branched_ret = true;
     emit_branch_cond(cond, context->symbol->name, STR_FROM("ret"), 0);
     return true;
@@ -1738,6 +1738,7 @@ void stmt_label(parser_context *context) {
         context->symbol = symbol;
         context->name = symbol->name;
     }
+    symbols_any = true;
 }
 
 bool directives(parser_context *context) {
@@ -1753,6 +1754,13 @@ bool directives(parser_context *context) {
         if (symbol == NULL) {
             return true;
         }
+    } else if (str_eq_lit(token_str, "noimport")) {
+        p(noimport)
+        import_all = false;
+        if (symbols_any)
+            compile_err(token, "#noimport this has no effect: signatures already pre-registered\n");
+    } else {
+        compile_err(token, "unknown directive "), str_printerr(token_str);
     }
     return true;
 }
@@ -2059,6 +2067,36 @@ void register_fund_types(void) {
     }
 }
 
+void register_signatures(iter src) {
+    iter *srcp = &src;
+    arr_mini_hashset_init(&local_ids);
+    parser_context context = { .src = srcp };
+    while (srcp->cur < srcp->end) {
+        tok(&context);
+        token_t *t = &context.cur_token;
+        if (str_len(t->id) == 0)
+            continue;
+        if (directives(&context)) {
+            if (!import_all) {
+                p(abort importing all)
+                return;
+            }
+            continue;
+        }
+        if (t->indent == 0
+                && (islower(t->data[0]) || t->data[0] == '_')
+                && streq(t->end - 1, ":")) {
+            bool had_paren = streq(t->end, " (");
+            label_meta(&context, NULL);
+            if (had_paren)
+                arr_mini_hashset_pop(&local_ids);
+        }
+    }
+    lineno = 1;
+    indent = 0;
+    eof = false;
+}
+
 int main(int argc, const char *argv[]) {
     TIMER_START(clock_full);
     if (argc == 1) {
@@ -2113,6 +2151,8 @@ int main(int argc, const char *argv[]) {
     emit_init();
     register_fund_types();
     TIMER_START(clock_parse_all);
+
+    register_signatures(src);
     while (src.cur < src.end) {
         function(&src, object_file);
     }

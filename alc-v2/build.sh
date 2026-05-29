@@ -1,6 +1,3 @@
-if [[ "$(uname -s)" != MINGW* ]]; then
-    EXTRA_FLAGS+=" -fsanitize=undefined"
-fi
 if [ "$(uname -o)" = Android ]; then
     EXTRA_FLAGS+=" -lexecinfo -rdynamic -fno-omit-frame-pointer"
 fi
