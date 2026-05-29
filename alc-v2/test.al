@@ -457,12 +457,62 @@ slice: (=>)
     }
 
     [Data] :: u32{1} =[]
-    Slice :: slice{.Begin Data .Size 1}
+    [Slice] :: slice{.Begin Data .Size 1} =[]
     [Slice.Begin]
-    [Slice]
     ret
 
 slice2: (=>)
     [Data] :: u32{1} =[]
     [Slice] :: slice{.Begin Data .Size 1} =[]
+    ret
+
+literals: (=>)
+    T :: true
+    F :: false
+    C :: 'A'
+    N :: i32{-3}
+    Big :: 0xDEADBEEF
+    ret
+
+arith_reg_val: (X i32, Y i32 => R i32)
+    A :: X + 1
+    B :: Y - 2
+    ret A + B
+
+control_flow: (X i32 =>)
+    X is 0 ->
+        done->
+    X is 1 ->
+        Y :: 99
+    done:
+    X is 2 ->
+        >>
+        Z :: 1
+        <<
+    ret
+
+addr_fns: (P addr u32 => R u32)
+    ret [P]
+
+scope_deep: (=>)
+    A ::
+        B ::
+            C :: 3
+            C =
+        B =
+    A is 3 ->
+        ret
+    ret
+
+typed_arrays: (=>)
+    [A8] :: 4*u8{.. 0} =[]
+    [A16] :: 4*u16{.0 1 .1 2 .. 0} =[]
+    [A64] :: 4*i64{.0 100 .1 200 .. 0} =[]
+    ret
+
+cast_chain: (=>)
+    A :: i8{127}
+    B :: i16{A}
+    C :: i32{B}
+    D :: i64{C}
     ret

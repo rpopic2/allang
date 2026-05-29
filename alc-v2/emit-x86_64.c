@@ -323,7 +323,6 @@ static bool x86_eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member 
                                       int *index, size_t *size_out) {
     type_t *type = dtype->base;
     ptrdiff_t member_count = args->cur - args->begin;
-    size_t dsize = dtype_size(dtype);
 
     bool is_arr = !dtype_empty(dtype) && dtype_top(dtype).tag == DK_ARRAY;
 
@@ -337,7 +336,8 @@ static bool x86_eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member 
         member_t local_memb;
         member_t *memb;
         if (is_arr) {
-            local_memb = (member_t){.type = *dtype, .offset = (size_t)i * dsize};
+            size_t elem_size = type->size;
+            local_memb = (member_t){.type = (dtype_t){.base = type}, .offset = (size_t)i * elem_size};
             memb = &local_memb;
         } else {
             memb = &type->struct_t.members.begin[i];
@@ -463,7 +463,8 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
 
     int index = 0;
     size_t size = 0;
-    reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
+    size_t total_size = dtype_size(dtype);
+    reg_size rsize = total_size > 8 ? 8 : (reg_size)total_size;
 
     while (index < member_count) {
         size_t member_off = size;
@@ -506,7 +507,7 @@ void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *ar
         }
         emit_str(dst, scratch, (int)offset + (int)member_off);
 
-        size_t remaining = type->size - size;
+        size_t remaining = total_size - size;
         if (remaining >= 8 && index < member_count
                 && args->begin[index].tag != AGGREGATE) {
             scratch.offset++;

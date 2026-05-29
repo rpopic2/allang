@@ -724,7 +724,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             reg_typecheck(&rhs_token, lhs->reg, rhs.reg);
         }
         context->reg.rsize = lhs->reg.rsize;
-        context->reg.dtype = rhs.reg.dtype;
+        context->reg.dtype = rhs.tag == REG ? rhs.reg.dtype : lhs->reg.dtype;
     }
 
     if (rhs.tag == NONE) {
@@ -1597,7 +1597,8 @@ bool stmt(parser_context *context) {
         emit_branch(context->name, STR_FROM("unnamed"), index);
         return true;
     } else if (streq(token->data, "<<")) {
-        int index = *context->deferred_unnamed_br.cur;
+        u16 *top = arr_u16_top(&context->deferred_unnamed_br);
+        int index = top ? *top : DEFERRED_NONE;
         if (index == DEFERRED_NONE) {
             compile_err(token, "unmatched branch merger. expected >> before <<\n");
             return true;
@@ -1719,8 +1720,8 @@ void stmt_label(parser_context *context) {
         unreachable;
     }
     for (int i = 0; i < symbol->airity; ++i) {
-        reg_t arg_reg = {.reg_type = PARAM, .offset = i};
         reg_t *param = &symbol->params.data[i];
+        reg_t arg_reg = {.reg_type = PARAM, .offset = i, .rsize = param->rsize};
         reg_t r = {
             .reg_type = NREG, .offset = context->nreg_count++,
             .rsize = param->rsize,
