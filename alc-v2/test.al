@@ -457,14 +457,12 @@ slice: (=>)
     }
 
     [Data] :: u32{1} =[]
-    Data
     Slice :: slice{.Begin Data .Size 1}
     [Slice.Begin]
+    [Slice]
     ret
 
 slice2: (=>)
     [Data] :: u32{1} =[]
-    Data
     [Slice] :: slice{.Begin Data .Size 1} =[]
     ret
-
