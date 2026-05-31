@@ -354,8 +354,10 @@ void emit_mov(reg_t dst, i64 value) {
 
 void type_conv(reg_t dst, reg_t src) {
     const type_t *srct = src.dtype.base;
-    if (!srct) // TODO is it okay to ignore?
+    if (srct == NULL) {
+        report_error("compiler bug: type of the src reg was null\n");
         return;
+    }
 
     buf_putc(fn_buf, '\t');
     if (srct->sign) {

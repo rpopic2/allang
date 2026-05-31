@@ -27,6 +27,7 @@ target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
+int expr_line(parser_context *context);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -320,6 +321,13 @@ int extrat_scope_up(str *s) {
         ++s->data;
     }
     return scope_up;
+}
+
+void context_add_nreg_count(parser_context *context) {
+    context->nreg_count += 1;
+#define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
+    UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
+#undef UPDATE_IF_GREATER
 }
 
 str dot_iter(str *s, char c) {
@@ -704,6 +712,29 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     return true;
 }
 
+void anonymous_branch(parser_context *context) {
+    str name = STR_FROM("lbb");
+    int index = context->unnamed_labels++;
+    emit_branch_cond(COND_EQ, context->name, name, index);
+    tok(context);
+
+    bool one_liner = context->cur_token.end[0] != '\n';
+    if (one_liner) {
+        tok(context);
+        if (expr_line(context)) {
+
+        } else if (fn_call(context)) {
+
+        } else {
+            compile_err(&context->cur_token, "a line of expression expected as this line does not end with newline\n");
+        }
+    } else {
+        parse_block(context);
+    }
+
+    emit_label(context->name, name, index);
+}
+
 void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t lhs_token = context->cur_token;
     tok(context);
@@ -787,12 +818,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             jump_target.end -= 2;
             emit_branch_cond(COND_EQ, context->name, jump_target.id, 0);
         } else if (streq(rhs_token.end + 1, "->")) {
-            str name = STR_FROM("lbb");
-            int index = context->unnamed_labels++;
-            emit_branch_cond(COND_EQ, context->name, name, index);
-            tok(context);
-            parse_block(context);
-            emit_label(context->name, name, index);
+            anonymous_branch(context);
         }
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
@@ -1521,9 +1547,7 @@ bool decl_vars(parser_context *context) {
 
         reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
 
-        context->nreg_count += 1;
-#define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
-        UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
+        context_add_nreg_count(context);
         if (!one_liner) {
             target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
             parse_block(context);
@@ -1807,14 +1831,15 @@ void stmt_label(parser_context *context) {
         unreachable;
     }
     for (int i = 0; i < symbol->airity; ++i) {
-        reg_t arg_reg = {.reg_type = PARAM, .offset = i};
         reg_t *param = &symbol->params.data[i];
+        reg_t arg_reg = {.reg_type = PARAM, .offset = i, .dtype = param->dtype};
         reg_t r = {
             .reg_type = NREG, .offset = context->nreg_count++,
             .rsize = param->rsize,
             .dtype = param->dtype,
         };
         emit_mov_reg(r, arg_reg);
+        context_add_nreg_count(context);
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {
             compile_err(&context->cur_token, "parameter ids should be unique\n");
@@ -1945,13 +1970,18 @@ symbol_t *fn_call(parser_context *context) {
 
     context->reg.offset = 0;
     context->reg.reg_type = RET;
-    reg_t *return_reg = &symbol->rets.data[0];
-    type_t *return_type = return_reg->dtype.base;
-    context->reg.dtype = return_reg->dtype;
-    if (dtype_tryget_addr(&return_reg->dtype))
-        context->reg.rsize = sizeof (void *);
-    else
-        context->reg.rsize = (reg_size)return_type->size;
+
+    if (symbol->ret_airity == 1) {
+        reg_t *return_reg = &symbol->rets.data[0];
+        context->reg.dtype = return_reg->dtype;
+
+        size_t return_size = dtype_size(&return_reg->dtype);
+        assert(return_size <= MAX_REG_SIZE);
+        context->reg.rsize = (reg_size)return_size;
+    } else if (symbol->ret_airity > 1) {
+        compile_err(token, "returning two values is not implemented\n");
+    }
+
 
     declarator_t top = dtype_top(&context->reg.dtype);
     if (top.tag == DK_CHECK) {
@@ -1960,6 +1990,23 @@ symbol_t *fn_call(parser_context *context) {
 
     context->calls_fn = true;
     return symbol;
+}
+
+bool control_flow(parser_context *context) {
+    const token_t *token = &context->cur_token;
+
+    if (streq(token->end - 2, "->")) {
+        str label = {.data = token->data, .end = token->end - 2};
+        emit_branch(context->symbol->name, label, 0);
+    } else if (streq(token->end - 1, ":")) {
+        stmt_label(context);
+    } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
+        fn_call(context);
+    } else {
+        compile_err(token, "trying to reference undefined label\n");
+        return false;
+    }
+    return true;
 }
 
 void parse(parser_context *context) {
@@ -1977,16 +2024,7 @@ void parse(parser_context *context) {
     } else if (stmt_reg_assign(context)) {
 
     } else if (islower(token->data[0]) || token->data[0] == '_') {
-        if (streq(token->end - 2, "->")) {
-            str label = {.data = token->data, .end = token->end - 2};
-            emit_branch(context->symbol->name, label, 0);
-        } else if (streq(token->end - 1, ":")) {
-            stmt_label(context);
-        } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
-            fn_call(context);
-        } else {
-            compile_err(token, "trying to reference undefined label\n");
-        }
+        control_flow(context);
     } else {
         compile_err(token, "unexpected token "), str_printerr(token->id);
     }
