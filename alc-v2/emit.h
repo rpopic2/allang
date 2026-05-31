@@ -6,6 +6,7 @@
 #include "arr.h"
 #include "str.h"
 #include "types.h"
+#include "buffer.h"
 
 typedef struct reg reg_t;
 typedef struct dtype dtype_t;
@@ -13,9 +14,15 @@ typedef struct dyn_agg_member dyn_agg_member;
 typedef struct dyn_regable dyn_regable;
 typedef struct parser_context parser_context;
 
+typedef struct emit_context {
+    buf fn_header_buf;
+    buf prologue_buf;
+    buf fn_buf;
+} emit_context_t;
+
 void emit_init(void);
-void emit_reset_fn(void);
-void emit_fnbuf(FILE *out);
+void emit_reset_fn(emit_context_t *context);
+void emit_fnbuf(emit_context_t *context, FILE *out);
 void emit_text(FILE *out);
 void emit_cstr(FILE *out);
 

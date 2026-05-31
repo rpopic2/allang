@@ -25,48 +25,41 @@ extern const char *fn_prefix;
 extern const char *fn_annotation_fmt;
 extern const char *local_string_prefix;
 
-DECL_PTR(static buf, text_buf);
-DECL_PTR(static buf, cstr_buf);
-
-DECL_PTR(static buf, fn_header_buf);
-DECL_PTR(static buf, prologue_buf);
-DECL_PTR(static buf, fn_buf);
-
-char *cstr_begin = NULL;
-unsigned string_lit_counts = 0;
+static buf *fn_header_buf;
+static buf *prologue_buf;
 
 const size_t default_register_size = 8;
 
 void emit_init(void) {
-    buf_init(text_buf, INIT_BUFSIZ);
-    buf_puts(text_buf, STR_FROM(text_section_header));
+    buf_init(&ctx->text_buf, INIT_BUFSIZ);
+    buf_puts(&ctx->text_buf, STR_FROM(text_section_header));
 
-    buf_init(cstr_buf, INIT_BUFSIZ);
-    buf_puts(cstr_buf, STR_FROM(string_section_header));
-    cstr_begin = cstr_buf->cur;
+    buf_init(&ctx->cstr_buf, INIT_BUFSIZ);
+    buf_puts(&ctx->cstr_buf, STR_FROM(string_section_header));
+    ctx->cstr_begin = ctx->cstr_buf.cur;
 
-    emit_reset_fn();
+    emit_reset_fn(ctx);
 }
 
-void emit_reset_fn(void) {
-    buf_init(fn_header_buf, 0x100);
-    buf_init(prologue_buf, INIT_BUFSIZ);
-    buf_init(fn_buf, INIT_BUFSIZ);
+void emit_reset_fn(emit_context_t *ctx) {
+    buf_init(&ctx->fn_header_buf, 0x100);
+    buf_init(&ctx->prologue_buf, INIT_BUFSIZ);
+    buf_init(&ctx->fn_buf, INIT_BUFSIZ);
 }
 
-void emit_fnbuf(FILE *out) {
-    buf_fwrite(fn_header_buf, out);
-    buf_fwrite(prologue_buf, out);
-    buf_fwrite(fn_buf, out);
+void emit_fnbuf(emit_context_t *ctx, FILE *out) {
+    buf_fwrite(&ctx->fn_header_buf, out);
+    buf_fwrite(&ctx->prologue_buf, out);
+    buf_fwrite(&ctx->fn_buf, out);
 }
 
-void emit_text(FILE *out) {
-    buf_fwrite(text_buf, out);
+void emit_text(emit_context_t *ctx, FILE *out) {
+    buf_fwrite(&ctx->text_buf, out);
 }
 
 void emit_cstr(FILE *out) {
-    if (cstr_begin < cstr_buf->cur) {
-        buf_fwrite(cstr_buf, out);
+    if (cstr_begin < cstr_buf.cur) {
+        buf_fwrite(&cstr_buf, out);
     }
 }
 
@@ -224,19 +217,19 @@ void emit_string_lit(reg_t dst, const str *s) {
     char *buffer = malloc(SPRINTF_BUFSIZ);
     if (!buffer)
         malloc_failed();
-    int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, local_string_prefix, string_lit_counts++);
+    int num_printed = snprintf(buffer, SPRINTF_BUFSIZ, local_string_prefix, ctx->string_lit_counts++);
     if (num_printed >= SPRINTF_BUFSIZ) {
         fputs("buffer overflow in snprintf\n", stderr);
         exit(EXIT_FAILURE);
     }
 
     emit_rx(STR("lea"), dst);
-    buf_snprintf(fn_buf, ", [rip+%s]\n", buffer);
+    buf_snprintf(&ctx->fn_buf, ", [rip+%s]\n", buffer);
 
-    buf_snprintf(cstr_buf, "%s:\n", buffer);
-    buf_puts(cstr_buf, STR_FROM("\t.asciz "));
-    buf_puts(cstr_buf, *s);
-    buf_putc(cstr_buf, '\n');
+    buf_snprintf(&ctx->cstr_buf, "%s:\n", buffer);
+    buf_puts(&ctx->cstr_buf, STR_FROM("\t.asciz "));
+    buf_puts(&ctx->cstr_buf, *s);
+    buf_putc(&ctx->cstr_buf, '\n');
 
     free(buffer);
 }

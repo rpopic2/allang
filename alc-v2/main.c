@@ -19,6 +19,7 @@
 #include "typesys.h"
 
 #define INT_SIZE 4
+#define NO_IMPORT_ALL_SELF "no_import_all_self"
 
 void parse_block(parser_context *context);
 symbol_t *fn_call(parser_context *context);
@@ -28,6 +29,9 @@ target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
 int expr_line(parser_context *context);
+void compile(iter src, FILE *object_file);
+iter read_file(const char *source_name);
+void import_all_from(iter src);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -40,6 +44,7 @@ bool has_compile_err = false;
 bool do_airity_check = true;
 bool import_all = true;
 bool symbols_any = false;
+FILE *object_file;
 
 type_t *type_i32;
 type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR_FROM("comptime int")};
@@ -1839,7 +1844,7 @@ void stmt_label(parser_context *context) {
     }
     for (int i = 0; i < symbol->airity; ++i) {
         reg_t *param = &symbol->params.data[i];
-        reg_t arg_reg = {.reg_type = PARAM, .offset = i, .dtype = param->dtype};
+        reg_t arg_reg = {.reg_type = PARAM, .offset = i, .dtype = param->dtype, .rsize = param->rsize};
         context_add_nreg(context);
         reg_t r = {
             .reg_type = NREG, .offset = context->nreg_count,
@@ -1874,10 +1879,22 @@ bool directives(parser_context *context) {
         if (symbol == NULL) {
             return true;
         }
-    } else if (str_eq_lit(token_str, "noimport")) {
+    } else if (str_eq_lit(token_str, NO_IMPORT_ALL_SELF)) {
         import_all = false;
         if (symbols_any)
-            compile_err(token, "#noimport this has no effect: signatures already pre-registered\n");
+            compile_err(token, "#"NO_IMPORT_ALL_SELF" has no effect: signatures already pre-registered\n");
+    } else if (str_eq_lit(token_str, "compile_all")) {
+        tok(context);
+        str filename = context->cur_token.id;
+        char buf[256];
+        size_t len = str_len(filename);
+        if (len >= sizeof buf)
+            compile_err(token, "filename was too long\n");
+        memcpy(buf, filename.data, len);
+        buf[len] = '\0';
+        iter src = read_file(buf);
+        import_all_from(src);
+        compile(src, object_file);
     } else {
         compile_err(token, "unknown directive "), str_printerr(token_str);
     }
@@ -2089,8 +2106,7 @@ void parse_block(parser_context *context) {
     }
 }
 
-void function(iter *src, FILE *object_file) {
-    emit_reset_fn();
+void function(iter *src) {
     arr_mini_hashset_init(&local_ids);
 
     parser_context *context = &(parser_context){
@@ -2117,7 +2133,7 @@ void function(iter *src, FILE *object_file) {
 
     if (!is_main) {
         tok(context);
-        if (!context->cur_token.data)
+        if (context->cur_token.data == NULL)
             return;
         stmt_label(context);
     }
@@ -2164,7 +2180,6 @@ void function(iter *src, FILE *object_file) {
     }
     emit_fn_prologue_epilogue(context);
     emit_ret();
-    emit_fnbuf(object_file);
     printd("end of fn\n");
     TIMER_END(parse_emit);
 }
@@ -2196,7 +2211,7 @@ void register_fund_types(void) {
     }
 }
 
-void register_signatures(iter src) {
+void import_all_from(iter src) {
     iter *srcp = &src;
     arr_mini_hashset_init(&local_ids);
     parser_context context = { .src = srcp };
@@ -2205,11 +2220,10 @@ void register_signatures(iter src) {
         token_t *t = &context.cur_token;
         if (str_len(t->id) == 0)
             continue;
-        if (directives(&context)) {
-            if (!import_all) {
-                return;
-            }
-            continue;
+
+        if (str_eq_lit(t->id, "#"NO_IMPORT_ALL_SELF)) {
+            import_all = false;
+            break;
         }
         if (t->indent == 0
                 && (islower(t->data[0]) || t->data[0] == '_')
@@ -2225,17 +2239,11 @@ void register_signatures(iter src) {
     eof = false;
 }
 
-int main(int argc, const char *argv[]) {
-    TIMER_START(clock_full);
-    if (argc == 1) {
-        fprintf(stderr, "usage: alc [filename]\n");
-        exit(EXIT_FAILURE);
-    }
-    TIMER_START(clock_read_source);
-    const char *source_name = argv[1];
-    FILE *source_file = fopen(argv[1], "r");
+iter read_file(const char *source_name) {
+        TIMER_START(clock_read_source);
+    FILE *source_file = fopen(source_name, "r");
     if (source_file == NULL) {
-        fprintf(stderr, "error: could not open file %s\n", argv[1]);
+        fprintf(stderr, "error: could not open file %s\n", source_name);
         exit(EXIT_FAILURE);
     }
     fseek(source_file, 0, SEEK_END);
@@ -2252,7 +2260,29 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, "error: buffer overflow. expected %zd bytes but read %zd bytes\n", source_len, bytes_read);
         exit(EXIT_FAILURE);
     }
+    fclose(source_file);
     TIMER_END(clock_read_source);
+
+    iter src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
+    return src;
+}
+
+void compile(iter src, FILE *object_file) {
+    while (src.cur < src.end) {
+        emit_context_t emit_ctx = {0};
+        emit_reset_fn(&emit_ctx);
+        function(&src);
+        emit_fnbuf(&emit_ctx, object_file);
+    }
+}
+
+int main(int argc, const char *argv[]) {
+    TIMER_START(clock_full);
+    if (argc == 1) {
+        fprintf(stderr, "usage: alc [filename]\n");
+        exit(EXIT_FAILURE);
+    }
+    const char *source_name = argv[1];
 
     TIMER_START(clock_make_output_name);
     size_t source_name_len = strlen(source_name);
@@ -2265,14 +2295,12 @@ int main(int argc, const char *argv[]) {
 
     TIMER_END(clock_make_output_name);
     TIMER_START(clock_make_output_fopen);
-    FILE *object_file = fopen(out_name, "w");
+    object_file = fopen(out_name, "w");
     if (object_file == NULL) {
         fprintf(stderr, "error: failed to create file\n");
         exit(EXIT_FAILURE);
     }
     TIMER_END(clock_make_output_fopen);
-
-    iter src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
 
     TIMER_START(clock_zero);
     TIMER_END(clock_zero);
@@ -2280,10 +2308,9 @@ int main(int argc, const char *argv[]) {
     register_fund_types();
     TIMER_START(clock_parse_all);
 
-    register_signatures(src);
-    while (src.cur < src.end) {
-        function(&src, object_file);
-    }
+    iter src = read_file(source_name);
+    import_all_from(src);
+    compile(src, object_file);
 
     emit_cstr(object_file);
     TIMER_END(clock_parse_all);

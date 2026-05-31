@@ -1,3 +1,5 @@
+#import test
+
 store_struct: (Dst reg_t, Dtype addr dtype_t, Args addr dyn_agg_member) =>
 once:
 	Member.Count :: [Args.Cur] - [Args.Begin]

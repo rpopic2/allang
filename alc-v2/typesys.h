@@ -9,6 +9,7 @@
 #include <stdlib.h>
 
 typedef struct dtype dtype_t;
+typedef struct emit_context emit_context_t;
 
 enum type_kind {
     TK_NONE, TK_FUND, TK_STRUCT, TK_UNION,

@@ -21,15 +21,15 @@
 #define INSTR(s) "\t"s"\n"
 #define STR_FROM_INSTR(s) STR_FROM(INSTR(s))
 
-DECL_PTR(static buf, text_buf);
-DECL_PTR(static buf, cstr_buf);
+emit_context_t *context;
+static buf *fn_buf;
 
-DECL_PTR(static buf, fn_header_buf);
-DECL_PTR(static buf, prologue_buf);
-DECL_PTR(static buf, fn_buf);
 
-char *cstr_begin = NULL;
-unsigned string_lit_counts = 0;
+static buf text_buf;
+
+static buf cstr_buf;
+static char *cstr_begin;
+static unsigned string_lit_counts;
 
 extern const char *addrgen_adrp;
 extern const char *addrgen_add;
@@ -47,35 +47,35 @@ const char *const cond_str[] = {
 const size_t default_register_size = 8;
 
 void emit_init(void) {
-    buf_init(text_buf, INIT_BUFSIZ);
-    buf_puts(text_buf, STR_FROM(text_section_header));
+    buf_init(&text_buf, INIT_BUFSIZ);
+    buf_puts(&text_buf, STR_FROM(text_section_header));
 
-    buf_init(cstr_buf, INIT_BUFSIZ);
-    buf_puts(cstr_buf, STR_FROM(string_section_header));
-    cstr_begin = cstr_buf->cur;
-
-    emit_reset_fn();
+    buf_init(&cstr_buf, INIT_BUFSIZ);
+    buf_puts(&cstr_buf, STR_FROM(string_section_header));
+    cstr_begin = cstr_buf.cur;
 }
 
-void emit_reset_fn(void) {
-    buf_init(fn_header_buf, 0x100);
-    buf_init(prologue_buf, INIT_BUFSIZ);
-    buf_init(fn_buf, INIT_BUFSIZ);
+void emit_reset_fn(emit_context_t *in_context) {
+    context = in_context;
+    fn_buf = &context->fn_buf;
+    buf_init(&context->fn_header_buf, 0x100);
+    buf_init(&context->prologue_buf, INIT_BUFSIZ);
+    buf_init(&context->fn_buf, INIT_BUFSIZ);
 }
 
-void emit_fnbuf(FILE *out) {
-    buf_fwrite(fn_header_buf, out);
-    buf_fwrite(prologue_buf, out);
-    buf_fwrite(fn_buf, out);
+void emit_fnbuf(emit_context_t *context, FILE *out) {
+    buf_fwrite(&context->fn_header_buf, out);
+    buf_fwrite(&context->prologue_buf, out);
+    buf_fwrite(&context->fn_buf, out);
 }
 
 void emit_text(FILE *out) {
-    buf_fwrite(text_buf, out);
+    buf_fwrite(&text_buf, out);
 }
 
 void emit_cstr(FILE *out) {
-    if (cstr_begin < cstr_buf->cur) {
-        buf_fwrite(cstr_buf, out);
+    if (cstr_begin < cstr_buf.cur) {
+        buf_fwrite(&cstr_buf, out);
     }
 }
 
@@ -466,10 +466,10 @@ void emit_string_lit(reg_t dst, const str *s) {
     buf_snprintf(fn_buf, addrgen_adrp, regidx, buffer);
     buf_snprintf(fn_buf, addrgen_add, regidx, regidx, buffer);
 
-    buf_snprintf(cstr_buf, "%s:\n", buffer);
-    buf_puts(cstr_buf, STR_FROM("\t.asciz "));
-    buf_puts(cstr_buf, *s);
-    buf_putc(cstr_buf, '\n');
+    buf_snprintf(&cstr_buf, "%s:\n", buffer);
+    buf_puts(&cstr_buf, STR_FROM("\t.asciz "));
+    buf_puts(&cstr_buf, *s);
+    buf_putc(&cstr_buf, '\n');
 
     free(buffer);
 }
@@ -624,38 +624,38 @@ void emit_label(str fn_name, str label, int index) {
     buf_puts(fn_buf, STR_FROM(":\n"));
 }
 
-void emit_fn_prologue_epilogue(const parser_context *context) {
-    prologue_buf->cur = prologue_buf->start;
-    if (!context->calls_fn
-            && context->max_nreg_count == 0
-            && context->stack_size == 0)
+void emit_fn_prologue_epilogue(const parser_context *parser_context) {
+    context->prologue_buf.cur = context->prologue_buf.start;
+    if (!parser_context->calls_fn
+            && parser_context->max_nreg_count == 0
+            && parser_context->stack_size == 0)
         return;
 
-    int regs_to_save = context->max_nreg_count;
+    int regs_to_save = parser_context->max_nreg_count;
     if (regs_to_save + CALLEE_START >= 28) {
-        compile_err(&context->cur_token, "used up all callee-saved registers. found %d (expected less than %d", context->max_nreg_count, 28 - CALLEE_START);
+        compile_err(&parser_context->cur_token, "used up all callee-saved registers. found %d (expected less than %d", parser_context->max_nreg_count, 28 - CALLEE_START);
         return;
     }
-    bool calls_fn = context->calls_fn;
+    bool calls_fn = parser_context->calls_fn;
     if (calls_fn) {
         regs_to_save += 2;
     }
 
     int stack_size =
         ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16)
-        + ALIGN_TO(context->stack_size, 16);
+        + ALIGN_TO(parser_context->stack_size, 16);
     printd("\nstack report for: ");
-    str_printd(context->name);
-    printd("\t- regs to save: %d, stack size: %d\n", regs_to_save, context->stack_size);
+    str_printd(parser_context->name);
+    printd("\t- regs to save: %d, stack size: %d\n", regs_to_save, parser_context->stack_size);
     printd("\t- aligned regs: %d, aligned stack: %d\n",
             ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16),
-            ALIGN_TO(context->stack_size, 16));
+            ALIGN_TO(parser_context->stack_size, 16));
     printd("\t- result stack: %d\n", stack_size);
 
-    int cur_stackoff = ALIGN_TO(context->stack_size, 16);
+    int cur_stackoff = ALIGN_TO(parser_context->stack_size, 16);
     const int stack_objs_size = cur_stackoff;
     if (stack_objs_size > 0) {
-        buf_snprintf(prologue_buf, INSTR("sub sp, sp, #%d"), stack_size);
+        buf_snprintf(&context->prologue_buf, INSTR("sub sp, sp, #%d"), stack_size);
     }
 
     int remaining = regs_to_save;
@@ -676,7 +676,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
             defer_ldp = true;
             off = stack_size;
         }
-        buf_snprintf(prologue_buf, stp_format, reg0, reg1, off);
+        buf_snprintf(&context->prologue_buf, stp_format, reg0, reg1, off);
         if (!defer_ldp)
             buf_snprintf(fn_buf, ldp_format, reg0, reg1, off);
         else
@@ -687,7 +687,7 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     while (remaining > 1) {
         int reg0 = CALLEE_START + remaining - 1;
         int reg1 = reg0 - 1;
-        buf_snprintf(prologue_buf, INSTR("stp x%d, x%d, [sp, #%d]"),
+        buf_snprintf(&context->prologue_buf, INSTR("stp x%d, x%d, [sp, #%d]"),
                 reg0, reg1, cur_stackoff);
         buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [sp, #%d]"),
                 reg0, reg1, cur_stackoff);
@@ -705,51 +705,51 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
             off = stack_size;
         }
         int reg0 = CALLEE_START + remaining;
-        buf_snprintf(prologue_buf, stp_format,
+        buf_snprintf(&context->prologue_buf, stp_format,
                 reg0, off);
-        buf_snprintf(fn_buf, ldp_format,
+        buf_snprintf(&context->fn_buf, ldp_format,
                 reg0, off);
         cur_stackoff += 16;
     }
 
     if (stack_objs_size == 0) {
-        buf_puts(prologue_buf, STR_FROM_INSTR("mov x29, sp"));
+        buf_puts(&context->prologue_buf, STR_FROM_INSTR("mov x29, sp"));
     } else {
-        buf_snprintf(prologue_buf, INSTR("add x29, sp, #%d"), stack_objs_size);
+        buf_snprintf(&context->prologue_buf, INSTR("add x29, sp, #%d"), stack_objs_size);
     }
 
     if (defer_ldp) {
         const char *ldp_format = INSTR("ldp x%d, x%d, [sp], #%d");
-        buf_snprintf(fn_buf, ldp_format, deferred0, deferred1, stack_size);
+        buf_snprintf(&context->fn_buf, ldp_format, deferred0, deferred1, stack_size);
     }
     if (stack_objs_size > 0) {
-        buf_snprintf(fn_buf, INSTR("add sp, sp, #%d"), stack_size);
+        buf_snprintf(&context->fn_buf, INSTR("add sp, sp, #%d"), stack_size);
     }
 }
 
 void emit_fn_call(const str *s) {
-    buf_puts(fn_buf, STR_FROM("\tbl "));
-    buf_puts(fn_buf, STR_FROM(fn_prefix));
-    buf_puts(fn_buf, *s);
-    buf_putc(fn_buf, '\n');
+    buf_puts(&context->fn_buf, STR_FROM("\tbl "));
+    buf_puts(&context->fn_buf, STR_FROM(fn_prefix));
+    buf_puts(&context->fn_buf, *s);
+    buf_putc(&context->fn_buf, '\n');
 }
 
 void emit_fn(str fn_name) {
-    buf_puts(fn_header_buf, STR_FROM("\n\t.globl "));
-    buf_puts(fn_header_buf, STR_FROM(fn_prefix));
-	buf_puts(fn_header_buf, fn_name);
-    buf_puts(fn_header_buf, STR_FROM("\n\t.p2align 2\n"));
+    buf_puts(&context->fn_header_buf, STR_FROM("\n\t.globl "));
+    buf_puts(&context->fn_header_buf, STR_FROM(fn_prefix));
+	buf_puts(&context->fn_header_buf, fn_name);
+    buf_puts(&context->fn_header_buf, STR_FROM("\n\t.p2align 2\n"));
     if (*fn_annotation_fmt) {
-        buf_snprintf(fn_header_buf, fn_annotation_fmt,
+        buf_snprintf(&context->fn_header_buf, fn_annotation_fmt,
                      (int)str_len(fn_name), fn_name.data);
     }
-    buf_puts(fn_header_buf, STR_FROM(fn_prefix));
-	buf_puts(fn_header_buf, fn_name);
-    buf_puts(fn_header_buf, STR_FROM(":\n"));
+    buf_puts(&context->fn_header_buf, STR_FROM(fn_prefix));
+	buf_puts(&context->fn_header_buf, fn_name);
+    buf_puts(&context->fn_header_buf, STR_FROM(":\n"));
 }
 
 void emit_ret(void) {
-    buf_puts(fn_buf, STR_FROM_INSTR("ret"));
+    buf_puts(&context->fn_buf, STR_FROM_INSTR("ret"));
 }
 
 #ifndef _WIN32

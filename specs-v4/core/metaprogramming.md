@@ -31,10 +31,20 @@ example:
 import directive imports all functions from the path provided.
 * it will not import top-level statements (the implicit main)
 * it will not import functions prefixed with `'_'`.
+* same file will not be imported twice.
 
 importing a symbol or type is equivalent to `#declare`ing it. it will not compile the body, but lets the compiler know the symbol or type exists.
 
 import_all directive imports all symbols and types from the path, including those prefixed with `'_'`.
+
+## no_import_all_self directive
+
+#no_import_all_self
+when compiling, self file is `#import_all`ed automatically by default. you can opt-out with this directive.
+
+## allow_import_multiple_times
+
+same file is not imported twice by default. you can opt-out with this directive.
 
 ## compile directive
 
@@ -45,7 +55,7 @@ example:
 ```
 
 compile directive compiles a file at the path and imports symbols.
-* it will not compile top-level statements.
+* it will not compile top-level statements(the implicit main).
 * it will compile private functions (prefixed with '_'), but not import it.
 * functions in the target file can reference a private function, but the current file can't.
 note that allang does not have a notion of compilation unit. all .al files are compiled at once, unless you link with libraries.
