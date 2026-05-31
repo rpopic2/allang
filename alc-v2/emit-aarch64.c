@@ -55,7 +55,17 @@ void emit_init(void) {
     cstr_begin = cstr_buf.cur;
 }
 
+#define MAX_CONTEXTS 10
+emit_context_t *contexts[MAX_CONTEXTS];
+emit_context_t **contexts_top = contexts;
+
 void emit_reset_fn(emit_context_t *in_context) {
+    if (contexts_top == contexts + MAX_CONTEXTS) {
+        report_error("max contexts reached. #import or #compile recursion might be too deep");
+        return;
+    }
+    *contexts_top++ = context;
+
     context = in_context;
     fn_buf = &context->fn_buf;
     buf_init(&context->fn_header_buf, 0x100);
@@ -63,10 +73,20 @@ void emit_reset_fn(emit_context_t *in_context) {
     buf_init(&context->fn_buf, INIT_BUFSIZ);
 }
 
-void emit_fnbuf(emit_context_t *context, FILE *out) {
-    buf_fwrite(&context->fn_header_buf, out);
-    buf_fwrite(&context->prologue_buf, out);
-    buf_fwrite(&context->fn_buf, out);
+void emit_finalize_fnbuf(emit_context_t *emit_ctx, FILE *out) {
+    if (out != NULL) {
+        buf_fwrite(&emit_ctx->fn_header_buf, out);
+        buf_fwrite(&emit_ctx->prologue_buf, out);
+        buf_fwrite(&emit_ctx->fn_buf, out);
+    }
+
+    if (contexts_top == contexts) {
+        context = NULL;
+        fn_buf = NULL;
+    } else {
+        context = *--contexts_top;
+        fn_buf = context != NULL ? &context->fn_buf : NULL;
+    }
 }
 
 void emit_text(FILE *out) {
