@@ -14,6 +14,11 @@ The emit backend files for your architecture and OS must be passed explicitly:
 ./run.sh emit-aarch64.c emit-macos.c hello.al
 ```
 
+## Coding Conventions
+
+- Don't add comments unless strictly necessary.
+- Make pointers const whenever possible.
+
 ## Architecture
 
 The compiler is a single-pass compiler entirely in `alc-v2/`:
@@ -37,9 +42,6 @@ allang uses indentation-sensitive scoping. Key syntax elements:
 - `!` — bounds check operator
 - `->` — branch/jump
 - `@` — macros, `#` — directives
-
+- `=` — assignment operator. note that this operator assigns from left to right.
 See `specs-v4/` for the full language spec.
 
-## Code Conventions
-
-- Use comments sparingly.

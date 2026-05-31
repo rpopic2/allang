@@ -133,7 +133,7 @@ void buf_putreg(buf *buffer, reg_t reg) {
 
 // Pack consecutive sub-byte VALUE members into a single immediate.
 // Advances *i past any members it consumes; caller's loop will re-increment.
-static void pack_small_values(const dyn_member_t *members, dyn_agg_member *args,
+static void pack_small_values(const dyn_member_t *members, const dyn_agg_member *args,
                                ptrdiff_t *i, ptrdiff_t member_count,
                                size_t first_size, i64 *value) {
     size_t packed = first_size;
@@ -156,7 +156,7 @@ static void pack_small_values(const dyn_member_t *members, dyn_agg_member *args,
     }
 }
 
-static void emit_member_value(reg_t dst, const dyn_member_t *members, dyn_agg_member *args,
+static void emit_member_value(reg_t dst, const dyn_member_t *members, const dyn_agg_member *args,
                                ptrdiff_t *i, ptrdiff_t member_count,
                                size_t memb_size, size_t offset_bits,
                                bool *dst_initialized) {
@@ -223,8 +223,8 @@ static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offse
     }
 }
 
-bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int *index, size_t *size) {
-    type_t *type = dtype->base;
+bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args, int *index, size_t *size) {
+    const type_t *type = dtype->base;
     const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = args->cur - args->begin;
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
@@ -265,31 +265,8 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
     return dst_initialized;
 }
 
-void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args) {
-    type_t *type = dtype->base;
-    size_t type_size = dtype_size(dtype);
-    if (type_size > MAX_REG_SIZE) {
-        compile_err(NULL, "compiler bug: type exceeds max reg size\n");
-    }
-
-    dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
-
-    int index = 0;
-    size_t size = 0;
-
-    bool cleared = eightbyte_make_struct(dst, dtype, args, &index, &size);
-    if (!cleared) {
-        emit_mov(dst, 0);
-    }
-
-    size_t remaining_size = type_size - size;
-    if (remaining_size >= 8) {
-        dst.offset++;
-        bool cleared = eightbyte_make_struct(dst, dtype, args, &index, &size);
-        if (!cleared) {
-            emit_mov(dst, 0);
-        }
-    }
+void emit_zero_out(reg_t dst) {
+    emit_mov(dst, 0);
 }
 
 static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
@@ -299,9 +276,10 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
     buf_snprintf(fn_buf, ", #%"PRId64"]\n", offset);
 }
 
+const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8};
+const reg_t wzr = {.reg_type = RD_NONE, .rsize = 4};
+
 void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
-    const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8, .dtype = {.base = type->base}};
-    reg_t wzr = {.reg_type = RD_NONE, .rsize = 4, .dtype = {.base = type->base}};
     size_t size = dtype_size(type);
 
     while (size >= 16) {
@@ -315,11 +293,12 @@ void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
         offset += 8;
     }
 
+    reg_t zr = wzr;
     reg_size rsize = 4;
     while (size) {
         if (size >= rsize) {
-            wzr.rsize = rsize;
-            emit_str(dst, wzr, (int)offset);
+            zr.rsize = rsize;
+            emit_str(dst, zr, (int)offset);
             size -= rsize;
             offset += rsize;
         }
@@ -327,84 +306,25 @@ void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
     }
 }
 
-void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *args) {
-    type_t *type = dtype->base;
-    const dyn_member_t *members = &type->struct_t.members;
-    ptrdiff_t member_count = args->cur - args->begin;
-    printd("%s\n", __func__);
-    int index = 0;
-    size_t size = 0;
-
-    bool is_arr = false;
-    if (dtype_empty(dtype)) {
-
-    } else if (dtype_top(dtype).tag == DK_ARRAY) {
-        is_arr = true;
-    } else {
-        unreachable;
+void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written,
+                           reg_t hi, bool hi_written, bool has_hi) {
+    if (has_hi) {
+        lo.rsize = 8;
+        hi.rsize = 8;
+        if (!lo_written) {
+            lo = xzr;
+        }
+        if (!hi_written) {
+            hi = xzr;
+        }
+        emit_stp(lo, hi, base, offset);
+        return;
     }
 
-    reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
-    while (index < member_count) {
-        reg_t tmp = {.reg_type = SCRATCH, .dtype = {.base = type}, .rsize = rsize};
-        size_t member_off = size;
-        int tmp_index = index;
-
-        dtype_t *mem_type;
-        if (is_arr) {
-            mem_type = dtype;
-        } else {
-            mem_type = &members->begin[index].type;
-        }
-        if (mem_type->base->tag == TK_STRUCT) {
-            const agg_member *arg = args->begin + index;
-            if (arg->tag == AGGREGATE) {
-                dtype_t inner;
-                if (dtype_empty(dtype)) {
-                    inner = *mem_type;
-                } else {
-                    inner = *dtype;
-                    dtype_pop(&inner);
-                }
-                emit_store_struct(dst, offset + (i64)size, &inner, args->begin[index].agg);
-            } else if (arg->tag == VALUE && arg->value == 0) {
-                emit_zerofill(dst, offset, mem_type);
-            }
-            size += dtype_size(mem_type);
-            index += 1;
-            continue;
-        }
-        bool cleared = eightbyte_make_struct(tmp, dtype, args, &index, &size);
-        if (tmp_index == index) {
-            compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", dtype_size(mem_type));
-            str_printerr(mem_type->base->name);
-            break;
-        }
-
-        size_t remaining_size = type->size - size;
-        if (remaining_size >= 8
-                && args->begin[index].tag != AGGREGATE) {
-            tmp.rsize = 8;
-            reg_t tmp2 = tmp;
-            tmp2.offset++;
-            bool cleared2 = eightbyte_make_struct(tmp2, dtype, args, &index, &size);
-            remaining_size = type->size - size;
-
-            if (!cleared) {
-                tmp.reg_type = RD_NONE;
-            }
-            if (!cleared2) {
-                tmp2.reg_type = RD_NONE;
-            }
-            emit_stp(tmp, tmp2, dst, offset + (i64)member_off);
-            continue;
-        }
-
-        if (!cleared) {
-            tmp.reg_type = RD_NONE;
-        }
-        emit_str(dst, tmp, (int)offset + (int)member_off);
+    if (!lo_written) {
+        lo.reg_type = RD_NONE;
     }
+    emit_str(base, lo, (int)offset);
 }
 
 
@@ -433,7 +353,7 @@ void emit_mov(reg_t dst, i64 value) {
 }
 
 void type_conv(reg_t dst, reg_t src) {
-    type_t *srct = src.dtype.base;
+    const type_t *srct = src.dtype.base;
     if (!srct) // TODO is it okay to ignore?
         return;
 

@@ -1001,6 +1001,94 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
     return true;
 }
 
+void make_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args) {
+    const type_t *type = dtype->base;
+    const size_t type_size = dtype_size(dtype);
+    if (type_size > MAX_REG_SIZE) {
+        compile_err(NULL, "compiler bug: type exceeds max reg size (%d)\n", MAX_REG_SIZE);
+        return;
+    }
+
+    dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
+
+    int index = 0;
+    size_t size = 0;
+    bool lo_written = emit_eightbyte_struct(dst, dtype, args, &index, &size);
+    if (!lo_written) {
+        emit_zero_out(dst);
+    }
+
+    if (type_size - size >= 8) {
+        dst.offset++;
+        bool hi_written = emit_eightbyte_struct(dst, dtype, args, &index, &size);
+        if (!hi_written) {
+            emit_zero_out(dst);
+        }
+    }
+}
+
+void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_member *args) {
+    type_t *type = dtype->base;
+    const ptrdiff_t member_count = args->cur - args->begin;
+
+    bool is_arr = dtype_top(dtype).tag == DK_ARRAY;
+
+    int index = 0;
+    size_t size = 0;
+    reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
+
+    while (index < member_count) {
+        dtype_t member_type;
+        if (is_arr) {
+            member_type = *dtype;
+        } else {
+            const dyn_member_t *members = &type->struct_t.members;
+            member_type = members->begin[index].type;
+        }
+
+        if (member_type.base->tag == TK_STRUCT) {
+            const agg_member *arg = args->begin + index;
+            if (arg->tag == AGGREGATE) {
+                dtype_t inner = {0};
+                if (dtype_empty(dtype)) {
+                    inner = member_type;
+                } else {
+                    inner = *dtype;
+                    dtype_pop(&inner);
+                }
+                store_struct(dst, offset + (i64)size, &inner, arg->agg);
+            } else if (arg->tag == VALUE && arg->value == 0) {
+                emit_zerofill(dst, offset + (i64)size, &member_type);
+            } else {
+                unreachable;
+            }
+            size += dtype_size(&member_type);
+            index += 1;
+            continue;
+        }
+
+        int start_index = index;
+        reg_t lo = {.reg_type = SCRATCH, .offset = 0, .rsize = rsize, .dtype = {.base = type}};
+        bool lo_written = emit_eightbyte_struct(lo, dtype, args, &index, &size);
+        if (start_index == index) {
+            compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", dtype_size(&member_type));
+            str_printerr(member_type.base->name);
+            break;
+        }
+
+        reg_t hi = lo;
+        hi.offset++;
+        bool hi_written = false;
+        bool has_hi = type->size - size >= 8
+                && index < member_count
+                && args->begin[index].tag != AGGREGATE;
+        if (has_hi) {
+            hi_written = emit_eightbyte_struct(hi, dtype, args, &index, &size);
+        }
+        emit_store_eightbytes(dst, offset + (i64)size, lo, lo_written, hi, hi_written, has_hi);
+    }
+}
+
 void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
     const token_t *token = &context->cur_token;
 
@@ -1022,7 +1110,7 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
         };
         int out_offset;
         get_store_offset(context, &src, &out_offset);
-        emit_store_struct(FP, -out_offset, dtype, args);
+        store_struct(FP, -out_offset, dtype, args);
     } else {
         size_t dsize = dtype_size(dtype);
         if (dsize > MAX_REG_SIZE) {
@@ -1031,7 +1119,7 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
         if (dsize > default_register_size) {
             context->nreg_count += 1;
         }
-        emit_make_struct(target, dtype, args);
+        make_struct(target, dtype, args);
     }
 
     dyn_agg_member_free(args);
@@ -1755,7 +1843,6 @@ bool directives(parser_context *context) {
             return true;
         }
     } else if (str_eq_lit(token_str, "noimport")) {
-        p(noimport)
         import_all = false;
         if (symbols_any)
             compile_err(token, "#noimport this has no effect: signatures already pre-registered\n");
@@ -2075,7 +2162,6 @@ void register_signatures(iter src) {
             continue;
         if (directives(&context)) {
             if (!import_all) {
-                p(abort importing all)
                 return;
             }
             continue;

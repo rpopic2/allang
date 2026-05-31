@@ -3,7 +3,7 @@
 allang is:
 - simple
 - low-level but productive
-- consistant
+- consistent
 language.
 
 allang consists of three parts:

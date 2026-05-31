@@ -25,8 +25,10 @@ typedef enum load_store {
     LOAD, STORE,
 } load_store_t;
 
-void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args);
-void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *args);
+bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args, int *index, size_t *size);
+void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written, reg_t hi, bool hi_written, bool has_hi);
+void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type);
+
 void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args);
 void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args);
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store);
@@ -41,6 +43,7 @@ void emit_cmp(reg_t lhs, i64 rhs);
 void emit_cmp_reg(reg_t lhs, reg_t rhs);
 void emit_string_lit(reg_t dst, const str *s);
 void emit_lsl(reg_t dst, reg_t lhs, i64 rhs);
+void emit_zero_out(reg_t dst);
 
 void emit_str(reg_t dst, reg_t src, int offset);
 void emit_ldr(reg_t dst, reg_t src, int offset);

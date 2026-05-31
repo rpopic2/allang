@@ -319,8 +319,8 @@ void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
 
 /* Pack up to 8 bytes of struct fields into dst using x86_64 instructions.
    Returns true if dst was written to, false if it remains unset. */
-static bool x86_eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args,
-                                      int *index, size_t *size_out) {
+bool emit_eightbyte_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args,
+                           int *index, size_t *size_out) {
     type_t *type = dtype->base;
     ptrdiff_t member_count = args->cur - args->begin;
     size_t dsize = dtype_size(dtype);
@@ -409,34 +409,11 @@ static bool x86_eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member 
     return cleared;
 }
 
-void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args) {
-    type_t *type = dtype->base;
-    size_t type_size = dtype_size(dtype);
-    if (type_size > MAX_REG_SIZE) {
-        compile_err(NULL, "compiler bug: type exceeds max reg size\n");
-        return;
-    }
-
-    dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
-
-    int index = 0;
-    size_t size = 0;
-    bool cleared = x86_eightbyte_make_struct(dst, dtype, args, &index, &size);
-    if (!cleared) {
-        emit_rr(STR("xor"), dst, dst);
-    }
-
-    size_t remaining = type_size - size;
-    if (remaining >= 8) {
-        dst.offset++;
-        cleared = x86_eightbyte_make_struct(dst, dtype, args, &index, &size);
-        if (!cleared) {
-            emit_rr(STR("xor"), dst, dst);
-        }
-    }
+void emit_zero_out(reg_t dst) {
+    emit_rr(STR("xor"), dst, dst);
 }
 
-static void emit_zerofill_x86(reg_t base, i64 offset, const dtype_t *dtype) {
+void emit_zerofill(reg_t base, i64 offset, const dtype_t *dtype) {
     size_t size = dtype_size(dtype);
     reg_t zero = {.reg_type = SCRATCH, .offset = 1, .rsize = 8, .dtype = {.base = dtype->base}};
     emit_rr(STR("xor"), zero, zero);
@@ -454,69 +431,21 @@ static void emit_zerofill_x86(reg_t base, i64 offset, const dtype_t *dtype) {
     }
 }
 
-void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *args) {
-    type_t *type = dtype->base;
-    const dyn_member_t *members = &type->struct_t.members;
-    ptrdiff_t member_count = args->cur - args->begin;
-
-    bool is_arr = !dtype_empty(dtype) && dtype_top(dtype).tag == DK_ARRAY;
-
-    int index = 0;
-    size_t size = 0;
-    reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
-
-    while (index < member_count) {
-        size_t member_off = size;
-        int tmp_index = index;
-
-        dtype_t *mem_type;
-        if (is_arr) {
-            mem_type = dtype;
-        } else {
-            mem_type = &members->begin[index].type;
+void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written,
+                           reg_t hi, bool hi_written, bool has_hi) {
+    if (has_hi) {
+        lo.rsize = 8;
+        hi.rsize = 8;
+    }
+    if (!lo_written) {
+        emit_rr(STR("xor"), lo, lo);
+    }
+    emit_str(base, lo, (int)offset);
+    if (has_hi) {
+        if (!hi_written) {
+            emit_rr(STR("xor"), hi, hi);
         }
-
-        if (mem_type->base->tag == TK_STRUCT) {
-            const agg_member *arg = args->begin + index;
-            if (arg->tag == AGGREGATE) {
-                dtype_t inner;
-                if (dtype_empty(dtype)) {
-                    inner = *mem_type;
-                } else {
-                    inner = *dtype;
-                    dtype_pop(&inner);
-                }
-                emit_store_struct(dst, offset + (i64)size, &inner, args->begin[index].agg);
-            } else if (arg->tag == VALUE && arg->value == 0) {
-                emit_zerofill_x86(dst, offset + (i64)size, mem_type);
-            }
-            size += dtype_size(mem_type);
-            index += 1;
-            continue;
-        }
-
-        reg_t scratch = {.reg_type = SCRATCH, .offset = 0, .rsize = rsize, .dtype = {.base = type}};
-        bool cleared = x86_eightbyte_make_struct(scratch, dtype, args, &index, &size);
-        if (tmp_index == index) {
-            compile_err(NULL, "member size expected less than 16\n");
-            break;
-        }
-        if (!cleared) {
-            emit_rr(STR("xor"), scratch, scratch);
-        }
-        emit_str(dst, scratch, (int)offset + (int)member_off);
-
-        size_t remaining = type->size - size;
-        if (remaining >= 8 && index < member_count
-                && args->begin[index].tag != AGGREGATE) {
-            scratch.offset++;
-            scratch.rsize = 8;
-            bool cleared2 = x86_eightbyte_make_struct(scratch, dtype, args, &index, &size);
-            if (!cleared2) {
-                emit_rr(STR("xor"), scratch, scratch);
-            }
-            emit_str(dst, scratch, (int)offset + (int)member_off + 8);
-        }
+        emit_str(base, hi, (int)offset + 8);
     }
 }
 
