@@ -717,20 +717,20 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     return true;
 }
 
-void named_branch(parser_context *context) {
+void named_bcond(parser_context *context, cond_t cond) {
     tok(context);
     token_t jump_target = context->cur_token;
     if (!streq(jump_target.end - 2, "->")) {
         compile_err(&jump_target, "-> expected at the end of a conditional branch");
     }
     jump_target.end -= 2;
-    emit_branch_cond(COND_EQ, context->name, jump_target.id, 0);
+    emit_branch_cond(cond, context->name, jump_target.id, 0);
 }
 
-void anonymous_branch(parser_context *context) {
+void anonymous_bcond(parser_context *context, cond_t cond) {
     str name = STR_FROM("lbb");
     int index = context->unnamed_labels++;
-    emit_branch_cond(COND_EQ, context->name, name, index);
+    emit_branch_cond(cond, context->name, name, index);
     tok(context);
 
     bool one_liner = context->cur_token.end[0] != '\n';
@@ -825,12 +825,19 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             emit_cmp_reg(lhs->reg, rhs.reg);
         else unreachable;
 
+        cond_t cond = COND_EQ;
+        if (streq(op_token.data + 2, "nt")) {
+            cond = COND_NE;
+        }
+
         if (is_id(rhs_token.end[1])) {
-            named_branch(context);
+            cond = cond_flip(cond);
+            named_bcond(context, cond);
         } else if (streq(rhs_token.end + 1, "->")) {
-            anonymous_branch(context);
+            cond = cond_flip(cond);
+            anonymous_bcond(context, cond);
         } else if (context->reg.reg_type == PARAM) {
-            emit_cond_set(context->reg, COND_EQ);
+            emit_cond_set(context->reg, cond);
         }
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
