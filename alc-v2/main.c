@@ -323,7 +323,7 @@ int extrat_scope_up(str *s) {
     return scope_up;
 }
 
-void context_add_nreg_count(parser_context *context) {
+void context_add_nreg(parser_context *context) {
     context->nreg_count += 1;
 #define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
     UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
@@ -1554,7 +1554,7 @@ bool decl_vars(parser_context *context) {
 
         reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
 
-        context_add_nreg_count(context);
+        context_add_nreg(context);
         if (!one_liner) {
             target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
             parse_block(context);
@@ -1840,13 +1840,13 @@ void stmt_label(parser_context *context) {
     for (int i = 0; i < symbol->airity; ++i) {
         reg_t *param = &symbol->params.data[i];
         reg_t arg_reg = {.reg_type = PARAM, .offset = i, .dtype = param->dtype};
+        context_add_nreg(context);
         reg_t r = {
-            .reg_type = NREG, .offset = context->nreg_count++,
+            .reg_type = NREG, .offset = context->nreg_count,
             .rsize = param->rsize,
             .dtype = param->dtype,
         };
         emit_mov_reg(r, arg_reg);
-        context_add_nreg_count(context);
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {
             compile_err(&context->cur_token, "parameter ids should be unique\n");
