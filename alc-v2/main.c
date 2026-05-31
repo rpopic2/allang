@@ -712,6 +712,16 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
     return true;
 }
 
+void named_branch(parser_context *context) {
+    tok(context);
+    token_t jump_target = context->cur_token;
+    if (!streq(jump_target.end - 2, "->")) {
+        compile_err(&jump_target, "-> expected at the end of a conditional branch");
+    }
+    jump_target.end -= 2;
+    emit_branch_cond(COND_EQ, context->name, jump_target.id, 0);
+}
+
 void anonymous_branch(parser_context *context) {
     str name = STR_FROM("lbb");
     int index = context->unnamed_labels++;
@@ -753,9 +763,9 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     } else if (lhs->tag == REG) {
         if (rhs.tag == REG) {
             reg_typecheck(&rhs_token, lhs->reg, rhs.reg);
+            context->reg.dtype = rhs.reg.dtype;
         }
         context->reg.rsize = lhs->reg.rsize;
-        context->reg.dtype = rhs.reg.dtype;
     }
 
     if (rhs.tag == NONE) {
@@ -803,22 +813,19 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         if (lhs->tag == VALUE) {
             compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
         }
+
         if (rhs.tag == VALUE)
             emit_cmp(lhs->reg, rhs.value);
         else if (rhs.tag == REG)
             emit_cmp_reg(lhs->reg, rhs.reg);
         else unreachable;
+
         if (is_id(rhs_token.end[1])) {
-            // ternary operator.
-            tok(context);
-            token_t jump_target = context->cur_token;
-            if (!streq(jump_target.end - 2, "->")) {
-                compile_err(&jump_target, "-> expected at the end of a conditional branch");
-            }
-            jump_target.end -= 2;
-            emit_branch_cond(COND_EQ, context->name, jump_target.id, 0);
+            named_branch(context);
         } else if (streq(rhs_token.end + 1, "->")) {
             anonymous_branch(context);
+        } else if (context->reg.reg_type == PARAM) {
+            emit_cond_set(context->reg, COND_EQ);
         }
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
@@ -1617,7 +1624,7 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
             tok(context);
             if (!expr(context))
                 break;
-                    context->reg.rsize = get_rsize(context->reg);
+            context->reg.rsize = get_rsize(context->reg);
             if (rets_it < rets->cur) {
                 if (context->reg.dtype.base == type_comptime_int
                         && rets_it->dtype.base->tag == TK_FUND) {

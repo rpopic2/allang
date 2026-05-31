@@ -25,6 +25,7 @@ typedef enum load_store {
     LOAD, STORE,
 } load_store_t;
 
+// aggregates
 bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args, int *index, size_t *size);
 void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written, reg_t hi, bool hi_written, bool has_hi);
 void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type);
@@ -33,6 +34,7 @@ void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args);
 void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args);
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store);
 
+// data processing
 void emit_mov(reg_t dst, i64 value);
 void emit_mov_reg(reg_t dst, reg_t src);
 void emit_add(reg_t dst, reg_t lhs, i64 rhs);
@@ -44,12 +46,13 @@ void emit_cmp_reg(reg_t lhs, reg_t rhs);
 void emit_string_lit(reg_t dst, const str *s);
 void emit_lsl(reg_t dst, reg_t lhs, i64 rhs);
 void emit_zero_out(reg_t dst);
+void emit_cond_set(reg_t dst, cond_t cond);
 
 void emit_str(reg_t dst, reg_t src, int offset);
 void emit_ldr(reg_t dst, reg_t src, int offset);
 void emit_str_reg(reg_t dst, reg_t src, reg_t offset);
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset);
-
+// control flow
 void emit_branch(str fn_name, str label, int index);
 bool emit_branch_cond(cond_t condition, str fn_name, str label, int index);
 void emit_label(str fn_name, str label, int index);

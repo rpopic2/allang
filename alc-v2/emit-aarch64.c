@@ -269,6 +269,13 @@ void emit_zero_out(reg_t dst) {
     emit_mov(dst, 0);
 }
 
+void emit_cond_set(reg_t dst, cond_t cond) {
+    emit_rx(STR("cset"), dst);
+    buf_puts(fn_buf, STR(", "));
+    buf_puts(fn_buf, STR_FROM(cond_str[cond]));
+    buf_putc(fn_buf, '\n');
+}
+
 static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
     emit_rrx(STR("stp"), src1, src2);
     buf_puts(fn_buf, STR(", ["));
