@@ -342,9 +342,16 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
                            int *index, size_t *size_out) {
     type_t *type = dtype->base;
     ptrdiff_t member_count = args->cur - args->begin;
-    size_t dsize = dtype_size(dtype);
 
     bool is_arr = !dtype_empty(dtype) && dtype_top(dtype).tag == DK_ARRAY;
+
+    /* For arrays, size dst to the bytes packed into this eightbyte so the
+       packing uses a wide-enough register (e.g. rax, not eax). */
+    if (is_arr) {
+        size_t remaining = (size_t)(member_count - *index) * dtype->base->size;
+        size_t span = remaining > 8 ? 8 : remaining;
+        dst.rsize = span > 4 ? 8 : (span > 2 ? 4 : (span > 1 ? 2 : 1));
+    }
 
     /* rcx (SCRATCH[1]) used as shift scratch — must differ from dst */
     const reg_t shift_tmp = {.reg_type = SCRATCH, .offset = 1, .rsize = 8};
@@ -356,12 +363,12 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
         member_t local_memb;
         member_t *memb;
         if (is_arr) {
-            local_memb = (member_t){.type = *dtype, .offset = (size_t)i * dsize};
+            local_memb = (member_t){.type = *dtype, .offset = (size_t)i * dtype->base->size};
             memb = &local_memb;
         } else {
             memb = &type->struct_t.members.begin[i];
         }
-        size_t memb_size = dtype_size(&memb->type);
+        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->type);
         size_t offset_bits = memb->offset * 8;
         size_t local_offset_bits = offset_bits % 64;
 
