@@ -44,6 +44,15 @@ inline static str str_move(str *s) {
     return ret;
 }
 
+inline static bool str_to_cstr(str s, char *buf, size_t bufsize) {
+    size_t len = str_len(s);
+    if (len >= bufsize)
+        return false;
+    memcpy(buf, s.data, len);
+    buf[len] = '\0';
+    return true;
+}
+
 inline static bool str_ends_with(const str *restrict token, const char *restrict cstr) {
     size_t len = strlen(cstr);
     return str_len(*token) >= len && memcmp(token->end - len, cstr, len) == 0;

@@ -1894,11 +1894,11 @@ bool directives(parser_context *context) {
         tok(context);
         str filename = context->cur_token.id;
         char buf[256];
-        size_t len = str_len(filename);
-        if (len >= sizeof buf)
+        bool ok = str_to_cstr(filename, buf, sizeof buf);
+        if (!ok) {
             compile_err(token, "filename was too long\n");
-        memcpy(buf, filename.data, len);
-        buf[len] = '\0';
+            return true;
+        }
         iter src = read_file(buf);
         import_all_from(src);
         compile(src, object_file);
