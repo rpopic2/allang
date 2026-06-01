@@ -2279,7 +2279,7 @@ void compile(iter src, FILE *object_file) {
         emit_context_t emit_ctx = {0};
         emit_reset_fn(&emit_ctx);
         function(&src);
-        emit_fnbuf(&emit_ctx, object_file);
+        emit_finalize_fnbuf(&emit_ctx, object_file);
     }
 }
 

@@ -47,13 +47,13 @@ void emit_reset_fn(emit_context_t *ctx) {
     buf_init(&ctx->fn_buf, INIT_BUFSIZ);
 }
 
-void emit_fnbuf(emit_context_t *ctx, FILE *out) {
+void emit_finalize_fnbuf(emit_context_t *ctx, FILE *out) {
     buf_fwrite(&ctx->fn_header_buf, out);
     buf_fwrite(&ctx->prologue_buf, out);
     buf_fwrite(&ctx->fn_buf, out);
 }
 
-void emit_text(emit_context_t *ctx, FILE *out) {
+void emit_text(FILE *out) {
     buf_fwrite(&ctx->text_buf, out);
 }
 

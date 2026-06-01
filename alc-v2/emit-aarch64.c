@@ -1,4 +1,5 @@
 #include "types.h"
+#include <assert.h>
 #include <stdio.h>
 #include <inttypes.h>
 #ifndef _WIN32
@@ -74,11 +75,11 @@ void emit_reset_fn(emit_context_t *in_context) {
 }
 
 void emit_finalize_fnbuf(emit_context_t *emit_ctx, FILE *out) {
-    if (out != NULL) {
-        buf_fwrite(&emit_ctx->fn_header_buf, out);
-        buf_fwrite(&emit_ctx->prologue_buf, out);
-        buf_fwrite(&emit_ctx->fn_buf, out);
-    }
+    assert(out != NULL);
+
+    buf_fwrite(&emit_ctx->fn_header_buf, out);
+    buf_fwrite(&emit_ctx->prologue_buf, out);
+    buf_fwrite(&emit_ctx->fn_buf, out);
 
     if (contexts_top == contexts) {
         context = NULL;

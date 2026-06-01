@@ -22,7 +22,7 @@ typedef struct emit_context {
 
 void emit_init(void);
 void emit_reset_fn(emit_context_t *context);
-void emit_fnbuf(emit_context_t *context, FILE *out);
+void emit_finalize_fnbuf(emit_context_t *context, FILE *out);
 void emit_text(FILE *out);
 void emit_cstr(FILE *out);
 
