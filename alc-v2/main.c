@@ -1709,9 +1709,11 @@ bool stmt_ret(parser_context *context) {
 }
 
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm) {
-    if (!stmt_ret_pre(context))
+    if (!str_eq_lit(context->cur_token.id, "ret"))
         return false;
     emit_cmp(cmp_reg, cmp_imm);
+    if (!stmt_ret_pre(context))
+        return false;
     context->has_branched_ret = true;
     emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
     return true;
