@@ -32,6 +32,7 @@ int expr_line(parser_context *context);
 void compile(iter src, FILE *object_file);
 iter read_file(const char *source_name);
 void import_all_from(iter src);
+void skip_function(iter *src);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -1651,6 +1652,18 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
         } while (token->end[0] == ',' && isspace(token->end[1]));
 }
 
+bool detect_mainfn_end(parser_context *context, bool start_of_line) {
+    if (context->cur_token.data == NULL
+            || (start_of_line && context->indent == context->cur_token.indent)) {
+        if (start_of_line) {
+            context->ended = true;
+        }
+        context->last_line_ret = true;
+        return true;
+    }
+    return false;
+}
+
 bool stmt_ret_pre(parser_context *context) {
     const token_t *token = &context->cur_token;
 
@@ -1679,14 +1692,7 @@ bool stmt_ret_pre(parser_context *context) {
             compile_err(token, "expected to return %d values (found %d)\n", expected, arg_count);
         // }
     }
-    if (context->cur_token.data == NULL
-            || (start_of_line && context->indent == context->cur_token.indent)) {
-        if (start_of_line) {
-            context->ended = true;
-        }
-        context->last_line_ret = true;
-        return true;
-    }
+    detect_mainfn_end(context, start_of_line);
     return true;
 }
 
@@ -1900,7 +1906,7 @@ bool directives(parser_context *context) {
             return true;
         }
         iter src = read_file(buf);
-        import_all_from(src);
+        skip_function(&src);
         compile(src, object_file);
     } else {
         compile_err(token, "unknown directive "), str_printerr(token_str);
@@ -2191,6 +2197,35 @@ void function(iter *src) {
     TIMER_END(parse_emit);
 }
 
+void skip_function(iter *src) {
+    printd("start skip\n");
+    parser_context *context = &(parser_context){
+        .src = src,
+        .reg = (reg_t) {.reg_type = SCRATCH, .offset = 0 },
+        .symbol = NULL,
+        .unnamed_labels = 1,
+    };
+
+    while (src->cur < src->end) {
+        tok(context);
+        token_t *cur_token = &context->cur_token;
+        if (str_len(cur_token->id) == 0) {
+            continue;
+        }
+        directives(context);
+
+        if (str_eq_lit(cur_token->id, "ret")) {
+            if (detect_mainfn_end(context, context->start_of_line))
+                break;
+        }
+
+        if (context->ended) {
+            printd("end of skip fn\n");
+            break;
+        }
+    }
+}
+
 const char *fund_type_names[] = {
     "u8", "u16", "u32", "u64", "u128", "usize",
     "i8", "i16", "i32", "i64", "i128", "isize",
@@ -2219,6 +2254,7 @@ void register_fund_types(void) {
 }
 
 void import_all_from(iter src) {
+    printd("import start\n");
     iter *srcp = &src;
     arr_mini_hashset_init(&local_ids);
     parser_context context = { .src = srcp };
@@ -2244,6 +2280,7 @@ void import_all_from(iter src) {
     lineno = 1;
     indent = 0;
     eof = false;
+    printd("import end\n");
 }
 
 iter read_file(const char *source_name) {
