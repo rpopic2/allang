@@ -48,7 +48,7 @@ bool symbols_any = false;
 FILE *object_file;
 
 type_t *type_i32;
-type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR_FROM("comptime int")};
+type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("comptime int")};
 
 
 u64 hashmap_hash(str id) {
@@ -251,7 +251,7 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
     }
     if (!escape) {
         context->reg.rsize = sizeof (char *);
-        context->reg.dtype = (dtype_t){.base = hashmap_type_t_tryfind(types, STR_FROM("u8"))};
+        context->reg.dtype = (dtype_t){.base = hashmap_type_t_tryfind(types, STR("u8"))};
         dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
         emit_string_lit(context->reg, (str *)token);
         return;
@@ -606,8 +606,8 @@ bool typecheck(const token_t *token, const type_t *ltype, const type_t *rtype) {
     }
     if (ltype == rtype)
         return true;
-    str lname = ltype ? ltype->name : STR_FROM("NULL");
-    str rname = rtype ? rtype->name : STR_FROM("NULL");
+    str lname = ltype ? ltype->name : STR("NULL");
+    str rname = rtype ? rtype->name : STR("NULL");
     compile_err(token, "type checker: expected type "), str_printerrnl(lname), puterr(", but found "), str_printerr(rname);
     return false;
 }
@@ -730,7 +730,7 @@ void named_bcond(parser_context *context, cond_t cond) {
 }
 
 void anonymous_bcond(parser_context *context, cond_t cond) {
-    str name = STR_FROM("lbb");
+    str name = STR("lbb");
     int index = context->unnamed_labels++;
     emit_branch_cond(cond, context->name, name, index);
     tok(context);
@@ -1704,7 +1704,7 @@ bool stmt_ret(parser_context *context) {
     if (!stmt_ret_pre(context))
         return false;
     context->has_branched_ret = true;
-    emit_branch(context->symbol->name, STR_FROM("ret"), 0);
+    emit_branch(context->symbol->name, STR("ret"), 0);
     return true;
 }
 
@@ -1713,7 +1713,7 @@ bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_
         return false;
     emit_cmp(cmp_reg, cmp_imm);
     context->has_branched_ret = true;
-    emit_branch_cond(cond, context->symbol->name, STR_FROM("ret"), 0);
+    emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
     return true;
 }
 
@@ -1735,7 +1735,7 @@ bool stmt(parser_context *context) {
             target = stack->cur - 1;
         }
         *target = index;
-        emit_branch(context->name, STR_FROM("unnamed"), index);
+        emit_branch(context->name, STR("unnamed"), index);
         return true;
     } else if (streq(token->data, "<<")) {
         int index = *context->deferred_unnamed_br.cur;
@@ -1743,7 +1743,7 @@ bool stmt(parser_context *context) {
             compile_err(token, "unmatched branch merger. expected >> before <<\n");
             return true;
         }
-        emit_label(context->name, STR_FROM("unnamed"), index);
+        emit_label(context->name, STR("unnamed"), index);
         return true;
     }
 
@@ -2143,7 +2143,7 @@ void function(src_t *src) {
             .airity = 2,
             .ret_airity = 1,
             .is_fn = true,
-            .name = STR_FROM("main"),
+            .name = STR("main"),
         };
         context->symbol = hashmap_symbol_t_overwrite(fn_ids, tmp.name, &tmp);
         context->name = context->symbol->name;
@@ -2191,7 +2191,7 @@ void function(src_t *src) {
     }
 
     if (context->has_branched_ret) {
-        emit_label(context->name, STR_FROM("ret"), 0);
+        emit_label(context->name, STR("ret"), 0);
     }
     if (do_airity_check && !context->last_line_ret) {
         if (context->symbol->ret_airity != 0) {
@@ -2248,7 +2248,7 @@ const u8 fund_type_sizes[] = {
 void register_fund_types(void) {
     size_t fund_types_count = sizeof fund_type_names / sizeof (char *);
     for (size_t i = 0; i < fund_types_count; ++i) {
-        str name = STR_FROM(fund_type_names[i]);
+        str name = STR(fund_type_names[i]);
         type_t s = {
             .size = fund_type_sizes[i],
             .sign = name.data[0] == 'u' ? false : true,

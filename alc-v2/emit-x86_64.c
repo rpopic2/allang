@@ -9,7 +9,7 @@
 
 #define DECL_PTR(T, X) T _##X; T *X = &_##X
 #define INSTR(s) "\t"s"\n"
-#define STR_FROM_INSTR(s) STR_FROM(INSTR(s))
+#define STR_FROM_INSTR(s) STR(INSTR(s))
 
 #define INIT_BUFSIZ 0x400
 
@@ -38,10 +38,10 @@ const size_t default_register_size = 8;
 
 void emit_init(void) {
     buf_init(&text_buf, INIT_BUFSIZ);
-    buf_puts(&text_buf, STR_FROM(text_section_header));
+    buf_puts(&text_buf, STR(text_section_header));
 
     buf_init(&cstr_buf, INIT_BUFSIZ);
-    buf_puts(&cstr_buf, STR_FROM(string_section_header));
+    buf_puts(&cstr_buf, STR(string_section_header));
     cstr_begin = cstr_buf.cur;
 }
 
@@ -96,10 +96,10 @@ bool emit_need_escaping(void) {
 static void buf_putreg(buf *buffer, reg_t reg) {
     register_dst reg_type = reg.reg_type;
     if (reg_type == STACK) {
-        buf_puts(buffer, STR_FROM("rsp"));
+        buf_puts(buffer, STR("rsp"));
         return;
     } else if (reg_type == FRAME) {
-        buf_puts(buffer, STR_FROM("rbp"));
+        buf_puts(buffer, STR("rbp"));
         return;
     }
     if (reg.offset < 0) {
@@ -168,7 +168,7 @@ void emit_mov(reg_t dst, i64 value) {
         emit_rr(STR("xor"), dst, dst);
     } else {
         emit_rx(STR("mov"), dst);
-        buf_puts(fn_buf, STR_FROM(", "));
+        buf_puts(fn_buf, STR(", "));
         buf_snprintf(fn_buf, "%"PRId64, value);
         buf_putc(fn_buf, '\n');
     }
@@ -253,7 +253,7 @@ void emit_string_lit(reg_t dst, const str *s) {
     buf_snprintf(fn_buf, ", [rip+%s]\n", buffer);
 
     buf_snprintf(&cstr_buf, "%s:\n", buffer);
-    buf_puts(&cstr_buf, STR_FROM("\t.asciz "));
+    buf_puts(&cstr_buf, STR("\t.asciz "));
     buf_puts(&cstr_buf, *s);
     buf_putc(&cstr_buf, '\n');
 
@@ -522,7 +522,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
             if (is_store) {
                 buf_snprintf(fn_buf, "\tmov %s ptr [", ptr_names[log2]);
                 buf_putreg(fn_buf, src);
-                buf_puts(fn_buf, STR_FROM(" + "));
+                buf_puts(fn_buf, STR(" + "));
                 buf_putreg(fn_buf, offset);
                 buf_snprintf(fn_buf, " * %zu], ", elem_size);
                 buf_putreg(fn_buf, dst);
@@ -532,7 +532,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
                 buf_putreg(fn_buf, dst);
                 buf_snprintf(fn_buf, ", %s ptr [", ptr_names[log2]);
                 buf_putreg(fn_buf, src);
-                buf_puts(fn_buf, STR_FROM(" + "));
+                buf_puts(fn_buf, STR(" + "));
                 buf_putreg(fn_buf, offset);
                 buf_snprintf(fn_buf, " * %zu]\n", elem_size);
             }
@@ -559,7 +559,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
 void emit_branch(str fn_name, str label, int index) {
     buf_puts(fn_buf, STR("\tjmp "));
     put_label(fn_name, label, index);
-    buf_puts(fn_buf, STR_FROM("\n"));
+    buf_puts(fn_buf, STR("\n"));
 }
 
 const char *const cond_str[] = {
@@ -572,13 +572,13 @@ bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
     }
     buf_snprintf(fn_buf, "\tj%s ", cond_str[condition]);
     put_label(fn_name, label, index);
-    buf_puts(fn_buf, STR_FROM("\n"));
+    buf_puts(fn_buf, STR("\n"));
     return true;
 }
 
 void emit_label(str fn_name, str label, int index) {
     put_label(fn_name, label, index);
-    buf_puts(fn_buf, STR_FROM(":\n"));
+    buf_puts(fn_buf, STR(":\n"));
 }
 
 void emit_cond_set(reg_t dst, cond_t cond) {
@@ -658,17 +658,17 @@ void emit_fn_call(const str *s) {
 }
 
 void emit_fn(str fn_name) {
-    buf_puts(&context->fn_header_buf, STR_FROM("\n\t.globl "));
-    buf_puts(&context->fn_header_buf, STR_FROM(fn_prefix));
+    buf_puts(&context->fn_header_buf, STR("\n\t.globl "));
+    buf_puts(&context->fn_header_buf, STR(fn_prefix));
     buf_puts(&context->fn_header_buf, fn_name);
-    buf_puts(&context->fn_header_buf, STR_FROM("\n\t.p2align 4\n"));
+    buf_puts(&context->fn_header_buf, STR("\n\t.p2align 4\n"));
     if (*fn_annotation_fmt) {
         buf_snprintf(&context->fn_header_buf, fn_annotation_fmt,
                      (int)str_len(fn_name), fn_name.data);
     }
-    buf_puts(&context->fn_header_buf, STR_FROM(fn_prefix));
+    buf_puts(&context->fn_header_buf, STR(fn_prefix));
     buf_puts(&context->fn_header_buf, fn_name);
-    buf_puts(&context->fn_header_buf, STR_FROM(":\n"));
+    buf_puts(&context->fn_header_buf, STR(":\n"));
 }
 
 void emit_ret(void) {

@@ -7,8 +7,8 @@ I is 1 ->
 ret 1
 
 expect: (Expect u8 =>)
-    Expect is 0 -> printf "test failed\n" => _Exit 1 =>
+    Expect is 0 ->
+        printf "test failed\n" => _Exit 1 =>
 
 expect_eq: (Lhs u8, Rhs u8 =>)
     Lhs isnt Rhs -> printf "test failed\n" => _Exit 1 =>
-
