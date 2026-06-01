@@ -119,6 +119,10 @@ static inline size_t dtype_size(const dtype_t *self) {
         if (top.amount <= 0)
             fprintf(stderr, "array length was <= 0 (%d)", top.amount);
         return self->base->size * (usize)top.amount;
+    } else if (top.tag == DK_CHECK) {
+        dtype_t stripped = *self;
+        dtype_pop(&stripped);
+        return dtype_size(&stripped);
     } else {
         unreachable;
     }

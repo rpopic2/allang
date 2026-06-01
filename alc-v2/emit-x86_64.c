@@ -283,8 +283,13 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
         dst.rsize = span > 4 ? 8 : (span > 2 ? 4 : (span > 1 ? 2 : 1));
     }
 
-    /* rcx (SCRATCH[1]) used as shift scratch — must differ from dst */
-    const reg_t shift_tmp = {.reg_type = SCRATCH, .offset = 1, .rsize = 8};
+    /* Shift scratch — must differ from dst. When packing the hi eightbyte
+       dst is SCRATCH[1], so bump past it (and past the lo eightbyte SCRATCH[0],
+       which must survive until the store). */
+    reg_t shift_tmp = {.reg_type = SCRATCH, .offset = 1, .rsize = 8};
+    if (dst.reg_type == SCRATCH && dst.offset >= shift_tmp.offset) {
+        shift_tmp.offset = dst.offset + 1;
+    }
 
     bool cleared = false;
     size_t size_acc = 0;

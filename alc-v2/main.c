@@ -652,6 +652,8 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (lsize != rsize) {
         compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
     }
+    assert(ltype);
+    assert(rtype);
     bool lsign = ltype->sign;
     bool rsign = rtype->sign;
     if (lsign != rsign) {
@@ -1085,6 +1087,7 @@ void make_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args) {
 void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_member *args) {
     type_t *type = dtype->base;
     const ptrdiff_t member_count = args->cur - args->begin;
+    const size_t total_size = dtype_size(dtype);
 
     bool is_arr = dtype_top(dtype).tag == DK_ARRAY;
 
@@ -1122,6 +1125,7 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
             continue;
         }
 
+        const size_t chunk_offset = size;
         int start_index = index;
         reg_t lo = {.reg_type = SCRATCH, .offset = 0, .rsize = rsize, .dtype = {.base = type}};
         bool lo_written = emit_eightbyte_struct(lo, dtype, args, &index, &size);
@@ -1134,13 +1138,13 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
         reg_t hi = lo;
         hi.offset++;
         bool hi_written = false;
-        bool has_hi = type->size - size >= 8
+        bool has_hi = total_size - size >= 8
                 && index < member_count
                 && args->begin[index].tag != AGGREGATE;
         if (has_hi) {
             hi_written = emit_eightbyte_struct(hi, dtype, args, &index, &size);
         }
-        emit_store_eightbytes(dst, offset + (i64)size, lo, lo_written, hi, hi_written, has_hi);
+        emit_store_eightbytes(dst, offset + (i64)chunk_offset, lo, lo_written, hi, hi_written, has_hi);
     }
 }
 
@@ -1346,7 +1350,10 @@ bool expr(parser_context *context) {
                     context->reg.dtype = nreg->dtype;
                     context->reg.rsize = nreg->rsize;
                 }
-                assert(nreg->dtype.base);
+                if (nreg->dtype.base == NULL) {
+                    compile_err(token, "use of unassigned register "), str_printerr(token->id);
+                    return true;
+                }
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->reg_type == STACK) {
                 context->reg.rsize = sizeof (void *);
@@ -1720,9 +1727,11 @@ bool stmt_ret(parser_context *context) {
 }
 
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm) {
-    if (!stmt_ret_pre(context))
+    if (!str_eq_lit(context->cur_token.id, "ret"))
         return false;
     emit_cmp(cmp_reg, cmp_imm);
+    if (!stmt_ret_pre(context))
+        return false;
     context->has_branched_ret = true;
     emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
     return true;
@@ -1972,7 +1981,8 @@ bool stmt_reg_assign(parser_context *context) {
         src_reg.offset -= 1;
     if (!cur_target->target_assigned) {
         if (src_reg.dtype.base == NULL) {
-            compile_err(token, "compiler bug: reg type shouldn't be null\n");
+            compile_err(token, "assignment has no value to assign; expected the form '<value> ='\n");
+            return true;
         } else if (src_reg.dtype.base == type_comptime_int) {
             src_reg.dtype.base = type_i32;
             src_reg.rsize = (reg_size)type_i32->size;
