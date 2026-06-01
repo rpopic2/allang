@@ -393,6 +393,10 @@ regable read_regable(str s, const token_t *token) {
         result.tag = REG;
         member_t *mem = NULL;
         type_t *t = e->dtype.base;
+        if (t == error_type) {
+            result.type = error_type;
+            return result;
+        }
         while (true) {
             str mem_name = dot_iter(&s, '.');
             if (str_empty(&mem_name))
