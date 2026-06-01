@@ -49,6 +49,7 @@ FILE *object_file;
 
 type_t *type_i32;
 type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("comptime int")};
+type_t *error_type = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("error_type")};
 
 
 u64 hashmap_hash(str id) {
@@ -377,10 +378,10 @@ int find_member_index(const dyn_member_t *members, str name) {
 }
 
 regable read_regable(str s, const token_t *token) {
-    regable result = (regable){ .value = 0, .tag = NONE};
+    regable result = (regable){ .value = 0, .tag = NONE };
     if (isupper(s.data[0]) || s.data[0] == '^') {
         int scope_up = extrat_scope_up(&s);
-        reg_t *e;
+        reg_t *e = NULL;
 
         str name = dot_iter(&s, '.');
         if (!find_id(&local_ids, name, token, &e, scope_up)
@@ -1277,7 +1278,11 @@ bool expr(parser_context *context) {
         type_t *type = hashmap_type_t_tryfind(types, id);
         if (type == NULL) {
             compile_err(&context->cur_token, "unknown type "), str_printerr(id);
-            goto skip;
+            while (tok(context)) {
+                if (context->cur_token.data[0] == '}')
+                    break;
+            }
+            return true;
         }
         if (len > INT_MAX)
             compile_err(&context->cur_token, "array length was too big");
@@ -1297,7 +1302,6 @@ bool expr(parser_context *context) {
         }
         tok(context);
     }
-skip:;
 
     token_t _token = context->cur_token;
     token_t *token = &_token;
@@ -1560,8 +1564,11 @@ bool decl_vars(parser_context *context) {
                 }
             }
         }
-        if (context->reg.dtype.base == type_comptime_int) {
+        const type_t *base_type = context->reg.dtype.base;
+        if (base_type == type_comptime_int) {
             context->reg.dtype.base = type_i32;
+        } else if (base_type == NULL) {
+            context->reg.dtype.base = error_type;
         }
         reg_t arg = {
             .reg_type = NREG, .offset = context->nreg_count,
