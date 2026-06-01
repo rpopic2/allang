@@ -2291,6 +2291,11 @@ void import_all_from(src_t src) {
             import_all = false;
             break;
         }
+
+        if (stmt_struct(&context)) {
+            
+        }
+        
         if (t->indent == 0
                 && (islower(t->data[0]) || t->data[0] == '_')
                 && streq(t->end - 1, ":")) {
