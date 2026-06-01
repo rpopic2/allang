@@ -737,14 +737,17 @@ void anonymous_bcond(parser_context *context, cond_t cond) {
 
     bool one_liner = context->cur_token.end[0] != '\n';
     if (one_liner) {
-        tok(context);
-        if (expr_line(context)) {
+        do {
+            tok(context);
+            if (expr_line(context)) {
 
-        } else if (fn_call(context)) {
+            } else if (fn_call(context)) {
 
-        } else {
-            compile_err(&context->cur_token, "a line of expression expected as this line does not end with newline\n");
-        }
+            } else {
+                compile_err(&context->cur_token, "a line of expression expected as this line does not end with newline\n");
+                break;
+            }
+        } while (!context->end_of_line);
     } else {
         parse_block(context);
     }
@@ -2219,8 +2222,11 @@ void skip_function(src_t *src) {
         directives(context);
 
         if (str_eq_lit(cur_token->id, "ret")) {
-            if (detect_mainfn_end(context, context->start_of_line))
+            if (detect_mainfn_end(context, context->start_of_line)) {
+                while (!context->end_of_line && src->cur < src->end)
+                    tok(context);
                 break;
+            }
         }
 
         if (context->ended) {
