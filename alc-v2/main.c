@@ -42,10 +42,12 @@ u16 lineno = 1;
 u8 indent = 0;
 bool eof = false;
 bool has_compile_err = false;
-bool do_airity_check = true;
-bool import_all = true;
 bool symbols_any = false;
 FILE *object_file;
+
+bool do_airity_check = true;
+bool import_all = true;
+bool dead_fn_elim = true;
 
 type_t *type_i32;
 type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("comptime int")};
@@ -1850,7 +1852,9 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
     hashentry_symbol_t *entry = hashmap_symbol_t_find(fn_ids, label);
     symbol_t *symbol_existing = &entry->value;
 
-    if (hashentry_symbol_t_valid(entry)) {
+    bool is_placeholder = entry->value.is_placeholder;
+    symbol.is_called = is_placeholder;
+    if (hashentry_symbol_t_valid(entry) && !is_placeholder) {
         if (symbol_existing->airity != symbol.airity || symbol_existing->is_fn != symbol.is_fn) {
             compile_err(token, "incorrect redefinition of fn "), str_printerr(label);
             return NULL;
@@ -1868,9 +1872,8 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 void stmt_label(parser_context *context) {
     arr_str params;
     symbol_t *symbol = label_meta(context, &params);
-    if (symbol == NULL) {
+    if (symbol == NULL)
         return;
-    }
 
     if (!symbol->is_fn) {
         str outer_name = str_null;
@@ -1884,6 +1887,11 @@ void stmt_label(parser_context *context) {
             emit_label(outer_name, symbol->name, 0);
         }
     }
+
+    context->symbol = symbol;
+    context->name = symbol->name;
+    if (dead_fn_elim && !symbol->is_called)
+        return;
 
     if (arr_reg_t_len(&symbol->params) != symbol->airity) {
         printf("expected %zd, but %d\n", arr_reg_t_len(&symbol->params), symbol->airity);
@@ -1907,8 +1915,6 @@ void stmt_label(parser_context *context) {
 
     if (symbol->is_fn) {
         emit_fn(symbol->name);
-        context->symbol = symbol;
-        context->name = symbol->name;
     }
     symbols_any = true;
 }
@@ -2175,6 +2181,7 @@ void function(src_t *src) {
             .ret_airity = 1,
             .is_fn = true,
             .name = STR("main"),
+            .is_called = true,
         };
         context->symbol = hashmap_symbol_t_overwrite(fn_ids, tmp.name, &tmp);
         context->name = context->symbol->name;
@@ -2184,9 +2191,14 @@ void function(src_t *src) {
 
     if (!is_main) {
         tok(context);
+        str_printd(context->cur_token.id);
         if (context->cur_token.data == NULL)
             return;
         stmt_label(context);
+    }
+    if (dead_fn_elim && !context->symbol->is_called) {
+        skip_function(src);
+        return;
     }
     context->indent = context->cur_token.indent;
     printd(CSI_GREEN"\n--- start of label: ");
@@ -2242,6 +2254,7 @@ void skip_function(src_t *src) {
         .reg = (reg_t) {.reg_type = SCRATCH, .offset = 0 },
         .symbol = NULL,
         .unnamed_labels = 1,
+        .indent = indent,
     };
 
     while (src->cur < src->end) {
@@ -2294,6 +2307,40 @@ void register_fund_types(void) {
     }
 }
 
+bool is_label_name(str t) {
+    if (!islower(t.data[0]) && t.data[0] != '_') {
+        return false;
+    }
+    return true;
+}
+
+void import_label(parser_context* context) {
+    token_t *t = &context->cur_token;
+    if (!is_label_name(t->id))
+        return;
+
+    if (streq(t->end - 1, ":")) {
+        bool had_paren = streq(t->end, " (");
+        symbol_t *symbol = label_meta(context, NULL);
+        context->symbol = symbol;
+        if (had_paren) {
+            arr_mini_hashset_pop(&local_ids);
+        }
+    } else if (t->end[0] == ' ') {
+        symbol_t *entry = hashmap_symbol_t_tryfind(fn_ids, t->id);
+        if (entry) {
+            entry->is_called = true;
+            return;
+        }
+        symbol_t placeholder = {
+            .name = t->id,
+            .is_called = true,
+            .is_placeholder = true,
+        };
+        hashmap_symbol_t_tryadd(fn_ids, t->id, &placeholder);
+    }
+}
+
 void import_all_from(src_t src) {
     u16 prev_lineno = lineno;
     lineno = 1;
@@ -2313,18 +2360,10 @@ void import_all_from(src_t src) {
         }
 
         if (stmt_struct(&context)) {
-
+            continue;
         }
 
-        if (t->indent == 0
-                && (islower(t->data[0]) || t->data[0] == '_')
-                && streq(t->end - 1, ":")) {
-            bool had_paren = streq(t->end, " (");
-            symbol_t *symbol = label_meta(&context, NULL);
-            context.symbol = symbol;
-            if (had_paren)
-                arr_mini_hashset_pop(&local_ids);
-        }
+        import_label(&context);
     }
     lineno = prev_lineno;
     indent = 0;

@@ -217,6 +217,8 @@ typedef struct {
     u8 airity;
     u8 ret_airity;
     bool is_fn;
+    bool is_called;
+    bool is_placeholder;
     arr_reg_t params;
     arr_reg_t rets;
 } symbol_t;
