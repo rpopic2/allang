@@ -647,9 +647,8 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (lsize != rsize) {
         compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
     }
-    if (ltype == NULL || rtype == NULL) {
-        return;
-    }
+    assert(ltype);
+    assert(rtype);
     bool lsign = ltype->sign;
     bool rsign = rtype->sign;
     if (lsign != rsign) {
