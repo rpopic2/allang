@@ -1728,10 +1728,20 @@ bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_
     return true;
 }
 
+void consume_until(parser_context *context, str s) {
+    while (tok(context)) {
+        str cur = context->cur_token.id;
+        if (str_eq(cur, s)) {
+            break;
+        }
+    }
+}
+
 bool stmt(parser_context *context) {
     const token_t *token = &context->cur_token;
 
-    if (stmt_struct(context)) {
+    if (str_eq_lit(token->id, "struct")) {
+        consume_until(context, STR("}"));
         return true;
     }
     if (stmt_ret(context)) {
@@ -2291,11 +2301,17 @@ void import_all_from(src_t src) {
             import_all = false;
             break;
         }
+
+        if (stmt_struct(&context)) {
+
+        }
+
         if (t->indent == 0
                 && (islower(t->data[0]) || t->data[0] == '_')
                 && streq(t->end - 1, ":")) {
             bool had_paren = streq(t->end, " (");
-            label_meta(&context, NULL);
+            symbol_t *symbol = label_meta(&context, NULL);
+            context.symbol = symbol;
             if (had_paren)
                 arr_mini_hashset_pop(&local_ids);
         }
