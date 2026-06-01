@@ -1,17 +1,9 @@
 #include <inttypes.h>
-#include <assert.h>
 
 #include "emit.h"
 #include "typesys.h"
 #include "buffer.h"
-#include "err.h"
 #include "emit_helper.h"
-
-#define DECL_PTR(T, X) T _##X; T *X = &_##X
-#define INSTR(s) "\t"s"\n"
-#define STR_FROM_INSTR(s) STR(INSTR(s))
-
-#define INIT_BUFSIZ 0x400
 
 extern const char * const rname_scratch[];
 extern const char * const rname_callee[];
@@ -26,68 +18,10 @@ extern const char *fn_prefix;
 extern const char *fn_annotation_fmt;
 extern const char *local_string_prefix;
 
-emit_context_t *context;
-
-static buf text_buf;
-
-static buf cstr_buf;
-static char *cstr_begin;
-static unsigned string_lit_counts;
+extern const char *text_section_header;
+extern const char *string_section_header;
 
 const size_t default_register_size = 8;
-
-void emit_init(void) {
-    buf_init(&text_buf, INIT_BUFSIZ);
-    buf_puts(&text_buf, STR(text_section_header));
-
-    buf_init(&cstr_buf, INIT_BUFSIZ);
-    buf_puts(&cstr_buf, STR(string_section_header));
-    cstr_begin = cstr_buf.cur;
-}
-
-#define MAX_CONTEXTS 10
-emit_context_t *contexts[MAX_CONTEXTS];
-emit_context_t **contexts_top = contexts;
-
-void emit_reset_fn(emit_context_t *in_context) {
-    if (contexts_top == contexts + MAX_CONTEXTS) {
-        report_error("max contexts reached. #import or #compile recursion might be too deep");
-        return;
-    }
-    *contexts_top++ = context;
-
-    context = in_context;
-    fn_buf = &context->fn_buf;
-    buf_init(&context->fn_header_buf, 0x100);
-    buf_init(&context->prologue_buf, INIT_BUFSIZ);
-    buf_init(&context->fn_buf, INIT_BUFSIZ);
-}
-
-void emit_finalize_fnbuf(emit_context_t *emit_ctx, FILE *out) {
-    assert(out != NULL);
-
-    buf_fwrite(&emit_ctx->fn_header_buf, out);
-    buf_fwrite(&emit_ctx->prologue_buf, out);
-    buf_fwrite(&emit_ctx->fn_buf, out);
-
-    if (contexts_top == contexts) {
-        context = NULL;
-        fn_buf = NULL;
-    } else {
-        context = *--contexts_top;
-        fn_buf = context != NULL ? &context->fn_buf : NULL;
-    }
-}
-
-void emit_text(FILE *out) {
-    buf_fwrite(&text_buf, out);
-}
-
-void emit_cstr(FILE *out) {
-    if (cstr_begin < cstr_buf.cur) {
-        buf_fwrite(&cstr_buf, out);
-    }
-}
 
 bool emit_need_escaping(void) {
     return false;
@@ -103,7 +37,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
         return;
     }
     if (reg.offset < 0) {
-        compile_err(NULL, "unexpected negative register offset %d", reg.offset);
+        report_error("unexpected negative register offset %d", reg.offset);
         return;
     }
     size_t offset = (size_t)reg.offset;
@@ -113,7 +47,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 #define RNAME(RTYPE, rtype) \
     } else if (reg_type == RTYPE) { \
         if (offset >= rname_##rtype##_len) { \
-            compile_err(NULL, "used up all "#rtype" registers. offset was %d\n", offset); \
+            report_error("used up all "#rtype" registers. offset was %zd\n", offset); \
             return; \
         } \
         rname_original = rname_##rtype[offset];
@@ -158,7 +92,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
             *--rname = 'r';
         }
     } else {
-        compile_err(NULL, "incorrect rsize %d\n", rsize);
+        report_error("incorrect rsize %d\n", rsize);
     }
     buf_snprintf(buffer, "%s", rname);
 }
@@ -291,7 +225,6 @@ int rsize_log2(reg_size size) {
         unreachable;
 }
 
-/* emit.h: emit_str(dst=memory_base, src=value, offset) */
 void emit_str(reg_t dst, reg_t src, int offset) {
     buf_puts(fn_buf, STR("\tmov "));
     int index = rsize_log2(src.rsize);
@@ -315,7 +248,6 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
 const reg_t rax = {.rsize = sizeof (void *), .reg_type = SCRATCH, .dtype = {.decl = {{.tag = DK_ADDR, .amount = 1}}, .decl_len = 1}};
 const reg_t rbp = {.rsize = sizeof (void *), .reg_type = FRAME, .dtype = {.decl = {{.tag = DK_ADDR, .amount = 1}}, .decl_len = 1}};
 
-/* emit.h: emit_str_reg(dst=memory_base, src=value, offset=index_reg) */
 void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
     emit_lea_begin(rax, dst, STR("+"));
     offset.rsize = 8; /* index must be 64-bit */
@@ -333,8 +265,6 @@ void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
 
     emit_ldr(dst, dst, 0);
 }
-
-/* --- aggregate construction --- */
 
 /* Pack up to 8 bytes of struct fields into dst using x86_64 instructions.
    Returns true if dst was written to, false if it remains unset. */
@@ -500,7 +430,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
 
     if (elem_size == 0) {
-        compile_err(NULL, "element size was zero\n");
+        report_error("element size was zero\n");
         return;
     }
 
@@ -604,12 +534,6 @@ void emit_cond_set(reg_t dst, cond_t cond) {
 
 /* --- function management --- */
 
-void put_r(buf *buffer, const char *op, reg_t reg) {
-    buf_snprintf(buffer, "\t%s ", op);
-    buf_putreg(buffer, reg);
-    buf_putc(buffer, '\n');
-}
-
 void emit_fn_prologue_epilogue(const parser_context *parser_context) {
     size_t stack_size = 0;
     size_t shadow_size = 0;
@@ -630,7 +554,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         stack_size += 8; // for aligning stack to 0x10 bytes on 'call' (x64 abi)
 
     for (int i = 0; i < regs_to_save; ++i) {
-        put_r(&context->prologue_buf, "push", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
+        emit_r(&context->prologue_buf, "push", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
     }
     if (locals_size) {
         if (shadow_size)
@@ -647,7 +571,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
     if (locals_size)
         buf_puts(fn_buf, STR_FROM_INSTR("pop rbp"));
     for (int i = 0; i < regs_to_save; ++i) {
-        put_r(fn_buf, "pop", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
+        emit_r(fn_buf, "pop", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
     }
 }
 
@@ -674,15 +598,3 @@ void emit_fn(str fn_name) {
 void emit_ret(void) {
     buf_puts(fn_buf, STR_FROM_INSTR("ret"));
 }
-
-
-void report_error(const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, CSI_RED"error: "CSI_RESET);
-    vfprintf(stderr, format, args);
-    va_end(args);
-}
-
-extern const char *text_section_header;
-extern const char *string_section_header;

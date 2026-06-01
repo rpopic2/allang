@@ -1,36 +1,15 @@
 #include "types.h"
-#include <assert.h>
 #include <stdio.h>
 #include <inttypes.h>
-#ifndef _WIN32
-#include <execinfo.h>
-#include <unistd.h>
-#endif
 
 #include "buffer.h"
 #include "emit.h"
-#include "str.h"
 #include "err.h"
+#include "str.h"
 #include "typesys.h"
 #include "emit_helper.h"
 
-#define INIT_BUFSIZ 0x400
 #define CALLEE_START 19
-
-#define DECL_PTR(T, X) T _##X; T *X = &_##X
-
-#define INSTR(s) "\t"s"\n"
-#define STR_FROM_INSTR(s) STR(INSTR(s))
-
-emit_context_t *context;
-static buf *fn_buf;
-
-
-static buf text_buf;
-
-static buf cstr_buf;
-static char *cstr_begin;
-static unsigned string_lit_counts;
 
 extern const char *addrgen_adrp;
 extern const char *addrgen_add;
@@ -39,72 +18,19 @@ extern const char *fn_annotation_fmt;
 extern const char *local_string_prefix;
 extern type_t *type_comptime_int;
 
-void str_printerr(str s);
-
 const char *const cond_str[] = {
     "eq", "ne", "ge", "lt",
 };
 
 const size_t default_register_size = 8;
 
-void emit_init(void) {
-    buf_init(&text_buf, INIT_BUFSIZ);
-    buf_puts(&text_buf, STR(text_section_header));
+const reg_t FP = { .reg_type = FRAME, .rsize = sizeof (void *) };
 
-    buf_init(&cstr_buf, INIT_BUFSIZ);
-    buf_puts(&cstr_buf, STR(string_section_header));
-    cstr_begin = cstr_buf.cur;
-}
-
-#define MAX_CONTEXTS 10
-emit_context_t *contexts[MAX_CONTEXTS];
-emit_context_t **contexts_top = contexts;
-
-void emit_reset_fn(emit_context_t *in_context) {
-    if (contexts_top == contexts + MAX_CONTEXTS) {
-        report_error("max contexts reached. #import or #compile recursion might be too deep");
-        return;
-    }
-    *contexts_top++ = context;
-
-    context = in_context;
-    fn_buf = &context->fn_buf;
-    buf_init(&context->fn_header_buf, 0x100);
-    buf_init(&context->prologue_buf, INIT_BUFSIZ);
-    buf_init(&context->fn_buf, INIT_BUFSIZ);
-}
-
-void emit_finalize_fnbuf(emit_context_t *emit_ctx, FILE *out) {
-    assert(out != NULL);
-
-    buf_fwrite(&emit_ctx->fn_header_buf, out);
-    buf_fwrite(&emit_ctx->prologue_buf, out);
-    buf_fwrite(&emit_ctx->fn_buf, out);
-
-    if (contexts_top == contexts) {
-        context = NULL;
-        fn_buf = NULL;
-    } else {
-        context = *--contexts_top;
-        fn_buf = context != NULL ? &context->fn_buf : NULL;
-    }
-}
-
-void emit_text(FILE *out) {
-    buf_fwrite(&text_buf, out);
-}
-
-void emit_cstr(FILE *out) {
-    if (cstr_begin < cstr_buf.cur) {
-        buf_fwrite(&cstr_buf, out);
-    }
-}
+void str_printerr(str s);
 
 bool emit_need_escaping(void) {
     return false;
 }
-
-const reg_t FP = { .reg_type = FRAME, .rsize = sizeof (void *) };
 
 static int get_regoff(reg_t e) {
     if (e.reg_type == SCRATCH)
@@ -369,7 +295,7 @@ void emit_mov(reg_t dst, i64 value) {
             dst.rsize = 8;
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
         } else {
-            compile_err(NULL, "literal was too big");
+            report_error("literal was too big");
         }
     } else {
         if (!dst.dtype.base || !dst.dtype.base->sign)
@@ -397,7 +323,7 @@ void type_conv(reg_t dst, reg_t src) {
         } else if (srct->size == 4) {
             buf_putc(fn_buf, 'w');
         } else {
-            report_error("incorrect src size %d\n", srct->size);
+            report_error("incorrect src size %zd\n", srct->size);
         }
 
 
@@ -506,10 +432,7 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
         size = 8;
     }
     if (r0.rsize <= 0) {
-        compile_err(NULL, "cannot %s size of zero\n", op);
-
-        printd("dump r0 | size: %d, reg_type: %d, offset: %d\n", r0.rsize, r0.reg_type, r0.offset);
-        report_error("");
+        report_error(NULL, "cannot %s size of zero\n", op);
     } else if (size <= 1) {
         if (*op == 'l' && r0.dtype.base->sign)
             suffix = "sb";
@@ -574,7 +497,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
 
     if (elem_size == 0) {
-        compile_err(NULL, "element size was zero\n");
+        report_error("element size was zero\n");
         return;
     }
     if (elem_size == 1) {
@@ -772,32 +695,3 @@ void emit_fn(str fn_name) {
 void emit_ret(void) {
     buf_puts(&context->fn_buf, STR_FROM_INSTR("ret"));
 }
-
-#ifndef _WIN32
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((format(printf, 1, 2)))
-#endif
-void report_error(const char *format, ...) {
-    int size = 0x1000;
-    void *array[size];
-    size = backtrace(array, size);
-
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, CSI_RED"error: "CSI_RESET);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    compile_err(NULL, "");
-
-    backtrace_symbols_fd(array, size, STDERR_FILENO);
-}
-#else
-void report_error(const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, CSI_RED"error: "CSI_RESET);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    compile_err(NULL, "");
-}
-#endif
