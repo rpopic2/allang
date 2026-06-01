@@ -1083,6 +1083,7 @@ void make_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args) {
 void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_member *args) {
     type_t *type = dtype->base;
     const ptrdiff_t member_count = args->cur - args->begin;
+    const size_t total_size = dtype_size(dtype);
 
     bool is_arr = dtype_top(dtype).tag == DK_ARRAY;
 
@@ -1120,6 +1121,7 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
             continue;
         }
 
+        const size_t chunk_offset = size;
         int start_index = index;
         reg_t lo = {.reg_type = SCRATCH, .offset = 0, .rsize = rsize, .dtype = {.base = type}};
         bool lo_written = emit_eightbyte_struct(lo, dtype, args, &index, &size);
@@ -1132,13 +1134,13 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
         reg_t hi = lo;
         hi.offset++;
         bool hi_written = false;
-        bool has_hi = type->size - size >= 8
+        bool has_hi = total_size - size >= 8
                 && index < member_count
                 && args->begin[index].tag != AGGREGATE;
         if (has_hi) {
             hi_written = emit_eightbyte_struct(hi, dtype, args, &index, &size);
         }
-        emit_store_eightbytes(dst, offset + (i64)size, lo, lo_written, hi, hi_written, has_hi);
+        emit_store_eightbytes(dst, offset + (i64)chunk_offset, lo, lo_written, hi, hi_written, has_hi);
     }
 }
 
