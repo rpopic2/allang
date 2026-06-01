@@ -6,7 +6,6 @@
 #include "types.h"
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 typedef struct dtype dtype_t;
 typedef struct emit_context emit_context_t;
