@@ -11,7 +11,7 @@ typedef struct str {
     const char *end;
 } str;
 
-typedef struct {
+typedef struct iter {
     char *cur;
     char *start;
     char *end;

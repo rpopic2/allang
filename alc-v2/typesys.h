@@ -188,6 +188,7 @@ typedef struct token {
         };
         str id;
     };
+    const char *filename;
     unsigned short lineno;
     unsigned char indent;
     eob_t eob;   // end of block
@@ -222,8 +223,15 @@ ARR_GENERIC(target, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u16, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u8, MAX_BLOCK_DEPTH)
 
+typedef struct src {
+    char *cur;
+    char *start;
+    char *end;
+    char filename[FILENAME_MAX];
+} src_t;
+
 typedef struct parser_context {
-    iter *src;
+    src_t *src;
     reg_t reg;
     int stack_size;
     u16 unnamed_labels;

@@ -29,10 +29,10 @@ target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
 int expr_line(parser_context *context);
-void compile(iter src, FILE *object_file);
-iter read_file(const char *source_name);
-void import_all_from(iter src);
-void skip_function(iter *src);
+void compile(src_t src, FILE *object_file);
+src_t read_source(const char *source_name);
+void import_all_from(src_t src);
+void skip_function(src_t *src);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -99,15 +99,16 @@ enum cond cond_flip(enum cond cond) {
 
 bool tok(parser_context *context) {
 retry:;
-    iter *src = context->src;
+    src_t *src = context->src;
     token_t *cur_token = &context->cur_token;
-    *cur_token = (token_t){.data = src->cur, .end = src->cur};
-    cur_token->lineno = lineno;
-    cur_token->indent = indent;
+    *cur_token = (token_t){
+        .data = src->cur, .end = src->cur, .filename = src->filename,
+        .lineno = lineno, .indent = indent
+    };
 
     while (true) {
         if (src->cur > src->end) {
-            *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno};
+            *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno, .filename = src->filename};
             eof = true;
             return false;
         }
@@ -154,7 +155,7 @@ retry:;
         ++src->cur;
     }
     if (cur_token->end > src->end) {
-        *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno};
+        *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno, .filename = src->filename};
         eof = true;
         return false;
     }
@@ -214,7 +215,7 @@ void compile_err(const token_t *token, const char *format, ...) {
     has_compile_err = true;
     fputs(CSI_RED, stderr);
     if (token) {
-        fprintf(stderr, "error in line %d: ", token->lineno);
+        fprintf(stderr, "error in %s:%d: ", token->filename, token->lineno);
     }
 
     va_list args;
@@ -1899,13 +1900,13 @@ bool directives(parser_context *context) {
     } else if (str_eq_lit(token_str, "compile_all")) {
         tok(context);
         str filename = context->cur_token.id;
-        char buf[256];
-        bool ok = str_to_cstr(filename, buf, sizeof buf);
+        char filename_cstr[256];
+        bool ok = str_to_cstr(filename, filename_cstr, sizeof filename_cstr);
         if (!ok) {
             compile_err(token, "filename was too long\n");
             return true;
         }
-        iter src = read_file(buf);
+        src_t src = read_source(filename_cstr);
         u16 tmp_lineno = lineno;
         lineno = 1;
         skip_function(&src);
@@ -2122,7 +2123,7 @@ void parse_block(parser_context *context) {
     }
 }
 
-void function(iter *src) {
+void function(src_t *src) {
     arr_mini_hashset_init(&local_ids);
 
     parser_context *context = &(parser_context){
@@ -2200,7 +2201,7 @@ void function(iter *src) {
     TIMER_END(parse_emit);
 }
 
-void skip_function(iter *src) {
+void skip_function(src_t *src) {
     printd("start skip\n");
     parser_context *context = &(parser_context){
         .src = src,
@@ -2256,11 +2257,11 @@ void register_fund_types(void) {
     }
 }
 
-void import_all_from(iter src) {
+void import_all_from(src_t src) {
     u16 prev_lineno = lineno;
     lineno = 1;
     printd("import start\n");
-    iter *srcp = &src;
+    src_t *srcp = &src;
     arr_mini_hashset_init(&local_ids);
     parser_context context = { .src = srcp };
     while (srcp->cur < srcp->end) {
@@ -2288,7 +2289,7 @@ void import_all_from(iter src) {
     printd("import end\n");
 }
 
-iter read_file(const char *source_name) {
+src_t read_source(const char *source_name) {
         TIMER_START(clock_read_source);
     FILE *source_file = fopen(source_name, "r");
     if (source_file == NULL) {
@@ -2312,11 +2313,12 @@ iter read_file(const char *source_name) {
     fclose(source_file);
     TIMER_END(clock_read_source);
 
-    iter src = { .start = source_start, .cur = source_start, .end = source_start + source_len };
+    src_t src = (src_t){ .cur = source_start, .start = source_start, .end = source_start + source_len };
+    strncpy(src.filename, source_name, sizeof src.filename);
     return src;
 }
 
-void compile(iter src, FILE *object_file) {
+void compile(src_t src, FILE *object_file) {
     while (src.cur < src.end) {
         emit_context_t emit_ctx = {0};
         emit_reset_fn(&emit_ctx);
@@ -2357,7 +2359,7 @@ int main(int argc, const char *argv[]) {
     register_fund_types();
     TIMER_START(clock_parse_all);
 
-    iter src = read_file(source_name);
+    src_t src = read_source(source_name);
     import_all_from(src);
     compile(src, object_file);
 
