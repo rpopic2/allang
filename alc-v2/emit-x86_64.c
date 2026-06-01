@@ -573,11 +573,11 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
 
     if (stack_size)
         buf_snprintf(fn_buf, "\tadd rsp, 0x%zx\n", stack_size);
-    if (locals_size)
-        buf_puts(fn_buf, STR_FROM_INSTR("pop rbp"));
-    for (int i = 0; i < regs_to_save; ++i) {
+    for (int i = regs_to_save - 1; i >= 0; --i) {
         emit_r(fn_buf, "pop", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
     }
+    if (locals_size)
+        buf_puts(fn_buf, STR_FROM_INSTR("pop rbp"));
 }
 
 void emit_fn_call(const str *s) {
