@@ -647,6 +647,9 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (lsize != rsize) {
         compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
     }
+    if (ltype == NULL || rtype == NULL) {
+        return;
+    }
     bool lsign = ltype->sign;
     bool rsign = rtype->sign;
     if (lsign != rsign) {
@@ -1338,7 +1341,10 @@ skip:;
                     context->reg.dtype = nreg->dtype;
                     context->reg.rsize = nreg->rsize;
                 }
-                assert(nreg->dtype.base);
+                if (nreg->dtype.base == NULL) {
+                    compile_err(token, "use of unassigned register "), str_printerr(token->id);
+                    return true;
+                }
                 emit_mov_reg(context->reg, lhs.reg);
             } else if (nreg->reg_type == STACK) {
                 context->reg.rsize = sizeof (void *);
@@ -1953,7 +1959,8 @@ bool stmt_reg_assign(parser_context *context) {
         src_reg.offset -= 1;
     if (!cur_target->target_assigned) {
         if (src_reg.dtype.base == NULL) {
-            compile_err(token, "compiler bug: reg type shouldn't be null\n");
+            compile_err(token, "assignment has no value to assign; expected the form '<value> ='\n");
+            return true;
         } else if (src_reg.dtype.base == type_comptime_int) {
             src_reg.dtype.base = type_i32;
             src_reg.rsize = (reg_size)type_i32->size;
