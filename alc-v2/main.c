@@ -38,8 +38,8 @@ static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
 OPT_GENERIC(i64)
 
-unsigned short lineno = 1;
-unsigned char indent = 0;
+u16 lineno = 1;
+u8 indent = 0;
 bool eof = false;
 bool has_compile_err = false;
 bool do_airity_check = true;
@@ -1906,8 +1906,11 @@ bool directives(parser_context *context) {
             return true;
         }
         iter src = read_file(buf);
+        u16 tmp_lineno = lineno;
+        lineno = 1;
         skip_function(&src);
         compile(src, object_file);
+        lineno = tmp_lineno;
     } else {
         compile_err(token, "unknown directive "), str_printerr(token_str);
     }
@@ -2254,6 +2257,8 @@ void register_fund_types(void) {
 }
 
 void import_all_from(iter src) {
+    u16 prev_lineno = lineno;
+    lineno = 1;
     printd("import start\n");
     iter *srcp = &src;
     arr_mini_hashset_init(&local_ids);
@@ -2277,7 +2282,7 @@ void import_all_from(iter src) {
                 arr_mini_hashset_pop(&local_ids);
         }
     }
-    lineno = 1;
+    lineno = prev_lineno;
     indent = 0;
     eof = false;
     printd("import end\n");
