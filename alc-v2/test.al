@@ -1,4 +1,4 @@
-#declare printf: (Format addr u8 => Num_Printed i32)
+#declare printf: Format addr u8 => Num_Printed i32
 
 printf "Hello World\n" =>
 
@@ -43,31 +43,31 @@ Hi :: get_hi =>
 
 ret 0
 
-foo: (X i32, Y i32 => A i32)
+foo: X i32, Y i32 => A i32
     ret X + Y
 
-minus: (X i32, Y i32 => A i32)
+minus: X i32, Y i32 => A i32
     X - 12
     ret X - Y
 
-get_hi: (=> Hi addr u8)
+get_hi: => Hi addr u8
     ret "HI\n"
 
-store_char: (=>)
+store_char: =>
     Hi :: get_hi =>
     [C] :: [Hi] =[]
 
-fn_assign: (=> R i32)
+fn_assign: => R i32
     Num_Printed ::
         printf "hello" => =
     Test :: 3
     ret Num_Printed
 
-stack_var: (=> R i32)
+stack_var: => R i32
     [X] :: 3 =[]
     ret [X]
 
-reg_off: (=>)
+reg_off: =>
     O :: 2
     [X] ::
         3 + 2, 4 =[]
@@ -75,15 +75,15 @@ reg_off: (=>)
     [Y * O unchecked]
     3 =[Y]
 
-copy: (=>)
+copy: =>
     [X] :: 3 =[]
     [Y] :: [X] =[]
     ret
 
-stack_store: (=>)
+stack_store: =>
     [X] :: 3 =[]
 
-short_lit: (=>)
+short_lit: =>
     K ::
         u64{7} =
         2 =
@@ -101,7 +101,7 @@ short_lit: (=>)
     K =[S]
     ret
 
-assign_vals: (=>)
+assign_vals: =>
     I :: 1
     3 =I
 
@@ -119,7 +119,7 @@ assign_vals: (=>)
 
     ret
 
-store_vals: (=>)
+store_vals: =>
     [I] :: 1 =[]
     2 =[I]
 
@@ -136,7 +136,7 @@ store_vals: (=>)
     [J2] ::
         [^J] =[]
 
-fund_types: (=>)
+fund_types: =>
     I8 :: i8{7}
     I16 :: i16{3}
     I32 :: i32{1}
@@ -160,7 +160,7 @@ fund_types: (=>)
     comptime_int:
     5 =I8
 
-casting_i8: (=>)
+casting_i8: =>
     Src :: i8{-3}
 
     I8 :: i8{Src}
@@ -174,7 +174,7 @@ casting_i8: (=>)
     u64{Src}
 
 
-casting_i16: (=>)
+casting_i16: =>
     Src :: i16{-3}
 
     I8 :: i8{Src}
@@ -187,7 +187,7 @@ casting_i16: (=>)
     u64{Src}
 
 
-casting_i32: (=>)
+casting_i32: =>
     Src :: i32{-3}
 
     I8 :: i8{Src}
@@ -200,7 +200,7 @@ casting_i32: (=>)
     u64{Src}
 
 
-casting_u8: (=>)
+casting_u8: =>
     Src :: u8{3}
 
     I8 :: i8{Src}
@@ -213,7 +213,7 @@ casting_u8: (=>)
     u64{Src}
 
 
-casting_u16: (=>)
+casting_u16: =>
     Src :: u16{3}
 
     I8 :: i8{Src}
@@ -226,7 +226,7 @@ casting_u16: (=>)
     u64{Src}
 
 
-casting_u32: (=>)
+casting_u32: =>
     Src :: u32{3}
 
     I8 :: i8{Src}
@@ -239,7 +239,7 @@ casting_u32: (=>)
     u64{Src}
 
 
-casting_u64: (=>)
+casting_u64: =>
     Src :: u64{3}
 
     I8 :: i8{Src}
@@ -252,7 +252,7 @@ casting_u64: (=>)
     u32{Src}
 
 
-casting_i64: (=>)
+casting_i64: =>
     Src :: i64{3}
 
     I8 :: i8{Src}
@@ -264,13 +264,13 @@ casting_i64: (=>)
     u32{Src}
     u64{Src}
 
-point: (=>)
+point: =>
     struct {
         X i8, Y i8, Z i8, W i8
         A i8, B i8, C i8, D i8
     }
 
-point_test: (=>)
+point_test: =>
     make_1:
     P :: point{.X 3 .Y 5 .Z 1 .W 2 .A 1 .B 2 .C 3 .D 4}
     reg:
@@ -283,7 +283,7 @@ point_test: (=>)
     zero:
     point{.B Y .. 0}
 
-point16: (=>)
+point16: =>
     struct {
         X i16, Y i16, Z i16, W i16,
     }
@@ -296,7 +296,7 @@ point16: (=>)
     point16{.. 0}
     point16{.Z X .. 0}
 
-point32: (=>)
+point32: =>
     struct {
         X i32, Y i32
     }
@@ -315,7 +315,7 @@ point32: (=>)
     point32{.Y Y .. 0}
     point32{.X X .. 0}
 
-struct64: (=>)
+struct64: =>
     struct {
         X i8, W i8, Y i16, Z i32
     }
@@ -329,7 +329,7 @@ struct64: (=>)
     all_zero:
     struct64{.. 0}
 
-lsl_test: (=>)
+lsl_test: =>
     I :: 3
     I shl 0
     I shl 1
@@ -338,24 +338,24 @@ lsl_test: (=>)
     I shl 4
     I shl 8
 
-struct_members: (=>)
+struct_members: =>
     [S] :: point{.X 1 .Y 2 .. 0} =[]
     load_memb:
     [S.B]
     i8{3} =[S.B]
     S.C
 
-big_lits: (=>)
+big_lits: =>
     Big :: 0xFFFFFFFFFFFFFFFF
 
-big_struct: (=>)
+big_struct: =>
     struct {
         A u64, B u64
     }
 
     B :: big_struct{.A 3, .B 5}
 
-big_struct4: (=>)
+big_struct4: =>
     struct {
         A u32, B u32, C u32, D u32
     }
@@ -363,7 +363,7 @@ big_struct4: (=>)
     [S] :: big_struct4{.A 1 .B 2 .C 3 .D 4} =[]
     S.A, S.B
 
-short_struct: (=>)
+short_struct: =>
     struct {
         A u16, B u16
     }
@@ -371,7 +371,7 @@ short_struct: (=>)
     [S] :: short_struct{.A 3 .B 7} =[]
     S.B
 
-recycle: (=>)
+recycle: =>
     I ::
         J :: 3
         J =
@@ -379,7 +379,7 @@ recycle: (=>)
     ret
 
 
-struct_store: (=>)
+struct_store: =>
     struct {
         A i64 B i64
     }
@@ -391,7 +391,7 @@ struct_store: (=>)
     K2 :: point32{.. 0}
     SS :: struct_store{.A 3 .B 5}
 
-nested_struct: (=>)
+nested_struct: =>
     struct {
         P2 point
         P3 point32
@@ -402,13 +402,13 @@ nested_struct: (=>)
     [Nested] :: nested_struct{.P3 point32{.X 3 .Y 4} .Point short_struct{.A 6 .B 7} .X 5 .. 0} =[]
     ret
 
-nested_2: (=>)
+nested_2: =>
     struct {
         A point32 B point32 C point32
     }
     [N] :: nested_2{.A point32{.X 1 .Y 2} .B point32{.X 3 .Y 4} .. 0} =[]
 
-nested_3: (=>)
+nested_3: =>
     struct point64 {
         X i64 Y i64
     }
@@ -422,7 +422,7 @@ nested_3: (=>)
     [N3] :: nested_3{.. 0} =[]
     [N4] :: nested_3{.A {.X 1 .Y 2} .B {.X 3 .Y 4} .C {.X 5 .Y 6}} =[]
 
-zerofill: (=>)
+zerofill: =>
     struct small {
         X i8
     }
@@ -432,17 +432,17 @@ zerofill: (=>)
     [S] :: zerofill{.. 0} =[]
     [S2] :: zerofill{.S {.X 1}} =[]
 
-big_array: (=>)
+big_array: =>
     struct big {
         X i64 Y i64
     }
     [Arr] :: 2*big{.. 0} =[]
     I :: 1
 
-ret_int: (=> I i32)
+ret_int: => I i32
     ret 1
 
-array: (=> I i32)
+array: => I i32
     [Arr] :: 8*i32{.0 2 .. 0} =[]
     [Arr2] :: 8*i32{.0 1 .1 2 .. 0} =[]
     I :: 2
@@ -450,7 +450,7 @@ array: (=> I i32)
     [Arr * I] ! ret 0
     ret 1
 
-slice: (=>)
+slice: =>
     struct {
         Begin addr u32,
         Size usize,
@@ -462,7 +462,7 @@ slice: (=>)
     [Slice]
     ret
 
-slice2: (=>)
+slice2: =>
     [Data] :: u32{1} =[]
     [Slice] :: slice{.Begin Data .Size 1} =[]
     ret

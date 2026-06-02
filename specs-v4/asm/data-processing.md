@@ -197,7 +197,7 @@ expressions at the last line of a block will be moved to return register instead
 ### examples
 
 ```
-foo: (=>int)
+foo: =>int
     3
 ```
 
