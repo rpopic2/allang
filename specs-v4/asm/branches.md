@@ -12,7 +12,7 @@ id/fn ::= [_]a-z[a-zA-Z0-9_]
 
 ## function definition
 ```
-fn/def ::= id/fn: ([fn/params ]=>[fn/returns])\n\tblock
+fn/def ::= id/fn: [fn/params ]=>[ fn/returns]\n\tblock
 ```
 
 ### assembles to

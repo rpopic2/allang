@@ -1786,7 +1786,6 @@ bool stmt(parser_context *context) {
 symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
     token_t _token = context->cur_token;
     token_t *token = &_token;
-    token_t *cur_token = &context->cur_token;
     str label = { .data = token->data, .end = token->end - 1 };
 
     symbol_t symbol = (symbol_t) {
@@ -1798,18 +1797,17 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
         arr_str_init(out_param_names);
     }
 
-    if (streq(token->end, " (")) {
+    bool has_signature = !context->end_of_line;
+    if (has_signature) {
         indent += 4;
         arr_mini_hashset_push(&local_ids);
 
-        tok(context);
-        _token = context->cur_token;
         bool parsing_arg = true;
-        while (token->end < context->src->end) {
-            bool break_out = false;
-            if (token->end[0] == ')') {
-                break_out = true;
-            }
+        while (true) {
+            tok(context);
+            token = &context->cur_token;
+            if (str_len(token->id) == 0)
+                break;
             if (isupper(token->data[0])) {
                 if (parsing_arg) {
                     symbol.airity += 1;
@@ -1818,11 +1816,11 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 } else {
                     symbol.ret_airity += 1;
                 }
-            } else if (islower(cur_token->data[0])) {
+            } else if (islower(token->data[0])) {
                 reg_t reg = {
                     .offset = symbol.airity,
                 };
-                break_out = parse_dtype(context, &reg.dtype);
+                parse_dtype(context, &reg.dtype);
                 reg.rsize = get_rsize(reg);
                 if (parsing_arg) {
                     arr_reg_t_push(&symbol.params, reg);
@@ -1835,11 +1833,8 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
             } else {
                 compile_err(token, "unknown token "), str_printerr(token->id);
             }
-            if (break_out)
+            if (context->end_of_line)
                 break;
-
-            tok(context);
-            token = &context->cur_token;
         }
     }
 
@@ -2320,10 +2315,10 @@ void import_label(parser_context* context) {
         return;
 
     if (streq(t->end - 1, ":")) {
-        bool had_paren = streq(t->end, " (");
+        bool has_signature = !context->end_of_line;
         symbol_t *symbol = label_meta(context, NULL);
         context->symbol = symbol;
-        if (had_paren) {
+        if (has_signature) {
             arr_mini_hashset_pop(&local_ids);
         }
     } else if (t->end[0] == ' ') {
