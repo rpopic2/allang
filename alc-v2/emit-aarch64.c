@@ -645,7 +645,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         const char *ldp_format = INSTR("ldr x%d, [sp, #%d]");
         int off = cur_stackoff;
         if (cur_stackoff == 0) {
-            stp_format = INSTR("str x%d, [sp, #%d]!");
+            stp_format = INSTR("str x%d, [sp, #-%d]!");
             ldp_format = INSTR("ldr x%d, [sp], #%d");
             off = stack_size;
         }
