@@ -63,9 +63,9 @@ foo{.. 0}          // zero struct
 
 # structuring and destructuring
 
-point P :: .... // makes point p
-X, Y :: (P)       // destructures p and loads x and y into registers
-point Q :: { X, Y } // structures it back
+P :: point{1, 2}  // make point p
+X, Y :: (P)       // destructure p into x and y
+Q :: point{X, Y}  // structure it back
 
 # unions
 
