@@ -1,7 +1,7 @@
 # declaring structs
 
 struct foo {  // curly braces for structs
-    i32 X,      // members delemted by comma.
+    i32 X,      // members delimited by comma.
     addr i32 P, // paddings are inserted automatically,
                 // and memory structure will obey the order of declaration
 }               // now struct point has been added to the type system
@@ -16,7 +16,7 @@ structs with size less than or equal to 16 bytes are called short structs. they 
 struct point {X i32, Y i32}
 
 P :: point{.X 1 .Y 2}  // creates struct in a register
-Q :: point<.X 2 .Y 3> // p points to const point. p is immutable.
+Q :: point<.X 2 .Y 3> // Q points to const point. Q is immutable.
 R :: point<.X 2 .Y 3> @copyto =[] // now copied on stack
 
 S ::
@@ -30,7 +30,7 @@ it is better to use short arrays for points,
 
 struct point{2*i32}
 P :: point{1, 2}
-P.X, P.0 // equivalant syntax
+P.X, P.0 // equivalent syntax
 
 # array literals
 
@@ -46,7 +46,7 @@ Arr .Len @ print=>                 // prints out 101
 "hello world"   // loads address and length of string in text section
                 // note that this is immutable
 
-""EOF           // empty strig followed by any word makes a heredoc
+""EOF           // empty string followed by any word makes a heredoc
     this is multi-line literal and it is \not escaped.
     type whatever you want even "quote" marks
     keep this indented
@@ -54,8 +54,35 @@ Arr .Len @ print=>                 // prints out 101
         but this indentation is part of this literal
 EOF             // use the same marker to end heredoc
 
+# slices and range syntax
 
-# zero aggreates
+Arr :: 10*i32{2, 3, .. 4} =[]
+I :: 2
+
+// these are static range syntax. only constant is allowed. it is a compiler error if accessed out of bounds.
+Arr.. // range syntax for selecting the whole array
+Arr..3 // from begin, to index 3 exclusive
+Arr.1.. // from index 1 inclusive, to the end
+Arr.1..3 // from index 1 inclusive to index 3 exclusive
+
+// these are dynamic range syntax. dynamic ranges are bounds checked.
+```
+Arr..I ? eret // to I exclusive, returns error if out of bounds
+Arr..I+1 ? eret // inclusive
+Arr*I.. ? eret // from index I
+Arr*I..J ? eret // I and J are checked for bounds. also checks if I <= J
+```
+
+// you can mix static and dynamic range syntaxes.
+Arr.2..I ? eret // also checks if I is greater or equal to 2
+Arr * I..3 ? eret // also checks if I is less than 3
+
+// when slicing slices, syntax is the same, but may be compiled differently.
+// `Slice..` is not allowed. just use `Slice` to copy.
+Slice * 1.. // you cannot Slice.1 because slice bounds are derived at runtime 
+
+
+# zero aggregates
 
 3*i32{.. 0}        // zero array literal. zero arrays and structs are optimised out, so no load address is performed here
 foo{.. 0}          // zero struct

@@ -2,7 +2,7 @@
 
 "Hello World!"n .print =>
 
-// symblols
+// symbols
 
 '@' : macro. replaces something.
 '#' : directive. tells compiler something
@@ -13,11 +13,11 @@
 '+' : plus. used for arithmetic.
 '=' : assignment. means moving data.
 '{}' : aggregate. bundles data into one aggregate. it can be arrays, structs, bitfields.
-'[]' : memory opetation. load and store to memory.
+'[]' : memory operation. load and store to memory.
 '=>' : call. branch to function.
 '->' : jump. branch to location.
 '>>' : jump to matching << in scope. may be depricated in future.
-',' : next register. also implies dependency break, as these comma seperated expressions cannot refer to each other.
+',' : next register. also implies dependency break, as these comma separated expressions cannot refer to each other.
 '.' : offset. X.Y.Z means hierarchy, and is never interpreted as multiple expression.
 ':' : right to left. inverts assignment directions. when used solo, binds static location to a name.
 '::' : named variable declaration. right to left. binds dynamic location to name(s).
@@ -37,7 +37,7 @@
 '~>' : ownership transfer
 '%' : move to matching %
 ';' : end of line
-'|' : pararrel
+'|' : parallel
 '^' : outer scope
 '\' : escaping | cast
 
@@ -51,4 +51,12 @@ union : declares an union.
 undefined : undefined state.
 unreachable: should be unreachable. panics if this code is reached. if "#optimize unreachable" is on, reaching this code will be undefined behaviour.
 is : check equality
+
+# constant/variable and mutable/immutable
+
+constants are decided at compile time.
+variables are decided at runtime.
+
+all constants are immutable.
+variables can be mutable or immutable.
 
