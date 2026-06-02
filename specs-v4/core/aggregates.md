@@ -7,32 +7,38 @@ struct foo {  // curly braces for structs
 }               // now struct point has been added to the type system
 
 // struct name should start with lower case
-// imported struct names also will be in lower case
+// imported struct names will be changed to lower case
 
+structs with size less than or equal to 16 bytes are called short structs. they can be placed in registers, while others cannot.
 
 # struct literals
 
-point <{ 1, 2 }>
-point [ 1, 2 ]  // loads address of struct in text section
-                // note that this is immutable
-P :: point [ 2, 3 ] // p points to const point. p is immutable.
-Q :: point [ 2, 3 ] @copyto =[] // now copied on stack
-R ::
-    #sizeof point# bytes std:heap:alloc=> This()
-    point < 2, 3 > @copyto This  // now copied on the heap
+struct point {X i32, Y i32}
 
-S :: < 2, 3 > =[] @point.new                // or use constructor macros
-T :: < 2, 3 > std.heap.alloc @point.new
+P :: point{.X 1 .Y 2}  // creates struct in a register
+Q :: point<.X 2 .Y 3> // p points to const point. p is immutable.
+R :: point<.X 2 .Y 3> @copyto =[] // now copied on stack
 
-U :: point < y= 3 >  // y is 3 and others are zero
+S ::
+    &Heap .alloc point .size @ bytes =>
+    point{.X 2, .Y 3} =[] // copied to the heap
+T :: &Heap .new point{2, 3} // or use the constructor macro
+
+v :: point{.Y 3 .. 0}  // y gets 3, others members zeroed out
+
+it is better to use short arrays for points,
+
+struct point{2*i32}
+P :: point{1, 2}
+P.X, P.0 // equivalant syntax
 
 # array literals
 
-i32 < 1, 2, 3 > // loads address and length of array in text section
+*i32<1, 2, 3> // loads address and length of array in text section
                 // note that this is immutable
 
-Arr :: i32 < 1, 2 .. 100= 3 >   // fill 2 until 100th element
-Arr.Len print=>                 // prints out 101
+Arr :: *i32<1, 2 .. 2 .100 3>   // fill 2 until 100th element
+Arr .Len @ print=>                 // prints out 101
 
 
 # string literals
@@ -41,24 +47,24 @@ Arr.Len print=>                 // prints out 101
                 // note that this is immutable
 
 ""EOF           // empty strig followed by any word makes a heredoc
-    this is multiple line and \not escaped
+    this is multi-line literal and it is \not escaped.
     type whatever you want even "quote" marks
-    keep indented one depth deeper
-    and indentation before this is ignored
-        but this indentation is recognised
-EOF             // end heredoc
+    keep this indented
+    one level of indentation before this is ignored
+        but this indentation is part of this literal
+EOF             // use the same marker to end heredoc
 
 
 # zero aggreates
 
-3 i32 []        // zero array literal. zero arrays and structs are optimised out, so no load address is performed here
-foo {}          // zero struct
+3*i32{.. 0}        // zero array literal. zero arrays and structs are optimised out, so no load address is performed here
+foo{.. 0}          // zero struct
 
 
 # structuring and destructuring
 
 point P :: .... // makes point p
-X, Y :: P       // destructures p and loads x and y into registers
+X, Y :: (P)       // destructures p and loads x and y into registers
 point Q :: { X, Y } // structures it back
 
 # unions
@@ -68,8 +74,8 @@ union u {
     u64 B,
 }
 
-U :: u { i32= 3 }
-V :: u { u64= 3 }
+U :: u{.i32 3}
+V :: u{.u64 3}
 
 # enum unions
 
@@ -78,24 +84,22 @@ enum union result {
     i32 Ok
 }
 
-R :: result { Error }
-T :: result { Ok, 3 }
+R :: result {.Error}
+T :: result {.Ok 3}
 
-R is { Error } ->
+R is {.Error} ->
     "error occured" print=>
-T is { Ok, &Value } ->
+T is {.Ok %Value} ->
     `value was `Value print=>
 
 
 # copying structs
 
 [Large_Struct]  // error! structs larger than 16 bytes cannot be loaded
-Large_Struct @copyto Dest   // now copies the struct
-Large_Struct @copyto_unchecked Dest   // type unchecked version
-
+Large_Struct memcpy Dest   // now copies the struct
 
 # struct equality
 
-Large_Struct @equals Dest   // compares all memory
-Large_Struct @sometype.equals Dest  // or use user-defined equals macro
+Large_Struct memeq Dest   // compares all memory
+Large_Struct .is Dest @  // or use user-defined macros
 
