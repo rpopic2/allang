@@ -581,7 +581,8 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         return;
     }
     bool calls_fn = parser_context->calls_fn;
-    if (calls_fn) {
+    bool needs_fp = calls_fn || parser_context->stack_size > 0;
+    if (needs_fp) {
         regs_to_save += 2;
     }
 
@@ -610,7 +611,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         int reg0 = CALLEE_START + remaining - 1;
         int reg1 = reg0 - 1;
         int off = cur_stackoff;
-        if (calls_fn) {
+        if (needs_fp) {
             reg0 = 29, reg1 = 30;
         }
         const char *stp_format = INSTR("stp x%d, x%d, [sp, #%d]");
@@ -644,7 +645,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         const char *ldp_format = INSTR("ldr x%d, [sp, #%d]");
         int off = cur_stackoff;
         if (cur_stackoff == 0) {
-            stp_format = INSTR("str x%d, [sp, #%d]!");
+            stp_format = INSTR("str x%d, [sp, #-%d]!");
             ldp_format = INSTR("ldr x%d, [sp], #%d");
             off = stack_size;
         }
@@ -656,10 +657,12 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         cur_stackoff += 16;
     }
 
-    if (stack_objs_size == 0) {
-        buf_puts(&context->prologue_buf, STR_FROM_INSTR("mov x29, sp"));
-    } else {
-        buf_snprintf(&context->prologue_buf, INSTR("add x29, sp, #%d"), stack_objs_size);
+    if (needs_fp) {
+        if (stack_objs_size == 0) {
+            buf_puts(&context->prologue_buf, STR_FROM_INSTR("mov x29, sp"));
+        } else {
+            buf_snprintf(&context->prologue_buf, INSTR("add x29, sp, #%d"), stack_objs_size);
+        }
     }
 
     if (defer_ldp) {
