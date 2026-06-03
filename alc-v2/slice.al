@@ -14,5 +14,9 @@ Arr.1..1
 
 Slice :: Arr..
 
+I :: 1
+
+Arr * I
+
 ret 0
 

@@ -306,6 +306,27 @@ void emit_mov(reg_t dst, i64 value) {
 
 }
 
+void put_xt(const type_t *type) {
+    if (type->sign) {
+        buf_putc(fn_buf, 's');
+    } else {
+        buf_putc(fn_buf, 'u');
+    }
+
+    buf_puts(fn_buf, STR("xt"));
+
+    if (type->size == 1) {
+        buf_putc(fn_buf, 'b');
+    } else if (type->size == 2) {
+        buf_putc(fn_buf, 'h');
+    } else if (type->size == 4) {
+        buf_putc(fn_buf, 'w');
+    } else {
+        report_error("incorrect src size %zd\n", type->size);
+    }
+    buf_putc(fn_buf, ' ');
+}
+
 void type_conv(reg_t dst, reg_t src) {
     const type_t *srct = src.dtype.base;
     if (srct == NULL) {
@@ -315,17 +336,7 @@ void type_conv(reg_t dst, reg_t src) {
 
     buf_putc(fn_buf, '\t');
     if (srct->sign) {
-        buf_puts(fn_buf, STR("sxt"));
-        if (srct->size == 1) {
-            buf_putc(fn_buf, 'b');
-        } else if (srct->size == 2) {
-            buf_putc(fn_buf, 'h');
-        } else if (srct->size == 4) {
-            buf_putc(fn_buf, 'w');
-        } else {
-            report_error("incorrect src size %zd\n", srct->size);
-        }
-
+        put_xt(srct);
 
         buf_snprintf(fn_buf, " %s%d, ", get_wx(dst.rsize), get_regoff(dst));
         buf_snprintf(fn_buf, "%s%d\n", get_wx(src.rsize), get_regoff(src));
@@ -365,6 +376,10 @@ void emit_mov_reg(reg_t dst, reg_t src) {
 }
 
 void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
+    if (rhs == 0) {
+        emit_mov_reg(dst, lhs);
+        return;
+    }
     buf_puts(fn_buf, STR("\tadd "));
     buf_putreg(fn_buf, dst);
     buf_puts(fn_buf, STR(", "));
@@ -384,6 +399,10 @@ void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
 }
 
 void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
+    if (rhs == 0) {
+        emit_mov_reg(dst, lhs);
+        return;
+    }
     emit_rri(STR("sub"), dst, lhs, rhs);
 }
 void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
@@ -537,6 +556,18 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         emit_str_reg(dst, src, offset);
     else
         emit_ldr_reg(dst, src, offset);
+}
+
+void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
+    reg_t base = {.reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *)};
+    emit_sub(base, FP, object.offset);
+
+    emit_rrrx(STR("add"), dst, base, index);
+    buf_comma(fn_buf);
+    const type_t *type = index.dtype.base;
+    put_xt(type);
+    buf_puti(fn_buf, __builtin_ctz((unsigned)type->size));
+    buf_putc(fn_buf, '\n');
 }
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {

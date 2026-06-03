@@ -21,6 +21,7 @@ Arr.4
 
 [Arr * Index] ! ret 1
 
-ret 0
+Arr * Index ! ret 2
 
+ret 0
 

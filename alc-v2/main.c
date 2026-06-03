@@ -551,10 +551,6 @@ void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
 void check_bounds(parser_context *context, reg_t index, i32 len) {
     const token_t *cur_token = &context->cur_token;
 
-    if (cur_token->id.end[-1] != ']') {
-        compile_err(cur_token, "closing ']' expected\n");
-    }
-
     tok(context);
     bool ok = expect(context, STR("!"));
     if (!ok) {
@@ -568,6 +564,21 @@ void check_bounds(parser_context *context, reg_t index, i32 len) {
     } else {
         compile_err(cur_token, "expected to handle check operator\n");
     }
+}
+
+bool diagnostic_dyn_elem_access(const parser_context *context, regable offset_regable) {
+    const token_t *cur_token = &context->cur_token;
+
+    if (offset_regable.tag == NONE) {
+        return false;
+    } else if (offset_regable.tag == VALUE) {
+        compile_warning(cur_token, "use static syntax [Arr.N] instead of [Arr * N]\n");
+    } else if (offset_regable.tag == REG && offset_regable.reg.reg_type == NREG) {
+
+    } else {
+        compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
+    }
+    return true;
 }
 
 bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, regable *out_offset) {
@@ -584,16 +595,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         if (offset_str.end[-1] == ']')
             offset_str.end -= 1;
         offset_regable = read_regable(offset_str, cur_token);
-
-        if (offset_regable.tag == NONE) {
-            return false;
-        } else if (offset_regable.tag == VALUE) {
-            compile_warning(cur_token, "use static syntax [Arr.N] instead of [Arr * N]\n");
-        } else if (offset_regable.tag == REG && offset_regable.reg.reg_type == NREG) {
-
-        } else {
-            compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
-        }
+        diagnostic_dyn_elem_access(context, offset_regable);
     } else if (s.end[-1] != ']') {
         compile_err(cur_token, "closing ']' expected\n");
     }
@@ -637,9 +639,9 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             }
         }
         if (first) {
-            reg.dtype  = first->dtype;
+            reg.dtype = first->dtype;
             reg.offset -= (i32)first->offset;
-            reg.rsize  = (reg_size)dtype_size(&first->dtype);
+            reg.rsize = (reg_size)dtype_size(&first->dtype);
         } else {
             compile_err(cur_token, "a register conatining addr is expected\n");
         }
@@ -724,8 +726,8 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (laddr != raddr) {
         compile_err(token, "\t- address of %d indirection(s) expected, but found %d indirection(s)\n", laddr, raddr);
     }
-    size_t lsize = lhs.rsize;
-    size_t rsize = rhs.rsize;
+    size_t lsize = dtype_size(&lhs.dtype);
+    size_t rsize = dtype_size(&rhs.dtype);
     if (lsize != rsize) {
         compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
     }
@@ -865,6 +867,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     if (rhs.tag == NONE) {
         compile_err(&rhs_token, "expected operand, but found "), str_printerr(rhs_token.id);
         compile_err(&lhs_token, "lhs was: "), str_printerr(lhs_token.id);
+        compile_err(&lhs_token, "operator was: "), str_printerr(op_token.id);
         return;
     } else if (rhs.tag == REG && rhs.reg.reg_type == NREG) {
         check_unassigned(rhs, context);
@@ -927,6 +930,21 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             anonymous_bcond(context, cond);
         } else if (context->reg.reg_type == PARAM) {
             emit_cond_set(context->reg, cond);
+        }
+    } else if (op_token.data[0] == '*') {
+        if (lhs->tag == REG) {
+            const reg_t *reg = &lhs->reg;
+            const dtype_t *dtype = &reg->dtype;
+            declarator_t decl = dtype_top(dtype);
+            if (decl.tag == DK_ARRAY || decl.tag == DK_SLICE) {
+                reg_t dst = context->reg;
+                check_bounds(context, rhs.reg, decl.amount);
+                diagnostic_dyn_elem_access(context, rhs);
+                dst.rsize = sizeof (void *); // TODO move this out when fixing typecheck
+                emit_elem_addr(dst, lhs->reg, rhs.reg);
+            }
+        } else {
+            compile_err(&op_token, "not implemented for lhs == value");
         }
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);

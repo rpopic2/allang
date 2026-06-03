@@ -40,6 +40,7 @@ void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type);
 void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args);
 void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args);
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store);
+void emit_elem_addr(reg_t dst, reg_t object, reg_t index);
 
 // data processing
 void emit_mov(reg_t dst, i64 value);
