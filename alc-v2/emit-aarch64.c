@@ -93,7 +93,7 @@ static void pack_small_values(const dyn_member_t *members, const dyn_agg_member 
             break;
         }
         member_t *next = &members->begin[*i];
-        size_t next_size = dtype_size(&next->type);
+        size_t next_size = dtype_size(&next->dtype);
         if (packed + next_size > 2) {
             --(*i);
             break;
@@ -183,9 +183,9 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
 
     for (ptrdiff_t i = *index; i < member_count; ++i, *index = (int)i) {
         member_t *memb = is_arr
-            ? &(member_t){.type = *dtype, .offset = (size_t)i * dtype->base->size}
+            ? &(member_t){.dtype = *dtype, .offset = (size_t)i * dtype->base->size}
             : &members->begin[i];
-        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->type);
+        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->dtype);
         size_t offset_bits = memb->offset * 8;
 
         if (size_acc == 0) {

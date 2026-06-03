@@ -400,11 +400,34 @@ regable read_regable(str s, const token_t *token) {
             result.type = error_type;
             return result;
         }
+
+        int array = dtype_tryget_arr(&reg->dtype);
+        i32 begin_index = 0;
         while (true) {
+            bool is_slice = array && streq(s.data, "..");
+            if (is_slice) {
+                s.data += 2;
+                char *end_ptr = NULL;
+                long long end_index = strtoll(s.data, &end_ptr, 0);
+                if (end_index > INT_MAX) {
+                    compile_err(token, "index was too big: %lld", end_index);
+                }
+                if (end_index == 0) {
+                    end_index = array;
+                }
+                if (begin_index > end_index) {
+                    compile_err(token, "expected begin to be less than or equal to end index\n");
+                }
+
+                dtype_push(&result.reg.dtype,
+                           (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
+                result.reg.rsize = sizeof(void *);
+                break;
+            }
+
             str mem_name = dot_iter(&s, '.');
             if (str_empty(&mem_name))
                 break;
-            int array = dtype_tryget_arr(&reg->dtype);
             if (array) {
                 char *end_ptr = NULL;
                 long long index = strtoll(mem_name.data, &end_ptr, 0);
@@ -416,7 +439,17 @@ regable read_regable(str s, const token_t *token) {
                     result.tag = NONE;
                     break;
                 }
-                member = &(member_t){.name = mem_name, .type = (dtype_t){.base = type}, .offset = type->size * (size_t)index};
+                member = &(member_t){
+                    .name = mem_name,
+                    .dtype = (dtype_t){
+                        .base = type,
+                    },
+                    .offset = type->size * (size_t)index
+                };
+                if (index > INT_MAX) {
+                    compile_err(token, "index was too big: %lld", index);
+                }
+                begin_index = (i32)index;
             } else {
                 member = find_member(&type->struct_t.members, mem_name);
                 if (member == NULL) {
@@ -426,12 +459,12 @@ regable read_regable(str s, const token_t *token) {
                 }
             }
             assert(member);
-            result.reg.dtype = member->type;
+            result.reg.dtype = member->dtype;
             result.reg.offset -= member->offset;
-            type = member->type.base;
+            type = member->dtype.base;
         }
         if (member) {
-            size_t mem_size = dtype_size(&member->type);
+            size_t mem_size = dtype_size(&member->dtype);
             if (mem_size > MAX_REG_SIZE) {
                 compile_err(token, "this member does not fit in register\n");
             }
@@ -578,14 +611,14 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         if (dtype_empty(dtype) && type
                 && type->tag == TK_STRUCT) {
             const dyn_member_t *m = &type->struct_t.members;
-            if (m->begin != m->cur && dtype_tryget_addr(&m->begin->type) > 0) {
+            if (m->begin != m->cur && dtype_tryget_addr(&m->begin->dtype) > 0) {
                 first = m->begin;
             }
         }
         if (first) {
-            reg.dtype  = first->type;
+            reg.dtype  = first->dtype;
             reg.offset -= (i32)first->offset;
-            reg.rsize  = (reg_size)dtype_size(&first->type);
+            reg.rsize  = (reg_size)dtype_size(&first->dtype);
         } else {
             compile_err(cur_token, "a register conatining addr is expected\n");
         }
@@ -932,7 +965,7 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
         if (is_arr) {
             mem_type = dtype->base;
         } else {
-            mem_type = members.begin[index].type.base;
+            mem_type = members.begin[index].dtype.base;
         }
 
         if (!tok(context))
@@ -998,7 +1031,7 @@ void struct_expr_report(dyn_agg_member *args, type_t *type, int depth) {
         } else if (r->tag == REG) {
             printd("reg off: %d\n", r->reg.offset);
         } else if (r->tag == AGGREGATE) {
-            struct_expr_report(r->agg, members.begin[i].type.base, depth + 1);
+            struct_expr_report(r->agg, members.begin[i].dtype.base, depth + 1);
         } else {
             printd("error tag %d\n", r->tag);
         }
@@ -1124,7 +1157,7 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
             member_type = *dtype;
         } else {
             const dyn_member_t *members = &type->struct_t.members;
-            member_type = members->begin[index].type;
+            member_type = members->begin[index].dtype;
         }
 
         if (member_type.base->tag == TK_STRUCT) {
@@ -1317,6 +1350,15 @@ bool nullary_op(parser_context *context, regable lhs) {
             context->reg.dtype = nreg->dtype;
             dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
             emit_sub(context->reg, FP, nreg->offset);
+            // TODO handle for cases where slice is not from STACK array
+            declarator_t top = dtype_top(&nreg->dtype);
+            if (top.tag == DK_SLICE) {
+                // TODO what to do with reg size? is it correct to bump it from here?
+                // assign it to nreg, that would be problematic
+                reg_t dst = context->reg;
+                dst.offset += 1;
+                emit_mov(context->reg, top.amount);
+            }
         } else {
             unreachable;
         }
@@ -1438,9 +1480,9 @@ void struct_report(type_t *type) {
         printd("\tmember %d: ", ko++);
         str_printdnl(mem->name);
         printd(" ");
-        str_printdnl(mem->type.base->name);
+        str_printdnl(mem->dtype.base->name);
         printd("\toffset: %zd, size: %zd\n",
-                mem->offset, dtype_size(&mem->type));
+                mem->offset, dtype_size(&mem->dtype));
     }
     printd(CSI_GREEN"end report\n\n"CSI_RESET);
 #else
@@ -1530,8 +1572,8 @@ bool stmt_struct(parser_context *context) {
         member_t m = {
             .name = name,
         };
-        parse_dtype(context, &m.type);
-        type_t *t = m.type.base;
+        parse_dtype(context, &m.dtype);
+        type_t *t = m.dtype.base;
         m.offset = ALIGN_TO(s->size, (size_t)t->align),
         s->size = m.offset + t->size;
         s->align = t->align > s->align ? t->align : s->align;

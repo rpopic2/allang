@@ -21,7 +21,7 @@ enum sign_t {
 typedef u8 sign_t;
 
 enum dtype_kind {
-    DK_ADDR, DK_ARRAY, DK_CHECK
+    DK_ADDR, DK_ARRAY, DK_CHECK, DK_SLICE
 };
 
 typedef struct delarator {
@@ -37,7 +37,7 @@ typedef struct dtype {
 } dtype_t;
 
 typedef struct member {
-    dtype_t type;
+    dtype_t dtype;
     str name;
     size_t offset;
 } member_t;

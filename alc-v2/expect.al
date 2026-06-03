@@ -6,7 +6,7 @@ I.Foo is 1 ->
     ret 0
 ret 1
 
-expect: Expect u8 =>
+expect: Expect i32 =>
     Expect is 0 ->
         printf "test failed\n" => _Exit 1 =>
 
