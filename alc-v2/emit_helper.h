@@ -24,6 +24,54 @@ static unsigned string_lit_counts;
 
 static buf *fn_buf;
 
+/* --- redundant branch elimination (peephole) --- */
+
+static struct {
+    bool valid;
+    size_t start;
+    size_t end;
+    str fn_name;
+    str label;
+    int index;
+} last_branch;
+
+/* Record an unconditional branch just emitted into fn_buf, spanning [start, cur).
+ * Backends call branch_begin() before writing the branch and branch_record()
+ * after, so a subsequent emit_label() can drop the branch when it falls through
+ * to its own target. */
+static size_t branch_begin(void) {
+    return buf_len(fn_buf);
+}
+
+static void branch_record(size_t start, str fn_name, str label, int index) {
+    last_branch.valid = true;
+    last_branch.start = start;
+    last_branch.end = buf_len(fn_buf);
+    last_branch.fn_name = fn_name;
+    last_branch.label = label;
+    last_branch.index = index;
+}
+
+static void branch_forget(void) {
+    last_branch.valid = false;
+}
+
+/* If the most recently emitted instruction is an unconditional branch to
+ * (fn_name, label, index) and nothing has been emitted after it, drop it so
+ * control simply falls through to the label about to be emitted. */
+static void elide_redundant_branch(str fn_name, str label, int index) {
+    if (!last_branch.valid)
+        return;
+    if (last_branch.end != buf_len(fn_buf))
+        return;
+    if (last_branch.index != index
+            || !str_eq(last_branch.fn_name, fn_name)
+            || !str_eq(last_branch.label, label))
+        return;
+    fn_buf->cur = fn_buf->start + last_branch.start;
+    last_branch.valid = false;
+}
+
 #define MAX_CONTEXTS 10
 emit_context_t *contexts[MAX_CONTEXTS];
 emit_context_t **contexts_top = contexts;
@@ -47,6 +95,7 @@ void emit_reset_fn(emit_context_t *in_context) {
 
     context = in_context;
     fn_buf = &context->fn_buf;
+    branch_forget();
     buf_init(&context->fn_header_buf, 0x100);
     buf_init(&context->prologue_buf, INIT_BUFSIZ);
     buf_init(&context->fn_buf, INIT_BUFSIZ);

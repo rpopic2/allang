@@ -545,9 +545,11 @@ void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
 }
 
 void emit_branch(str fn_name, str label, int index) {
+    size_t start = branch_begin();
     buf_puts(fn_buf, STR("\tb "));
     put_label(fn_name, label, index);
     buf_puts(fn_buf, STR("\n"));
+    branch_record(start, fn_name, label, index);
 }
 
 bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
@@ -564,6 +566,7 @@ bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
 }
 
 void emit_label(str fn_name, str label, int index) {
+    elide_redundant_branch(fn_name, label, index);
     put_label(fn_name, label, index);
     buf_puts(fn_buf, STR(":\n"));
 }
