@@ -38,5 +38,6 @@ typedef enum cond {
 
 #define CSI_RED "\x1b[31m"
 #define CSI_GREEN "\x1b[32m"
+#define CSI_YELLOW "\x1b[33m"
 #define CSI_RESET "\x1b[0m"
 

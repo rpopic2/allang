@@ -43,6 +43,7 @@ u16 lineno = 1;
 u8 indent = 0;
 bool eof = false;
 bool has_compile_err = false;
+bool has_compile_warning = false;
 bool symbols_any = false;
 FILE *object_file;
 
@@ -220,6 +221,23 @@ void compile_err(const token_t *token, const char *format, ...) {
     fputs(CSI_RED, stderr);
     if (token) {
         fprintf(stderr, "error in %s:%d: ", token->filename, token->lineno);
+    }
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputs(CSI_RESET, stderr);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 2, 3)))
+#endif
+void compile_warning(const token_t *token, const char *format, ...) {
+    has_compile_warning = true;
+    fputs(CSI_YELLOW, stderr);
+    if (token) {
+        fprintf(stderr, "warning in %s:%d: ", token->filename, token->lineno);
     }
 
     va_list args;
@@ -570,7 +588,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         if (offset_regable.tag == NONE) {
             return false;
         } else if (offset_regable.tag == VALUE) {
-
+            compile_warning(cur_token, "use static syntax [Arr.N] instead of [Arr * N]\n");
         } else if (offset_regable.tag == REG && offset_regable.reg.reg_type == NREG) {
 
         } else {
@@ -2520,6 +2538,8 @@ int main(int argc, const char *argv[]) {
 
     if (has_compile_err)
         fprintf(stderr, CSI_RED"compilation failed\n"CSI_RESET);
+    else if (has_compile_warning)
+        fprintf(stderr, CSI_YELLOW"compilation succeeded with warnings\n"CSI_RESET);
     TIMER_END(clock_full);
-    return has_compile_err;
+    return has_compile_err ? 1 : has_compile_warning ? 2 : 0;
 }
