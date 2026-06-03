@@ -408,6 +408,9 @@ regable read_regable(str s, const token_t *token) {
             if (array) {
                 char *end_ptr = NULL;
                 long long index = strtoll(mem_name.data, &end_ptr, 0);
+                if (end_ptr == mem_name.data) {
+                    compile_err(token, "expected constant number for index\n");
+                }
                 if (index < 0) {
                     compile_err(token, "expected index greater or equal to zero\n");
                     result.tag = NONE;
@@ -499,7 +502,11 @@ void check_bounds(parser_context *context, reg_t index, i32 len) {
     }
 
     tok(context);
-    expect(context, STR("!"));
+    bool ok = expect(context, STR("!"));
+    if (!ok) {
+        compile_err(cur_token, "expected to check bounds with operator !\n");
+        return;
+    }
 
     tok(context);
     if (stmt_ret_cond(context, COND_GE, index, len)) {
