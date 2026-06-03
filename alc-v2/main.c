@@ -1945,10 +1945,8 @@ void stmt_label(parser_context *context) {
     if (symbol == NULL)
         return;
 
-    if (!symbol->is_fn && context->symbol) {
-        if (!str_empty(&symbol->name)) {
-            emit_label(context->symbol->name, symbol->name, 0);
-        }
+    if (!symbol->is_fn && context->symbol && !str_empty(&symbol->name)) {
+        emit_label(context->symbol->name, symbol->name, 0);
     }
 
     context->symbol = symbol;
@@ -2292,25 +2290,23 @@ void function(src_t *src) {
     TIMER_END(parse_while);
 
     TIMER_START(parse_emit);
-    if (str_len(context->name) == 0) {
-        return;
-    }
-
-    if (!context->symbol->is_fn) {
-        return;
-    }
-
-    if (context->has_branched_ret) {
-        emit_label(context->name, STR("ret"), 0);
-    }
-    if (do_airity_check && !context->last_line_ret) {
-        if (context->symbol->ret_airity != 0) {
-            compile_err(&context->cur_token, "expected to return %d value(s)\n", context->symbol->ret_airity);
+    do {
+        if (str_len(context->name) == 0)
+            break;
+        if (!context->symbol->is_fn)
+            break;
+        if (context->has_branched_ret) {
+            emit_label(context->name, STR("ret"), 0);
         }
-    }
-    emit_fn_prologue_epilogue(context);
-    emit_ret();
-    printd("end of fn\n");
+        if (do_airity_check && !context->last_line_ret) {
+            if (context->symbol->ret_airity != 0) {
+                compile_err(&context->cur_token, "expected to return %d value(s)\n", context->symbol->ret_airity);
+            }
+        }
+        emit_fn_prologue_epilogue(context);
+        emit_ret();
+        printd("end of fn\n");
+    } while (0);
     TIMER_END(parse_emit);
 }
 
