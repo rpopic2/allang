@@ -963,6 +963,11 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
             if (!tok(context)) break;
             continue;
         }
+        if (is_arr && index >= member_count) {
+            compile_err(token, "array initializer index out of bounds\n");
+            if (!tok(context)) break;
+            continue;
+        }
 
         type_t *mem_type;
         if (is_arr) {

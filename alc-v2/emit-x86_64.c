@@ -298,12 +298,12 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
         member_t local_memb;
         member_t *memb;
         if (is_arr) {
-            local_memb = (member_t){.type = *dtype, .offset = (size_t)i * dtype->base->size};
+            local_memb = (member_t){.dtype = *dtype, .offset = (size_t)i * dtype->base->size};
             memb = &local_memb;
         } else {
             memb = &type->struct_t.members.begin[i];
         }
-        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->type);
+        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->dtype);
         size_t offset_bits = memb->offset * 8;
         size_t local_offset_bits = offset_bits % 64;
 
