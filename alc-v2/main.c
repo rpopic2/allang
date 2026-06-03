@@ -389,7 +389,7 @@ regable read_regable(str s, const token_t *token) {
         str name = dot_iter(&s, '.');
         if (!find_id(&local_ids, name, token, &reg, scope_up)
             || reg->reg_type == RD_NONE) {
-            compile_err(token, "unknown id "), str_printerr(s);
+            compile_err(token, "unknown id "), str_printerr(token->id);
             return result;
         }
         result.reg = *reg;
@@ -1027,7 +1027,7 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
         reg_t *out_reg;
         str name = dot_iter(&full_name, '.');
         if (!find_id(&local_ids, name, token, &out_reg, 0)) {
-            compile_err(token, "unknown id "), str_printerr(full_name);
+            compile_err(token, "unknown id "), str_printerr(*token_str);
             return true;
         }
 
