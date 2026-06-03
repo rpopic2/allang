@@ -85,7 +85,11 @@ static void buf_comma(buf *buffer) {
 }
 
 static void buf_puti(buf *buffer, i64 i0) {
+#ifdef EMIT_HASH_IMM
+    buf_snprintf(buffer, "#0x%"PRIx64, (u64)i0);
+#else
     buf_snprintf(buffer, "0x%"PRIx64, i0);
+#endif
 }
 
 void emit_r(buf *buffer, const char *op, reg_t reg) {

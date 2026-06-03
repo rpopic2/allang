@@ -7,6 +7,7 @@
 #include "err.h"
 #include "str.h"
 #include "typesys.h"
+#define EMIT_HASH_IMM
 #include "emit_helper.h"
 
 #define CALLEE_START 19
@@ -227,7 +228,7 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
     emit_rrx(STR("stp"), src1, src2);
     buf_puts(fn_buf, STR(", ["));
     buf_putreg(fn_buf, base);
-    buf_snprintf(fn_buf, ", #%"PRId64"]\n", offset);
+    buf_snprintf(fn_buf, ", #0x%"PRIx64"]\n", (u64)offset);
 }
 
 const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8};
@@ -286,22 +287,19 @@ void emit_mov(reg_t dst, i64 value) {
     int regidx = get_regoff(dst);
     if (dst.dtype.base == type_comptime_int) {
         if (value <= INT32_MAX) {
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId32), get_wx(dst.rsize), regidx, (i32)value);
+            buf_snprintf(fn_buf, INSTR("mov %s%d, #0x%"PRIx32), get_wx(dst.rsize), regidx, (u32)value);
         } else if (value <= INT64_MAX) {
             dst.rsize = 8;
             //emit_ri(STR("mov"), dst, value);
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
+            buf_snprintf(fn_buf, INSTR("mov %s%d, #0x%"PRIx64), get_wx(dst.rsize), regidx, (u64)value);
         } else if ((u64)value <= UINT64_MAX) {
             dst.rsize = 8;
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
+            buf_snprintf(fn_buf, INSTR("mov %s%d, #0x%"PRIx64), get_wx(dst.rsize), regidx, (u64)value);
         } else {
             report_error("literal was too big");
         }
     } else {
-        if (!dst.dtype.base || !dst.dtype.base->sign)
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIx64), get_wx(dst.rsize), regidx, value);
-        else
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIi64), get_wx(dst.rsize), regidx, value);
+        buf_snprintf(fn_buf, INSTR("mov %s%d, #0x%"PRIx64), get_wx(dst.rsize), regidx, (u64)value);
     }
 
 }
@@ -370,7 +368,7 @@ void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
     buf_puts(fn_buf, STR(", "));
     buf_putreg(fn_buf, lhs);
     buf_puts(fn_buf, STR(", "));
-    buf_snprintf(fn_buf, "#%"PRId64"\n", rhs);
+    buf_snprintf(fn_buf, "#0x%"PRIx64"\n", (u64)rhs);
 }
 
 void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
@@ -391,8 +389,8 @@ void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
 }
 
 void emit_cmp(reg_t lhs, i64 rhs) {
-    buf_snprintf(fn_buf, INSTR("cmp w%d, #%"PRId64),
-            get_regoff(lhs), rhs);
+    buf_snprintf(fn_buf, INSTR("cmp w%d, #0x%"PRIx64),
+            get_regoff(lhs), (u64)rhs);
 }
 
 void emit_cmp_reg(reg_t lhs, reg_t rhs) {
@@ -456,12 +454,12 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
 
 void emit_str(reg_t dst, reg_t src, int offset) {
     load_store_x("str", src, dst);
-    buf_snprintf(fn_buf, ("#%d]\n"), offset);
+    buf_snprintf(fn_buf, ("#0x%x]\n"), offset);
 }
 
 void emit_ldr(reg_t dst, reg_t src, int offset) {
     load_store_x("ldr", dst, src);
-    buf_snprintf(fn_buf, ("#%d]\n"), offset);
+    buf_snprintf(fn_buf, ("#0x%x]\n"), offset);
 }
 
 void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
@@ -471,12 +469,12 @@ void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
 
 void str_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
     load_store_x("str", src, dst);
-    buf_snprintf(fn_buf, ("x%d, lsl #%d]\n"), get_regoff(offset), lsl);
+    buf_snprintf(fn_buf, ("x%d, lsl #0x%x]\n"), get_regoff(offset), lsl);
 }
 
 void ldr_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
     load_store_x("ldr", dst, src);
-    buf_snprintf(fn_buf, ("x%d, lsl #%d]\n"), get_regoff(offset), lsl);
+    buf_snprintf(fn_buf, ("x%d, lsl #0x%x]\n"), get_regoff(offset), lsl);
 }
 
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store) {
@@ -600,7 +598,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
     int cur_stackoff = ALIGN_TO(parser_context->stack_size, 16);
     const int stack_objs_size = cur_stackoff;
     if (stack_objs_size > 0) {
-        buf_snprintf(&context->prologue_buf, INSTR("sub sp, sp, #%d"), stack_size);
+        buf_snprintf(&context->prologue_buf, INSTR("sub sp, sp, #0x%x"), stack_size);
     }
 
     int remaining = regs_to_save;
@@ -614,10 +612,10 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         if (needs_fp) {
             reg0 = 29, reg1 = 30;
         }
-        const char *stp_format = INSTR("stp x%d, x%d, [sp, #%d]");
-        const char *ldp_format = INSTR("ldp x%d, x%d, [sp, #%d]");
+        const char *stp_format = INSTR("stp x%d, x%d, [sp, #0x%x]");
+        const char *ldp_format = INSTR("ldp x%d, x%d, [sp, #0x%x]");
         if (cur_stackoff == 0) {
-            stp_format = INSTR("stp x%d, x%d, [sp, #-%d]!");
+            stp_format = INSTR("stp x%d, x%d, [sp, #-0x%x]!");
             defer_ldp = true;
             off = stack_size;
         }
@@ -632,21 +630,21 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
     while (remaining > 1) {
         int reg0 = CALLEE_START + remaining - 1;
         int reg1 = reg0 - 1;
-        buf_snprintf(&context->prologue_buf, INSTR("stp x%d, x%d, [sp, #%d]"),
+        buf_snprintf(&context->prologue_buf, INSTR("stp x%d, x%d, [sp, #0x%x]"),
                 reg0, reg1, cur_stackoff);
-        buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [sp, #%d]"),
+        buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [sp, #0x%x]"),
                 reg0, reg1, cur_stackoff);
         remaining -= 2;
         cur_stackoff += 16;
     }
     if (remaining == 1) {
         remaining -= 1;
-        const char *stp_format = INSTR("str x%d, [sp, #%d]");
-        const char *ldp_format = INSTR("ldr x%d, [sp, #%d]");
+        const char *stp_format = INSTR("str x%d, [sp, #0x%x]");
+        const char *ldp_format = INSTR("ldr x%d, [sp, #0x%x]");
         int off = cur_stackoff;
         if (cur_stackoff == 0) {
-            stp_format = INSTR("str x%d, [sp, #-%d]!");
-            ldp_format = INSTR("ldr x%d, [sp], #%d");
+            stp_format = INSTR("str x%d, [sp, #-0x%x]!");
+            ldp_format = INSTR("ldr x%d, [sp], #0x%x");
             off = stack_size;
         }
         int reg0 = CALLEE_START + remaining;
@@ -661,16 +659,16 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         if (stack_objs_size == 0) {
             buf_puts(&context->prologue_buf, STR_FROM_INSTR("mov x29, sp"));
         } else {
-            buf_snprintf(&context->prologue_buf, INSTR("add x29, sp, #%d"), stack_objs_size);
+            buf_snprintf(&context->prologue_buf, INSTR("add x29, sp, #0x%x"), stack_objs_size);
         }
     }
 
     if (defer_ldp) {
-        const char *ldp_format = INSTR("ldp x%d, x%d, [sp], #%d");
+        const char *ldp_format = INSTR("ldp x%d, x%d, [sp], #0x%x");
         buf_snprintf(&context->fn_buf, ldp_format, deferred0, deferred1, stack_size);
     }
     if (stack_objs_size > 0) {
-        buf_snprintf(&context->fn_buf, INSTR("add sp, sp, #%d"), stack_size);
+        buf_snprintf(&context->fn_buf, INSTR("add sp, sp, #0x%x"), stack_size);
     }
 }
 
