@@ -1945,16 +1945,9 @@ void stmt_label(parser_context *context) {
     if (symbol == NULL)
         return;
 
-    if (!symbol->is_fn) {
-        str outer_name = str_null;
-        if (context->symbol) {
-            outer_name = context->symbol->name;
-        } else {
-            context->symbol = symbol;
-            outer_name = context->symbol->name;
-        }
+    if (!symbol->is_fn && context->symbol) {
         if (!str_empty(&symbol->name)) {
-            emit_label(outer_name, symbol->name, 0);
+            emit_label(context->symbol->name, symbol->name, 0);
         }
     }
 
@@ -2300,6 +2293,10 @@ void function(src_t *src) {
 
     TIMER_START(parse_emit);
     if (str_len(context->name) == 0) {
+        return;
+    }
+
+    if (!context->symbol->is_fn) {
         return;
     }
 
