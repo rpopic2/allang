@@ -22,6 +22,7 @@
 #define NO_IMPORT_ALL_SELF "no_import_all_self"
 
 void parse_block(parser_context *context);
+bool parse_dtype(parser_context *restrict context, dtype_t *restrict out);
 symbol_t *fn_call(parser_context *context);
 bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
@@ -1273,37 +1274,28 @@ bool expr_load(parser_context *context) {
 bool expr(parser_context *context) {
     bool explicit_type = context->cur_token.end[0] == '{';
     if (explicit_type) {
-        str id = context->cur_token.id;
+        bool unknown = false;
+        parse_dtype(context, &context->reg.dtype);
 
         tok(context);
         expect(context, STR("{"));
 
-        char *end_ptr = NULL;
-        unsigned long long len = strtoull(id.data, &end_ptr, 0);
-        if (len) {
-            if (!end_ptr) unreachable;
-            id.data = end_ptr +1;
-        }
-
-        type_t *type = hashmap_type_t_tryfind(types, id);
-        if (type == NULL) {
-            compile_err(&context->cur_token, "unknown type "), str_printerr(id);
+        if (unknown) {
             while (tok(context)) {
                 if (context->cur_token.data[0] == '}')
                     break;
             }
             return true;
         }
-        if (len > INT_MAX)
-            compile_err(&context->cur_token, "array length was too big");
+
+        dtype_t *decl = &context->reg.dtype;
+        type_t *type = decl->base;
+        i32 len = dtype_tryget_arr(decl);
 
         context->reg.rsize = (reg_size)type->size;
-        context->reg.dtype = (dtype_t){.base = type};
-        dtype_t *decl = &context->reg.dtype;
         if (len) {
-            unsigned long long arr_size = context->reg.rsize * len;
+            unsigned long long arr_size = context->reg.rsize * (unsigned long long)len;
             context->reg.rsize = arr_size > 8 ? 8 : (reg_size)arr_size;
-            dtype_push(decl, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
             expr_struct(context, context->reg, decl);
             return true;
         } else if (type->tag == TK_STRUCT) {
@@ -1444,6 +1436,13 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
     }
 
     str iter = cur_token->id;
+
+    char *end_ptr = NULL;
+    unsigned long long len = strtoull(iter.data, &end_ptr, 0);
+    if (len) {
+        iter.data = end_ptr + 1;
+    }
+
     str typename = dot_iter(&iter, '!');
     if (!str_empty(&iter)) {
         str value = dot_iter(&iter, '!');
@@ -1457,9 +1456,16 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
     type_t *type = hashmap_type_t_tryfind(types, typename);
     if (!type) {
         compile_err(cur_token, "unknown type "), str_printerr(typename);
-        type = type_comptime_int;
+        type = error_type;
     }
     out->base = type;
+
+    if (len) {
+        if (len > INT_MAX)
+            compile_err(cur_token, "array length was too big");
+        dtype_push(out, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
+    }
+
     return break_out;
 }
 
