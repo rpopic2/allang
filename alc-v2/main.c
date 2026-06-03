@@ -1968,17 +1968,8 @@ void stmt_label(parser_context *context) {
     if (symbol == NULL)
         return;
 
-    if (!symbol->is_fn) {
-        str outer_name = str_null;
-        if (context->symbol) {
-            outer_name = context->symbol->name;
-        } else {
-            context->symbol = symbol;
-            outer_name = context->symbol->name;
-        }
-        if (!str_empty(&symbol->name)) {
-            emit_label(outer_name, symbol->name, 0);
-        }
+    if (!symbol->is_fn && context->symbol && !str_empty(&symbol->name)) {
+        emit_label(context->symbol->name, symbol->name, 0);
     }
 
     context->symbol = symbol;
@@ -2322,10 +2313,10 @@ void function(src_t *src) {
     TIMER_END(parse_while);
 
     TIMER_START(parse_emit);
-    if (str_len(context->name) == 0) {
+    if (str_len(context->name) == 0)
         return;
-    }
-
+    if (!context->symbol->is_fn)
+        return;
     if (context->has_branched_ret) {
         emit_label(context->name, STR("ret"), 0);
     }
