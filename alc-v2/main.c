@@ -404,12 +404,25 @@ regable read_regable(str s, const token_t *token) {
             str mem_name = dot_iter(&s, '.');
             if (str_empty(&mem_name))
                 break;
-            member = find_member(&type->struct_t.members, mem_name);
-            if (member == NULL) {
-                compile_err(token, "member not found: "), str_printerr(mem_name);
-                result.tag = NONE;
-                break;
+            int array = dtype_tryget_arr(&reg->dtype);
+            if (array) {
+                char *end_ptr = NULL;
+                long long index = strtoll(mem_name.data, &end_ptr, 0);
+                if (index < 0) {
+                    compile_err(token, "expected index greater or equal to zero\n");
+                    result.tag = NONE;
+                    break;
+                }
+                member = &(member_t){.name = mem_name, .type = (dtype_t){.base = type}, .offset = type->size * (size_t)index};
+            } else {
+                member = find_member(&type->struct_t.members, mem_name);
+                if (member == NULL) {
+                    compile_err(token, "member not found: "), str_printerr(mem_name);
+                    result.tag = NONE;
+                    break;
+                }
             }
+            assert(member);
             result.reg.dtype = member->type;
             result.reg.offset -= member->offset;
             type = member->type.base;
