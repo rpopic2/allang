@@ -384,19 +384,19 @@ regable read_regable(str s, const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE };
     if (isupper(s.data[0]) || s.data[0] == '^') {
         int scope_up = extrat_scope_up(&s);
-        reg_t *e = NULL;
+        reg_t *reg = NULL;
 
         str name = dot_iter(&s, '.');
-        if (!find_id(&local_ids, name, token, &e, scope_up)
-            || e->reg_type == RD_NONE) {
+        if (!find_id(&local_ids, name, token, &reg, scope_up)
+            || reg->reg_type == RD_NONE) {
             compile_err(token, "unknown id "), str_printerr(s);
             return result;
         }
-        result.reg = *e;
+        result.reg = *reg;
         result.tag = REG;
-        member_t *mem = NULL;
-        type_t *t = e->dtype.base;
-        if (t == error_type) {
+        member_t *member = NULL;
+        type_t *type = reg->dtype.base;
+        if (type == error_type) {
             result.type = error_type;
             return result;
         }
@@ -404,18 +404,18 @@ regable read_regable(str s, const token_t *token) {
             str mem_name = dot_iter(&s, '.');
             if (str_empty(&mem_name))
                 break;
-            mem = find_member(&t->struct_t.members, mem_name);
-            if (mem == NULL) {
+            member = find_member(&type->struct_t.members, mem_name);
+            if (member == NULL) {
                 compile_err(token, "member not found: "), str_printerr(mem_name);
                 result.tag = NONE;
                 break;
             }
-            result.reg.dtype = mem->type;
-            result.reg.offset -= mem->offset;
-            t = mem->type.base;
+            result.reg.dtype = member->type;
+            result.reg.offset -= member->offset;
+            type = member->type.base;
         }
-        if (mem) {
-            size_t mem_size = dtype_size(&mem->type);
+        if (member) {
+            size_t mem_size = dtype_size(&member->type);
             if (mem_size > MAX_REG_SIZE) {
                 compile_err(token, "this member does not fit in register\n");
             }
@@ -1271,6 +1271,41 @@ bool expr_load(parser_context *context) {
     return true;
 }
 
+bool nullary_op(parser_context *context, regable lhs) {
+    const token_t *token = &context->cur_token;
+    printd("nullary op\n");
+    if (lhs.tag == VALUE) {
+        context->reg.rsize = get_rsize(context->reg);
+        emit_mov(context->reg, lhs.value);
+    } else if (lhs.tag == REG) {
+        const reg_t *nreg = &lhs.reg;
+        if (nreg->reg_type == NREG) {
+            if (context->reg.reg_type == PARAM) {
+                context->reg.dtype = nreg->dtype;
+                context->reg.rsize = nreg->rsize;
+            }
+            if (nreg->dtype.base == NULL) {
+                compile_err(token, "use of unassigned register "), str_printerr(token->id);
+                return true;
+            }
+            emit_mov_reg(context->reg, lhs.reg);
+        } else if (nreg->reg_type == STACK) {
+            context->reg.rsize = sizeof (void *);
+            if (nreg->dtype.base == NULL) {
+                compile_err(token, "taking address of stack object with unknown type\n");
+            }
+            context->reg.dtype = nreg->dtype;
+            dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            emit_sub(context->reg, FP, nreg->offset);
+        } else {
+            unreachable;
+        }
+    } else {
+        unreachable;
+    }
+    return false;
+}
+
 bool expr(parser_context *context) {
     bool explicit_type = context->cur_token.end[0] == '{';
     if (explicit_type) {
@@ -1332,37 +1367,8 @@ bool expr(parser_context *context) {
 
     } else if (token_end != ',' && token_end != '\n' && token_end != ')' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>") && !streq(token->end + 1, "=") && token_end != '}') {
         binary_op(&lhs, context);
-    } else {
-        printd("nullary op\n");
-        if (lhs.tag == VALUE) {
-            context->reg.rsize = get_rsize(context->reg);
-            emit_mov(context->reg, lhs.value);
-        } else if (lhs.tag == REG) {
-            const reg_t *nreg = &lhs.reg;
-            if (nreg->reg_type == NREG) {
-                if (context->reg.reg_type == PARAM) {
-                    context->reg.dtype = nreg->dtype;
-                    context->reg.rsize = nreg->rsize;
-                }
-                if (nreg->dtype.base == NULL) {
-                    compile_err(token, "use of unassigned register "), str_printerr(token->id);
-                    return true;
-                }
-                emit_mov_reg(context->reg, lhs.reg);
-            } else if (nreg->reg_type == STACK) {
-                context->reg.rsize = sizeof (void *);
-                if (nreg->dtype.base == NULL) {
-                    compile_err(token, "taking address of stack object with unknown type\n");
-                }
-                context->reg.dtype = nreg->dtype;
-                dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
-                emit_sub(context->reg, FP, nreg->offset);
-            } else {
-                unreachable;
-            }
-        } else {
-            unreachable;
-        }
+    } else if(nullary_op(context, lhs)) {
+        return true;
     }
     if (explicit_type) {
         tok(context);
