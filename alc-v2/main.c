@@ -2541,5 +2541,7 @@ int main(int argc, const char *argv[]) {
     else if (has_compile_warning)
         fprintf(stderr, CSI_YELLOW"compilation succeeded with warnings\n"CSI_RESET);
     TIMER_END(clock_full);
-    return has_compile_err ? 1 : has_compile_warning ? 2 : 0;
+    if (has_compile_err) return 1;
+    if (has_compile_warning) return 2;
+    return 0;
 }
