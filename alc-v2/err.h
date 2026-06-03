@@ -2,6 +2,7 @@
 
 typedef struct token token_t;
 void compile_err(const token_t *token, const char *format, ...);
+void compile_warning(const token_t *token, const char *format, ...);
 
 #if NDEBUG
 #define printd(...) ((void)0)

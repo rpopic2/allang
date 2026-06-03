@@ -18,6 +18,7 @@ The emit backend files for your architecture and OS must be passed explicitly:
 
 - Don't add comments unless strictly necessary.
 - Make pointers const whenever possible.
+- Always put `return` on its own line; never `if (cond) return x;` on one line.
 
 ## Architecture
 
