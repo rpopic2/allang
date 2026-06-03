@@ -5,6 +5,8 @@
 #include "buffer.h"
 #include "emit_helper.h"
 
+const char *imm_prefix = "0x";
+
 extern const char * const rname_scratch[];
 extern const char * const rname_callee[];
 extern const char * const rname_param[];

@@ -7,8 +7,9 @@
 #include "err.h"
 #include "str.h"
 #include "typesys.h"
-#define EMIT_HASH_IMM
 #include "emit_helper.h"
+
+const char *imm_prefix = "#0x";
 
 #define CALLEE_START 19
 

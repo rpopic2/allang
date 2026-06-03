@@ -84,12 +84,10 @@ static void buf_comma(buf *buffer) {
     buf_puts(buffer, STR(", "));
 }
 
+extern const char *imm_prefix;
+
 static void buf_puti(buf *buffer, i64 i0) {
-#ifdef EMIT_HASH_IMM
-    buf_snprintf(buffer, "#0x%"PRIx64, (u64)i0);
-#else
-    buf_snprintf(buffer, "0x%"PRIx64, i0);
-#endif
+    buf_snprintf(buffer, "%s%"PRIx64, imm_prefix, (u64)i0);
 }
 
 void emit_r(buf *buffer, const char *op, reg_t reg) {
