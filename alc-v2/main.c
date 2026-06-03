@@ -418,6 +418,9 @@ regable read_regable(str s, const token_t *token) {
                 if (begin_index > end_index) {
                     compile_err(token, "expected begin to be less than or equal to end index\n");
                 }
+                if (end_index > array) {
+                    compile_err(token, "end index out of bounds\n");
+                }
 
                 dtype_push(&result.reg.dtype,
                            (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
