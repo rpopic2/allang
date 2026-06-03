@@ -334,8 +334,8 @@ int extrat_scope_up(str *s) {
     return scope_up;
 }
 
-void context_add_nreg(parser_context *context) {
-    context->nreg_count += 1;
+void context_add_nreg(parser_context *context, const dtype_t *dtype) {
+    context->nreg_count += dtype_reg_count(dtype);
 #define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
     UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
 #undef UPDATE_IF_GREATER
@@ -1356,11 +1356,9 @@ bool nullary_op(parser_context *context, regable lhs) {
             // TODO handle for cases where slice is not from STACK array
             declarator_t top = dtype_top(&nreg->dtype);
             if (top.tag == DK_SLICE) {
-                // TODO what to do with reg size? is it correct to bump it from here?
-                // assign it to nreg, that would be problematic
                 reg_t dst = context->reg;
                 dst.offset += 1;
-                emit_mov(context->reg, top.amount);
+                emit_mov(dst, top.amount);
             }
         } else {
             unreachable;
@@ -1449,7 +1447,7 @@ int expr_line(parser_context *context) {
     bool ok = expr(context);
     if (!ok)
         return 0;
-    context->reg.offset++;
+    context->reg.offset += dtype_reg_count(&context->reg.dtype);
 
     while (token->end[0] == ',' && isspace(token->end[1])) {
         printd(", ");
@@ -1459,7 +1457,7 @@ int expr_line(parser_context *context) {
         ok = expr(context);
         if (!ok)
             break;
-        context->reg.offset++;
+        context->reg.offset += dtype_reg_count(&context->reg.dtype);
     }
     int expr_count = context->reg.offset;
     if (context->cur_token.end[0] == '\n') {
@@ -1668,7 +1666,7 @@ bool decl_vars(parser_context *context) {
 
         reg_t *reg = overwrite_id(*local_ids.cur, name, &arg);
 
-        context_add_nreg(context);
+        context_add_nreg(context, &context->reg.dtype);
         if (!one_liner) {
             target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
             parse_block(context);
@@ -1972,7 +1970,7 @@ void stmt_label(parser_context *context) {
     for (int i = 0; i < symbol->airity; ++i) {
         reg_t *param = &symbol->params.data[i];
         reg_t arg_reg = {.reg_type = PARAM, .offset = i, .dtype = param->dtype, .rsize = param->rsize};
-        context_add_nreg(context);
+        context_add_nreg(context, &param->dtype);
         reg_t r = {
             .reg_type = NREG, .offset = context->nreg_count,
             .rsize = param->rsize,

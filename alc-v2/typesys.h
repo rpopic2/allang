@@ -128,6 +128,14 @@ static inline size_t dtype_size(const dtype_t *self) {
     }
 }
 
+static inline int dtype_reg_count(const dtype_t *self) {
+    for (usize i = 0; i < self->decl_len; ++i) {
+        if (self->decl[i].tag == DK_SLICE)
+            return 2;
+    }
+    return 1;
+}
+
 typedef struct reg {
     i32 offset;
     reg_size rsize;

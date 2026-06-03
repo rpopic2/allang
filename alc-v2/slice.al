@@ -12,5 +12,7 @@ Arr..5
 
 Arr.1..1
 
+Slice :: Arr..
+
 ret 0
 
