@@ -411,7 +411,7 @@ void diagnositc_slice(const token_t *token, i64 begin_index, i64 end_index, i32 
         compile_err(token, "end index out of bounds\n");
     }
 
-    printd("slice: begin=%lld end=%lld array=%d\n", begin_index, end_index, array);
+    printd("slice: begin=%"PRId64" end=%"PRId64" array=%d\n", begin_index, end_index, array);
 }
 
 regable read_regable(str s, const token_t *token) {
