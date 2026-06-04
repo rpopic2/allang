@@ -1773,13 +1773,134 @@ bool stmt_stack_store(parser_context *context, reg_t src) {
     return true;
 }
 
+static const char *decl_rtrim(const char *start, const char *e) {
+    while (e > start && (e[-1] == ' ' || e[-1] == '\t' || e[-1] == '\r')) {
+        --e;
+    }
+    return e;
+}
+
+static bool decl_ends_with(const char *start, const char *e, const char *suffix) {
+    size_t n = strlen(suffix);
+    if ((size_t)(e - start) < n) {
+        return false;
+    }
+    return memcmp(e - n, suffix, n) == 0;
+}
+
+typedef enum { DECL_LINE_SKIP, DECL_LINE_STACK, DECL_LINE_REG } decl_line_kind;
+
+static decl_line_kind classify_decl_body_line(const char *start, const char *nl) {
+    bool in_str = false;
+    bool has_decl_op = false;
+    const char *code_end = nl;
+    for (const char *p = start; p < nl; ++p) {
+        if (*p == '"') {
+            in_str = !in_str;
+            continue;
+        }
+        if (in_str) {
+            continue;
+        }
+        if (p[0] == '/' && p + 1 < nl && p[1] == '/') {
+            code_end = p;
+            break;
+        }
+        if (p[0] == ':' && p + 1 < nl && p[1] == ':') {
+            has_decl_op = true;
+        }
+    }
+    code_end = decl_rtrim(start, code_end);
+    if (has_decl_op) {
+        return DECL_LINE_SKIP;
+    }
+    if (decl_ends_with(start, code_end, "=[]")) {
+        return DECL_LINE_STACK;
+    }
+    if (code_end - start >= 2 && code_end[-1] == '=' && code_end[-2] == ' ') {
+        return DECL_LINE_REG;
+    }
+    return DECL_LINE_SKIP;
+}
+
+bool decl_is_stack(const parser_context *context) {
+    const char *const buf_end = context->src->end;
+    const int decl_indent = context->cur_token.indent;
+    const char *const colon = context->src->cur;
+
+    const char *nl = colon;
+    while (nl < buf_end && *nl != '\n') {
+        ++nl;
+    }
+
+    const char *hdr = colon;
+    while (hdr < nl && *hdr != ' ' && *hdr != '\t') {
+        ++hdr;
+    }
+    while (hdr < nl && (*hdr == ' ' || *hdr == '\t')) {
+        ++hdr;
+    }
+    bool in_str = false;
+    const char *hdr_end = nl;
+    for (const char *p = hdr; p < nl; ++p) {
+        if (*p == '"') {
+            in_str = !in_str;
+        } else if (!in_str && p[0] == '/' && p + 1 < nl && p[1] == '/') {
+            hdr_end = p;
+            break;
+        }
+    }
+    hdr_end = decl_rtrim(hdr, hdr_end);
+    if (hdr_end > hdr) {
+        return decl_ends_with(hdr, hdr_end, "=[]");
+    }
+
+    for (const char *line = nl; line < buf_end; ) {
+        ++line;
+        int line_indent = 0;
+        const char *q = line;
+        while (q < buf_end && *q == ' ') {
+            ++line_indent;
+            ++q;
+        }
+        if (q >= buf_end) {
+            break;
+        }
+        if (*q == '\n') {
+            line = q;
+            continue;
+        }
+        const char *lnl = q;
+        while (lnl < buf_end && *lnl != '\n') {
+            ++lnl;
+        }
+        if (line_indent <= decl_indent) {
+            break;
+        }
+        if (line_indent == decl_indent + 4) {
+            decl_line_kind kind = classify_decl_body_line(q, lnl);
+            if (kind == DECL_LINE_STACK) {
+                return true;
+            }
+            if (kind == DECL_LINE_REG) {
+                return false;
+            }
+        }
+        line = lnl;
+    }
+    return false;
+}
+
 bool decl_vars(parser_context *context) {
     const token_t *token = &context->cur_token;
     if (!streq(token->end, " ::")) {
         return false;
     }
+    if (!isupper(token->data[0])) {
+        return false;
+    }
 
-    if (isupper(token->data[0])) {
+    if (!decl_is_stack(context)) {
         str name = token->id;
         tok(context);
         bool one_liner = context->cur_token.end[0] != '\n';
@@ -1826,16 +1947,8 @@ bool decl_vars(parser_context *context) {
             arr_target_pop(&context->targets);
         }
         return true;
-    } else if (token->data[0] == '[') {
+    } else {
         str name = token->id;
-        name.data += 1;
-        name.end -= 1;
-        if (name.end[0] != ']') {
-            compile_err(token, "closing ']' expected(stmt)\n");
-        }
-        if (!isupper(name.data[0])) {
-            compile_err(token, "name of stack objects must start with uppercase\n");
-        }
         tok(context);
         bool one_liner = context->cur_token.end[0] != '\n';
         context->reg.reg_type = SCRATCH;

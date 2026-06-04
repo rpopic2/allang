@@ -4,18 +4,18 @@ printf "Hello World\n" =>
 
 V ::
     3 + 2 =
-[Q] :: V =[]
+Q :: V =[]
 
-[I] ::
+I ::
     4 + 9
     2 + 1 =[]
-[J] ::
+J ::
     [^I] =[]
     2 + 9 =[]
 
 K ::
     2 + 33
-    [P] ::
+    P ::
         5 =[]
     3 + 2 =
 
@@ -39,7 +39,7 @@ foo 2, 2 =>
 foo K, [J] =>
 
 Hi :: get_hi =>
-[Hi_Stack] :: get_hi => =[]
+Hi_Stack :: get_hi => =[]
 
 ret 0
 
@@ -55,7 +55,7 @@ get_hi: => Hi addr u8
 
 store_char: =>
     Hi :: get_hi =>
-    [C] :: [Hi] =[]
+    C :: [Hi] =[]
 
 fn_assign: => R i32
     Num_Printed ::
@@ -64,30 +64,30 @@ fn_assign: => R i32
     ret Num_Printed
 
 stack_var: => R i32
-    [X] :: 3 =[]
+    X :: 3 =[]
     ret [X]
 
 reg_off: =>
     O :: 2
-    [X] ::
+    X ::
         3 + 2, 4 =[]
     Y :: X
     [Y * O unchecked]
     3 =[Y]
 
 copy: =>
-    [X] :: 3 =[]
-    [Y] :: [X] =[]
+    X :: 3 =[]
+    Y :: [X] =[]
     ret
 
 stack_store: =>
-    [X] :: 3 =[]
+    X :: 3 =[]
 
 short_lit: =>
     K ::
         u64{7} =
         2 =
-    [S] ::
+    S ::
         u64{7} =[]
         ^K =[]
 
@@ -120,20 +120,20 @@ assign_vals: =>
     ret
 
 store_vals: =>
-    [I] :: 1 =[]
+    I :: 1 =[]
     2 =[I]
 
-    [I2] :: [I] =[]
+    I2 :: [I] =[]
     [I] =[I2]
 
-    [PI] :: I =[]
+    PI :: I =[]
 
-    [J] ::
+    J ::
         3 =[]
         4 =[^J]
         5 =[This]
 
-    [J2] ::
+    J2 ::
         [^J] =[]
 
 fund_types: =>
@@ -142,10 +142,10 @@ fund_types: =>
     I32 :: i32{1}
     I64 :: i64{2}
 
-    [I8_Stack] :: i8{5} =[]
-    [I16_Stack] :: i16{6} =[]
-    [I32_Stack] :: i32{7} =[]
-    [I64_Stack] :: i64{8} =[]
+    I8_Stack :: i8{5} =[]
+    I16_Stack :: i16{6} =[]
+    I32_Stack :: i32{7} =[]
+    I64_Stack :: i64{8} =[]
 
     I8 =[I8_Stack]
     I16 =[I16_Stack]
@@ -339,7 +339,7 @@ lsl_test: =>
     I shl 8
 
 struct_members: =>
-    [S] :: point{.X 1 .Y 2 .. 0} =[]
+    S :: point{.X 1 .Y 2 .. 0} =[]
     load_memb:
     [S.B]
     i8{3} =[S.B]
@@ -360,7 +360,7 @@ big_struct4: =>
         A u32, B u32, C u32, D u32
     }
 
-    [S] :: big_struct4{.A 1 .B 2 .C 3 .D 4} =[]
+    S :: big_struct4{.A 1 .B 2 .C 3 .D 4} =[]
     S.A, S.B
 
 short_struct: =>
@@ -368,7 +368,7 @@ short_struct: =>
         A u16, B u16
     }
 
-    [S] :: short_struct{.A 3 .B 7} =[]
+    S :: short_struct{.A 3 .B 7} =[]
     S.B
 
 recycle: =>
@@ -383,7 +383,7 @@ struct_store: =>
     struct {
         A i64 B i64
     }
-    [S] :: point32{.X 1, .Y 2} =[]
+    S :: point32{.X 1, .Y 2} =[]
     point32{.. 0} =[S]
 
     K :: point32{.X 3 .Y 4}
@@ -399,14 +399,14 @@ nested_struct: =>
         X u32
     }
 
-    [Nested] :: nested_struct{.P3 point32{.X 3 .Y 4} .Point short_struct{.A 6 .B 7} .X 5 .. 0} =[]
+    Nested :: nested_struct{.P3 point32{.X 3 .Y 4} .Point short_struct{.A 6 .B 7} .X 5 .. 0} =[]
     ret
 
 nested_2: =>
     struct {
         A point32 B point32 C point32
     }
-    [N] :: nested_2{.A point32{.X 1 .Y 2} .B point32{.X 3 .Y 4} .. 0} =[]
+    N :: nested_2{.A point32{.X 1 .Y 2} .B point32{.X 3 .Y 4} .. 0} =[]
 
 nested_3: =>
     struct point64 {
@@ -417,10 +417,10 @@ nested_3: =>
         A point64 B point64 C point64
     }
 
-    [N] :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6} .. 0} =[]
-    [N2] :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6}} =[]
-    [N3] :: nested_3{.. 0} =[]
-    [N4] :: nested_3{.A {.X 1 .Y 2} .B {.X 3 .Y 4} .C {.X 5 .Y 6}} =[]
+    N :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6} .. 0} =[]
+    N2 :: nested_3{.A point64{.X 1 .Y 2} .B point64{.X 3 .Y 4} .C point64{.X 5 .Y 6}} =[]
+    N3 :: nested_3{.. 0} =[]
+    N4 :: nested_3{.A {.X 1 .Y 2} .B {.X 3 .Y 4} .C {.X 5 .Y 6}} =[]
 
 zerofill: =>
     struct small {
@@ -429,22 +429,22 @@ zerofill: =>
     struct {
         S small
     }
-    [S] :: zerofill{.. 0} =[]
-    [S2] :: zerofill{.S {.X 1}} =[]
+    S :: zerofill{.. 0} =[]
+    S2 :: zerofill{.S {.X 1}} =[]
 
 big_array: =>
     struct big {
         X i64 Y i64
     }
-    [Arr] :: 2*big{.. 0} =[]
+    Arr :: 2*big{.. 0} =[]
     I :: 1
 
 ret_int: => I i32
     ret 1
 
 array: => I i32
-    [Arr] :: 8*i32{.0 2 .. 0} =[]
-    [Arr2] :: 8*i32{.0 1 .1 2 .. 0} =[]
+    Arr :: 8*i32{.0 2 .. 0} =[]
+    Arr2 :: 8*i32{.0 1 .1 2 .. 0} =[]
     I :: 2
 
     [Arr * I] ! ret 0
@@ -456,13 +456,13 @@ slice: =>
         Size usize,
     }
 
-    [Data] :: u32{1} =[]
+    Data :: u32{1} =[]
     Slice :: slice{.Begin Data .Size 1}
     [Slice.Begin]
     [Slice]
     ret
 
 slice2: =>
-    [Data] :: u32{1} =[]
-    [Slice] :: slice{.Begin Data .Size 1} =[]
+    Data :: u32{1} =[]
+    Slice :: slice{.Begin Data .Size 1} =[]
     ret

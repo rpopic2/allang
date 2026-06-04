@@ -1,6 +1,6 @@
 #compile_all expect.al
 
-[Arr] :: 5*i32{.. 0} =[]
+Arr :: 5*i32{.. 0} =[]
 
 Arr..
 
@@ -24,7 +24,7 @@ dynamic =>
 ret 0
 
 dynamic: =>
-    [Arr] :: 5*i32{.. 0} =[]
+    Arr :: 5*i32{.. 0} =[]
     I :: 1
     J :: 2
 
