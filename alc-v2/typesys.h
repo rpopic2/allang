@@ -221,12 +221,11 @@ ARR_GENERIC(target, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u16, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u8, MAX_BLOCK_DEPTH)
 
-// record of a stack-allocated local, kept for the stack visualizer
 typedef struct {
     str name;
     str type_name;
-    size_t offset; // distance below the frame pointer of the slot's top byte + size
-    size_t size;   // bytes reserved on the stack
+    size_t offset;
+    size_t size;
 } stack_slot_t;
 #define MAX_STACK_SLOTS 64
 
