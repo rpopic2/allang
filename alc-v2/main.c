@@ -2631,6 +2631,10 @@ int main(int argc, const char *argv[]) {
 
     TIMER_START(clock_make_output_name);
     size_t source_name_len = strlen(source_name);
+    if (source_name_len < 3) {
+        fprintf(stderr, "usage: alc [filename]\n");
+        exit(EXIT_FAILURE);
+    }
     char *out_name = malloc(source_name_len + 1);
     if (!out_name)
         malloc_failed();
