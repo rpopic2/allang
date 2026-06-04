@@ -9,7 +9,7 @@
 #include "typesys.h"
 #include "emit_helper.h"
 
-const char *imm_prefix = "#0x";
+const char *imm_prefix = "#";
 
 #define CALLEE_START 19
 
@@ -455,12 +455,14 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
 
 void emit_str(reg_t dst, reg_t src, int offset) {
     load_store_x("str", src, dst);
-    buf_snprintf(fn_buf, ("#0x%x]\n"), offset);
+    buf_puti(fn_buf, offset);
+    buf_puts(fn_buf, STR("]\n"));
 }
 
 void emit_ldr(reg_t dst, reg_t src, int offset) {
     load_store_x("ldr", dst, src);
-    buf_snprintf(fn_buf, ("#0x%x]\n"), offset);
+    buf_puti(fn_buf, offset);
+    buf_puts(fn_buf, STR("]\n"));
 }
 
 void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
@@ -470,12 +472,12 @@ void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
 
 void str_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
     load_store_x("str", src, dst);
-    buf_snprintf(fn_buf, ("x%d, lsl #0x%x]\n"), get_regoff(offset), lsl);
+    buf_snprintf(fn_buf, ("x%d, lsl #0x%d]\n"), get_regoff(offset), lsl);
 }
 
 void ldr_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
     load_store_x("ldr", dst, src);
-    buf_snprintf(fn_buf, ("x%d, lsl #0x%x]\n"), get_regoff(offset), lsl);
+    buf_snprintf(fn_buf, ("x%d, lsl #0x%d]\n"), get_regoff(offset), lsl);
 }
 
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store) {
