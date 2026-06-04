@@ -114,13 +114,13 @@ void struct_diagram(type_t *type) {
     dyn_member_t *members = &type->struct_t.members;
     for (const member_t *mem = members->begin; mem != members->cur; ++mem) {
         long off = (long)mem->offset;
-        long size = (long)dtype_size(&mem->type);
+        long size = (long)dtype_size(&mem->dtype);
         if (off > prev_end && n < MAX_STACK_SLOTS)
             boxes[n++] = (mem_box){.lo = prev_end, .hi = off, .pad = true};
         if (n < MAX_STACK_SLOTS)
             boxes[n++] = (mem_box){
                 .name = mem->name,
-                .type_name = mem->type.base->name,
+                .type_name = mem->dtype.base->name,
                 .lo = off,
                 .hi = off + size,
             };

@@ -411,7 +411,7 @@ void diagnositc_slice(const token_t *token, i64 begin_index, i64 end_index, i32 
         compile_err(token, "end index out of bounds\n");
     }
 
-    printd("slice: begin=%lld end=%lld array=%d\n", begin_index, end_index, array);
+    printd("slice: begin=%lld end=%lld array=%d\n", (long long)begin_index, (long long)end_index, array);
 }
 
 regable read_regable(str s, const token_t *token) {
@@ -849,7 +849,7 @@ void anonymous_bcond(parser_context *context, cond_t cond) {
 }
 
 void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
-    p(slice access)
+    printd("slice access\n");
 
     tok(context);
 
@@ -2399,15 +2399,21 @@ void function(src_t *src) {
     }
     arr_target_init(&context->targets);
 
+    u8 label_indent = 0;
     if (!is_main) {
         tok(context);
         str_printd(context->cur_token.id);
         if (context->cur_token.data == NULL)
             return;
+        label_indent = context->cur_token.indent;
         stmt_label(context);
     }
     if (dead_fn_elim && !context->symbol->is_called) {
         skip_function(src);
+        return;
+    }
+    if (!is_main && context->symbol->is_fn && indent <= label_indent) {
+        compile_err(&context->cur_token, "function definition has no body: "), str_printerr(context->symbol->name);
         return;
     }
     context->indent = context->cur_token.indent;
