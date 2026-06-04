@@ -2631,7 +2631,7 @@ int main(int argc, const char *argv[]) {
 
     TIMER_START(clock_make_output_name);
     size_t source_name_len = strlen(source_name);
-    if (source_name_len < 3) {
+    if (source_name_len < strlen(".al")) {
         fprintf(stderr, "usage: alc [filename]\n");
         exit(EXIT_FAILURE);
     }
