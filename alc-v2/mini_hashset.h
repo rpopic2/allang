@@ -27,15 +27,19 @@ void hash_entry_invalidate(hash_entry *entry) {
 
 typedef hash_entry mini_hashset[array_len];
 
-int hash(str id) {
-    int index = id.data[0] - 'A';
-    return index;
+u64 hash(str id) {
+    u64 hash = 0xcbf29ce484222325;
+    while (id.data != id.end) {
+        hash ^= (u64)*id.data++;
+        hash *= 0x100000001b3;
+    }
+    return hash;
 }
 
 inline static hash_entry *find_entry(mini_hashset self, const str id) {
-    int index = hash(id) % array_len;
-    str_printdnl(id), printd(" -> hash was: %d\n", index);
-    int start = index;
+    u64 index = hash(id) % array_len;
+    str_printdnl(id), printd(" -> hash was: %"PRIu64"\n", index);
+    u64 start = index;
 
     while (hash_entry_valid(&self[index])) {
         if (str_eq(self[index].key, id)) {
