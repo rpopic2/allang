@@ -448,6 +448,12 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         return;
     }
 
+    if (offset.rsize == 1 || offset.rsize == 2) {
+        reg_t wide = offset;
+        wide.rsize = 8;
+        emit_mov_reg(wide, offset);
+        offset = wide;
+    }
     offset.rsize = 8;
     src.rsize = 8;
 
@@ -508,6 +514,12 @@ void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
     }
 
     const size_t elem_size = object.dtype.base->size;
+    if (index.rsize == 1 || index.rsize == 2) {
+        reg_t wide = index;
+        wide.rsize = 8;
+        emit_mov_reg(wide, index);
+        index = wide;
+    }
     index.rsize = 8;
     if (elem_size <= 8 && (elem_size == 1 || power_of_two_exponent(elem_size))) {
         emit_lea_begin(dst, base, STR("+"));
