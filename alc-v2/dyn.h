@@ -1,6 +1,8 @@
 // dynamic arrays
 #pragma once
 
+#include <stdlib.h>
+
 #define DYN_GENERIC(T) \
 typedef struct dyn_##T { \
     T *begin; \

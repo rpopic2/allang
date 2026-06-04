@@ -11,7 +11,7 @@ typedef struct str {
     const char *end;
 } str;
 
-typedef struct {
+typedef struct iter {
     char *cur;
     char *start;
     char *end;
@@ -42,6 +42,15 @@ inline static str str_move(str *s) {
     str ret = *s;
     *s = str_null;
     return ret;
+}
+
+inline static bool str_to_cstr(str s, char *buf, size_t bufsize) {
+    size_t len = str_len(s);
+    if (len >= bufsize)
+        return false;
+    memcpy(buf, s.data, len);
+    buf[len] = '\0';
+    return true;
 }
 
 inline static bool str_ends_with(const str *restrict token, const char *restrict cstr) {
@@ -82,5 +91,4 @@ inline static iter iter_init(char *start, size_t end) {
     return (iter){.start = start, .cur = start, .end = start + end};
 }
 
-#define STR_FROM(s) (str) { .data = (s), .end = (s) + strlen(s) }
 #define STR(s) (str) { .data = (s), .end = (s) + strlen(s) }

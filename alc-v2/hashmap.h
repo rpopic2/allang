@@ -49,7 +49,7 @@ inline static T *hashmap_##T##_overwrite(hashmap_##T self, str id, const T *valu
     return &entry->value; \
 } \
  \
-inline static T *hashmap_##T##_tryadd(hashmap_##T self, str id, const T *value) { \
+inline static T * __attribute__((unused)) hashmap_##T##_tryadd(hashmap_##T self, str id, const T *value) { \
     hashentry_##T *entry = hashmap_##T##_find(self, id); \
     if (hashentry_##T##_valid(entry)) { \
         return NULL; \

@@ -14,8 +14,9 @@ typedef struct {
 } buf;
 
 inline static size_t buf_cap(const buf *buffer) {
-    if (buffer->end - buffer->start < 0)
-        abort();
+    if (buffer->end - buffer->start < 0) {
+        unreachable;
+    }
     return (size_t)(buffer->end - buffer->start);
 }
 
