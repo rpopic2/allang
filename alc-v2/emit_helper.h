@@ -24,8 +24,6 @@ static unsigned string_lit_counts;
 
 static buf *fn_buf;
 
-/* --- redundant branch elimination (peephole) --- */
-
 static struct {
     bool valid;
     size_t start;
@@ -35,10 +33,6 @@ static struct {
     int index;
 } last_branch;
 
-/* Record an unconditional branch just emitted into fn_buf, spanning [start, cur).
- * Backends call branch_begin() before writing the branch and branch_record()
- * after, so a subsequent emit_label() can drop the branch when it falls through
- * to its own target. */
 static size_t branch_begin(void) {
     return buf_len(fn_buf);
 }
@@ -56,9 +50,6 @@ static void branch_forget(void) {
     last_branch.valid = false;
 }
 
-/* If the most recently emitted instruction is an unconditional branch to
- * (fn_name, label, index) and nothing has been emitted after it, drop it so
- * control simply falls through to the label about to be emitted. */
 static void elide_redundant_branch(str fn_name, str label, int index) {
     if (!last_branch.valid)
         return;

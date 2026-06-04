@@ -16,7 +16,7 @@ The emit backend files for your architecture and OS must be passed explicitly:
 
 ## Coding Conventions
 
-- Don't add comments unless strictly necessary.
+- Do NOT add comments. Only add a comment when it is strictly necessary to explain something the code itself cannot convey, and keep it minimal.
 - Make pointers const whenever possible.
 - Always put `return` on its own line; never `if (cond) return x;` on one line.
 
