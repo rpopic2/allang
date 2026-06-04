@@ -489,6 +489,31 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         emit_ldr(dst, idx, 0);
 }
 
+void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
+    reg_t base = {.reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *)};
+    if (object.reg_type == STACK) {
+        const reg_t frame = {.reg_type = FRAME, .rsize = sizeof (void *)};
+        emit_sub(base, frame, object.offset);
+    } else {
+        emit_mov_reg(base, object);
+    }
+
+    const size_t elem_size = object.dtype.base->size;
+    index.rsize = 8;
+    if (elem_size <= 8 && (elem_size == 1 || power_of_two_exponent(elem_size))) {
+        emit_lea_begin(dst, base, STR("+"));
+        buf_putreg(fn_buf, index);
+        buf_snprintf(fn_buf, "*%zu]\n", elem_size);
+    } else {
+        reg_t idx = {.reg_type = SCRATCH, .offset = 1, .rsize = 8};
+        emit_mov_reg(idx, index);
+        buf_snprintf(fn_buf, "\timul ");
+        buf_putreg(fn_buf, idx);
+        buf_snprintf(fn_buf, ", %zu\n", elem_size);
+        emit_add_reg(dst, base, idx);
+    }
+}
+
 /* --- control flow --- */
 
 void emit_branch(str fn_name, str label, int index) {

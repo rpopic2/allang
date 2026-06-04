@@ -29,6 +29,8 @@ target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
+bool stmt_ret_pre(parser_context *context);
+void check_slice_bounds(parser_context *context, regable start, regable end, i32 len);
 int expr_line(parser_context *context);
 void compile(src_t src, FILE *object_file);
 src_t read_source(const char *source_name);
@@ -500,6 +502,45 @@ regable read_regable(str s, const token_t *token) {
     return result;
 }
 
+// Parses one side of a dynamic range (the text before or after "..").
+// A part may be a register (starts with an uppercase letter or '^') or a
+// constant number. An empty part yields a NONE regable so the caller can
+// substitute a default (0 for the start, the array length for the end).
+regable parse_range_part(str part, const token_t *token) {
+    regable result = (regable){.tag = NONE, .value = 0};
+    if (str_empty(&part)) {
+        return result;
+    }
+    if (isupper(part.data[0]) || part.data[0] == '^') {
+        int scope_up = extrat_scope_up(&part);
+        reg_t *reg = NULL;
+        if (!find_id(&local_ids, part, token, &reg, scope_up)
+            || reg->reg_type == RD_NONE) {
+            compile_err(token, "unknown id "), str_printerr(part);
+            return result;
+        }
+        result.reg = *reg;
+        result.tag = REG;
+        return result;
+    }
+    char *end_ptr = NULL;
+    long long value = strtoll(part.data, &end_ptr, 0);
+    if (end_ptr == part.data) {
+        compile_err(token, "expected constant number or register for range bound\n");
+        return result;
+    }
+    if (value < 0) {
+        compile_err(token, "expected range bound greater or equal to zero\n");
+        return result;
+    }
+    if (value > INT_MAX) {
+        compile_err(token, "range bound was too big: %lld", value);
+    }
+    result.tag = VALUE;
+    result.value = value;
+    return result;
+}
+
 void check_unassigned(regable lhs, const parser_context *context) {
     target *top = arr_target_top(&context->targets);
     if (!top)
@@ -548,22 +589,57 @@ void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
     }
 }
 
-void check_bounds(parser_context *context, reg_t index, i32 len) {
+// Branches to the function's `ret` label when `a > b`. Comparisons between two
+// constants are resolved at compile time by the caller, so nothing is emitted
+// for that case here.
+static void emit_branch_ret_if_gt(parser_context *context, regable a, regable b) {
+    cond_t cond;
+    if (a.tag == VALUE && b.tag == VALUE) {
+        return;
+    } else if (a.tag == REG && b.tag == VALUE) {
+        emit_cmp(a.reg, b.value + 1);
+        cond = COND_GE;
+    } else if (a.tag == VALUE && b.tag == REG) {
+        emit_cmp(b.reg, a.value);
+        cond = COND_LT;
+    } else {
+        emit_cmp_reg(b.reg, a.reg);
+        cond = COND_LT;
+    }
+    emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
+}
+
+// Consumes the `! ret <val>` bounds-check fallback and sets up the return
+// epilogue value. On success the caller emits the comparison branches that
+// jump to the function's `ret` label when a bound is violated.
+static bool check_prelude(parser_context *context) {
     const token_t *cur_token = &context->cur_token;
 
     tok(context);
-    bool ok = expect(context, STR("!"));
-    if (!ok) {
+    if (!expect(context, STR("!"))) {
         compile_err(cur_token, "expected to check bounds with operator !\n");
-        return;
+        return false;
     }
 
     tok(context);
-    if (stmt_ret_cond(context, COND_GE, index, len)) {
-
-    } else {
+    if (!str_eq_lit(context->cur_token.id, "ret")) {
         compile_err(cur_token, "expected to handle check operator\n");
+        return false;
     }
+    if (!stmt_ret_pre(context)) {
+        return false;
+    }
+    context->has_branched_ret = true;
+    return true;
+}
+
+void check_bounds(parser_context *context, reg_t index, i32 len) {
+    if (!check_prelude(context)) {
+        return;
+    }
+    const regable idx = {.tag = REG, .reg = index};
+    const regable hi = {.tag = VALUE, .value = len - 1};
+    emit_branch_ret_if_gt(context, idx, hi);
 }
 
 bool diagnostic_dyn_elem_access(const parser_context *context, regable offset_regable) {
@@ -841,6 +917,69 @@ void anonymous_bcond(parser_context *context, cond_t cond) {
     emit_label(context->name, name, index);
 }
 
+// Materialises a dynamic slice `Array * start..end` as a fat pointer
+// (element address followed by the slice length) in context->reg.
+// Constant bounds are validated at compile time, mirroring the static slice
+// path in read_regable; remaining bounds (start <= end and end <= len) are
+// checked at runtime through the `!` operator in check_slice_bounds.
+void emit_dyn_slice(parser_context *context, reg_t array, declarator_t decl,
+                    regable start, regable end) {
+    const token_t *token = &context->cur_token;
+    if (array.reg_type != STACK) {
+        compile_err(token, "slicing a non-stack object is not supported yet\n");
+        return;
+    }
+    const size_t stride = array.dtype.base->size;
+    const i32 array_len = decl.amount;
+
+    if (start.tag == NONE) {
+        start = (regable){.tag = VALUE, .value = 0};
+    }
+    if (end.tag == NONE) {
+        end = (regable){.tag = VALUE, .value = array_len};
+    }
+
+    if (end.tag == VALUE && end.value > array_len) {
+        compile_err(token, "end index out of bounds\n");
+    }
+    if (start.tag == VALUE && end.tag == VALUE && start.value > end.value) {
+        compile_err(token, "expected begin to be less than or equal to end index\n");
+    }
+
+    reg_t dst = context->reg;
+    dst.rsize = sizeof (void *);
+    if (start.tag == VALUE) {
+        emit_sub(dst, FP, array.offset - (i32)(start.value * (i64)stride));
+    } else {
+        emit_elem_addr(dst, array, start.reg);
+    }
+
+    reg_t len_reg = dst;
+    len_reg.offset += 1;
+    reg_t start_reg = start.reg;
+    reg_t end_reg = end.reg;
+    start_reg.rsize = sizeof (void *);
+    end_reg.rsize = sizeof (void *);
+    if (start.tag == VALUE && end.tag == VALUE) {
+        emit_mov(len_reg, end.value - start.value);
+    } else if (start.tag == VALUE && end.tag == REG) {
+        emit_sub(len_reg, end_reg, start.value);
+    } else if (start.tag == REG && end.tag == VALUE) {
+        emit_mov(len_reg, end.value);
+        emit_sub_reg(len_reg, len_reg, start_reg);
+    } else {
+        emit_sub_reg(len_reg, end_reg, start_reg);
+    }
+
+    context->reg.dtype = array.dtype;
+    i32 known_len = (start.tag == VALUE && end.tag == VALUE)
+                  ? (i32)(end.value - start.value) : 0;
+    dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = known_len});
+    context->reg.rsize = sizeof (void *);
+
+    check_slice_bounds(context, start, end, array_len);
+}
+
 void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t lhs_token = context->cur_token;
     tok(context);
@@ -937,11 +1076,27 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             const dtype_t *dtype = &reg->dtype;
             declarator_t decl = dtype_top(dtype);
             if (decl.tag == DK_ARRAY || decl.tag == DK_SLICE) {
-                reg_t dst = context->reg;
-                check_bounds(context, rhs.reg, decl.amount);
-                diagnostic_dyn_elem_access(context, rhs);
-                dst.rsize = sizeof (void *); // TODO move this out when fixing typecheck
-                emit_elem_addr(dst, lhs->reg, rhs.reg);
+                str range = rhs_token.id;
+                const char *dotdot = NULL;
+                for (const char *p = range.data; p + 1 < range.end; ++p) {
+                    if (p[0] == '.' && p[1] == '.') {
+                        dotdot = p;
+                        break;
+                    }
+                }
+                if (dotdot) {
+                    str start_str = {range.data, dotdot};
+                    str end_str = {dotdot + 2, range.end};
+                    regable start = parse_range_part(start_str, &rhs_token);
+                    regable end = parse_range_part(end_str, &rhs_token);
+                    emit_dyn_slice(context, lhs->reg, decl, start, end);
+                } else {
+                    reg_t dst = context->reg;
+                    check_bounds(context, rhs.reg, decl.amount);
+                    diagnostic_dyn_elem_access(context, rhs);
+                    dst.rsize = sizeof (void *); // TODO move this out when fixing typecheck
+                    emit_elem_addr(dst, lhs->reg, rhs.reg);
+                }
             }
         } else {
             compile_err(&op_token, "not implemented for lhs == value");
@@ -1853,6 +2008,18 @@ bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_
     context->has_branched_ret = true;
     emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
     return true;
+}
+
+// Runtime bounds check for dynamic slices: verifies `end <= len` and
+// `start <= end` for the bounds that are only known at runtime. Shares the
+// `! ret <val>` fallback machinery with check_bounds.
+void check_slice_bounds(parser_context *context, regable start, regable end, i32 len) {
+    if (!check_prelude(context)) {
+        return;
+    }
+    const regable len_bound = {.tag = VALUE, .value = len};
+    emit_branch_ret_if_gt(context, end, len_bound);
+    emit_branch_ret_if_gt(context, start, end);
 }
 
 void consume_until(parser_context *context, str s) {

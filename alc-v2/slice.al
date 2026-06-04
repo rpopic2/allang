@@ -16,7 +16,17 @@ Slice :: Arr..
 
 I :: 1
 
-Arr * I
+J :: 3
+
+Arr * I ! ret 1
+
+Arr * I.. ! ret 1
+
+Arr * I..3 ! ret 1
+
+Arr * I..J ! ret 1
+
+Arr * 1..I ! ret 1
 
 ret 0
 

@@ -65,17 +65,17 @@ Arr..3 // from begin, to index 3 exclusive
 Arr.1.. // from index 1 inclusive, to the end
 Arr.1..3 // from index 1 inclusive to index 3 exclusive
 
-// these are dynamic range syntax. dynamic ranges are bounds checked.
+// these are dynamic range syntax. dynamic ranges are bounds checked at
+// runtime through the `!` operator, with a `ret` fallback that is taken
+// when the check fails.
 ```
-Arr..I ? eret // to I exclusive, returns error if out of bounds
-Arr..I+1 ? eret // inclusive
-Arr*I.. ? eret // from index I
-Arr*I..J ? eret // I and J are checked for bounds. also checks if I <= J
+Arr * I.. ! ret 1 // from index I, returns 1 if out of bounds
+Arr * I..J ! ret 1 // I and J are checked for bounds. also checks if I <= J
 ```
 
 // you can mix static and dynamic range syntaxes.
-Arr.2..I ? eret // also checks if I is greater or equal to 2
-Arr * I..3 ? eret // also checks if I is less than 3
+Arr * 1..I ! ret 1 // also checks if I is greater or equal to 1
+Arr * I..3 ! ret 1 // also checks if I is less than 3
 
 // when slicing slices, syntax is the same, but may be compiled differently.
 // `Slice..` is not allowed. just use `Slice` to copy.
