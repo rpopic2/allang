@@ -86,7 +86,10 @@ static void buf_comma(buf *buffer) {
 }
 
 static void buf_puti(buf *buffer, i64 i0) {
-    buf_snprintf(buffer, "%s0x%"PRIx64, imm_prefix, i0);
+    if (i0 < 0)
+        buf_snprintf(buffer, "%s-0x%"PRIx64, imm_prefix, -i0);
+    else
+        buf_snprintf(buffer, "%s0x%"PRIx64, imm_prefix, i0);
 }
 
 void emit_r(buf *buffer, const char *op, reg_t reg) {

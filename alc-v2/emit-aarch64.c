@@ -229,7 +229,9 @@ static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
     emit_rrx(STR("stp"), src1, src2);
     buf_puts(fn_buf, STR(", ["));
     buf_putreg(fn_buf, base);
-    buf_snprintf(fn_buf, ", #%"PRId64"]\n", offset);
+    buf_comma(fn_buf);
+    buf_puti(fn_buf, offset);
+    buf_snprintf(fn_buf, "]\n");
 }
 
 const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8};
@@ -477,12 +479,14 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
 
 void emit_str(reg_t dst, reg_t src, int offset) {
     load_store_x("str", src, dst);
-    buf_snprintf(fn_buf, ("#%d]\n"), offset);
+    buf_puti(fn_buf, offset);
+    buf_snprintf(fn_buf, "]\n");
 }
 
 void emit_ldr(reg_t dst, reg_t src, int offset) {
     load_store_x("ldr", dst, src);
-    buf_snprintf(fn_buf, ("#%d]\n"), offset);
+    buf_puti(fn_buf, offset);
+    buf_snprintf(fn_buf, "]\n");
 }
 
 void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
@@ -633,7 +637,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
     int cur_stackoff = ALIGN_TO(parser_context->stack_size, 16);
     const int stack_objs_size = cur_stackoff;
     if (stack_objs_size > 0) {
-        buf_snprintf(&context->prologue_buf, INSTR("sub sp, sp, #%d"), stack_size);
+        buf_snprintf(&context->prologue_buf, INSTR("sub sp, sp, #0x%x"), stack_size);
     }
 
     int remaining = regs_to_save;
@@ -647,10 +651,10 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         if (needs_fp) {
             reg0 = 29, reg1 = 30;
         }
-        const char *stp_format = INSTR("stp x%d, x%d, [sp, #%d]");
-        const char *ldp_format = INSTR("ldp x%d, x%d, [sp, #%d]");
+        const char *stp_format = INSTR("stp x%d, x%d, [sp, #0x%x]");
+        const char *ldp_format = INSTR("ldp x%d, x%d, [sp, #0x%x]");
         if (cur_stackoff == 0) {
-            stp_format = INSTR("stp x%d, x%d, [sp, #-%d]!");
+            stp_format = INSTR("stp x%d, x%d, [sp, #-0x%x]!");
             defer_ldp = true;
             off = stack_size;
         }
@@ -665,21 +669,21 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
     while (remaining > 1) {
         int reg0 = CALLEE_START + remaining - 1;
         int reg1 = reg0 - 1;
-        buf_snprintf(&context->prologue_buf, INSTR("stp x%d, x%d, [sp, #%d]"),
+        buf_snprintf(&context->prologue_buf, INSTR("stp x%d, x%d, [sp, #0x%x]"),
                 reg0, reg1, cur_stackoff);
-        buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [sp, #%d]"),
+        buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [sp, #0x%x]"),
                 reg0, reg1, cur_stackoff);
         remaining -= 2;
         cur_stackoff += 16;
     }
     if (remaining == 1) {
         remaining -= 1;
-        const char *stp_format = INSTR("str x%d, [sp, #%d]");
-        const char *ldp_format = INSTR("ldr x%d, [sp, #%d]");
+        const char *stp_format = INSTR("str x%d, [sp, #0x%x]");
+        const char *ldp_format = INSTR("ldr x%d, [sp, #0x%x]");
         int off = cur_stackoff;
         if (cur_stackoff == 0) {
-            stp_format = INSTR("str x%d, [sp, #-%d]!");
-            ldp_format = INSTR("ldr x%d, [sp], #%d");
+            stp_format = INSTR("str x%d, [sp, #-0x%x]!");
+            ldp_format = INSTR("ldr x%d, [sp], #0x%x");
             off = stack_size;
         }
         int reg0 = CALLEE_START + remaining;
@@ -694,16 +698,16 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         if (stack_objs_size == 0) {
             buf_puts(&context->prologue_buf, STR_FROM_INSTR("mov x29, sp"));
         } else {
-            buf_snprintf(&context->prologue_buf, INSTR("add x29, sp, #%d"), stack_objs_size);
+            buf_snprintf(&context->prologue_buf, INSTR("add x29, sp, #0x%x"), stack_objs_size);
         }
     }
 
     if (defer_ldp) {
-        const char *ldp_format = INSTR("ldp x%d, x%d, [sp], #%d");
+        const char *ldp_format = INSTR("ldp x%d, x%d, [sp], #0x%x");
         buf_snprintf(&context->fn_buf, ldp_format, deferred0, deferred1, stack_size);
     }
     if (stack_objs_size > 0) {
-        buf_snprintf(&context->fn_buf, INSTR("add sp, sp, #%d"), stack_size);
+        buf_snprintf(&context->fn_buf, INSTR("add sp, sp, #0x%x"), stack_size);
     }
 }
 
