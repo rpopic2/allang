@@ -16,8 +16,7 @@ The emit backend files for your architecture and OS must be passed explicitly:
 
 ## Coding Conventions
 
-- Don't add comments unless strictly necessary.
-- Make pointers const whenever possible.
+- Do NOT add comments. Only add a comment when it is strictly necessary to explain something the code itself cannot convey, and keep it minimal.- Make pointers const whenever possible.
 - Always put `return` on its own line; never `if (cond) return x;` on one line.
 
 ## Architecture
@@ -45,4 +44,3 @@ allang uses indentation-sensitive scoping. Key syntax elements:
 - `@` — macros, `#` — directives
 - `=` — assignment operator. note that this operator assigns from left to right.
 See `specs-v4/` for the full language spec.
-

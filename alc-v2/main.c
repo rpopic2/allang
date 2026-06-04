@@ -398,6 +398,20 @@ int find_member_index(const dyn_member_t *members, str name) {
     return -1;
 }
 
+void diagnositc_slice(const token_t *token, i64 begin_index, i64 end_index, i32 array) {
+    if (end_index > INT_MAX) {
+        compile_err(token, "index was too big: %"PRId64, end_index);
+    }
+    if (begin_index > end_index) {
+        compile_err(token, "expected begin to be less than or equal to end index\n");
+    }
+    if (end_index > array) {
+        compile_err(token, "end index out of bounds\n");
+    }
+
+    printd("slice: begin=%lld end=%lld array=%d\n", begin_index, end_index, array);
+}
+
 regable read_regable(str s, const token_t *token) {
     regable result = (regable){ .value = 0, .tag = NONE };
     if (isupper(s.data[0]) || s.data[0] == '^') {
@@ -427,19 +441,10 @@ regable read_regable(str s, const token_t *token) {
                 s.data += 2;
                 char *end_ptr = NULL;
                 long long end_index = strtoll(s.data, &end_ptr, 0);
-                if (end_index > INT_MAX) {
-                    compile_err(token, "index was too big: %lld", end_index);
-                }
                 if (end_index == 0) {
                     end_index = array;
                 }
-                if (begin_index > end_index) {
-                    compile_err(token, "expected begin to be less than or equal to end index\n");
-                }
-                if (end_index > array) {
-                    compile_err(token, "end index out of bounds\n");
-                }
-
+                diagnositc_slice(token, begin_index, end_index, array);
                 dtype_push(&result.reg.dtype,
                            (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
                 result.reg.rsize = sizeof(void *);
@@ -565,14 +570,14 @@ void check_bounds(parser_context *context, reg_t index, i32 len) {
     }
 }
 
-bool diagnostic_dyn_elem_access(const parser_context *context, regable offset_regable) {
+bool diagnostic_dyn_elem_access(const parser_context *context, const regable *offset_regable) {
     const token_t *cur_token = &context->cur_token;
 
-    if (offset_regable.tag == NONE) {
+    if (offset_regable->tag == NONE) {
         return false;
-    } else if (offset_regable.tag == VALUE) {
+    } else if (offset_regable->tag == VALUE) {
         compile_warning(cur_token, "use static syntax [Arr.N] instead of [Arr * N]\n");
-    } else if (offset_regable.tag == REG && offset_regable.reg.reg_type == NREG) {
+    } else if (offset_regable->tag == REG && offset_regable->reg.reg_type == NREG) {
 
     } else {
         compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
@@ -594,7 +599,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         if (offset_str.end[-1] == ']')
             offset_str.end -= 1;
         offset_regable = read_regable(offset_str, cur_token);
-        diagnostic_dyn_elem_access(context, offset_regable);
+        diagnostic_dyn_elem_access(context, &offset_regable);
     } else if (s.end[-1] != ']') {
         compile_err(cur_token, "closing ']' expected\n");
     }
@@ -840,6 +845,33 @@ void anonymous_bcond(parser_context *context, cond_t cond) {
     emit_label(context->name, name, index);
 }
 
+void operator_mul(parser_context *context, const regable *lhs, const regable *rhs) {
+    if (lhs->tag != REG) {
+        compile_err(&context->cur_token, "not implemented for lhs == value\n");
+        return;
+    }
+
+    const reg_t *reg = &lhs->reg;
+    const dtype_t *dtype = &reg->dtype;
+    declarator_t decl = dtype_top(dtype);
+    if (decl.tag == DK_ARRAY || decl.tag == DK_SLICE) {
+        reg_t dst = context->reg;
+        check_bounds(context, rhs->reg, decl.amount);
+        diagnostic_dyn_elem_access(context, rhs);
+        dst.rsize = sizeof(void *); // TODO move this out when fixing typecheck
+        emit_elem_addr(dst, lhs->reg, rhs->reg);
+        reg_t tmp = {.offset = 0, .reg_type = SCRATCH, .rsize = sizeof (void *)};
+        reg_t rreg = rhs->reg;
+        rreg.rsize = sizeof (void *);
+        emit_mov(tmp, decl.amount);
+        reg_t dst2 = dst;
+        dst2.offset += 1;
+        emit_sub_reg(dst2, tmp, rreg);
+    } else {
+        compile_err(&context->cur_token, "not implemented for lhs is not arr or slice\n");
+    }
+}
+
 void binary_op(const regable *restrict lhs, parser_context *restrict context) {
     token_t lhs_token = context->cur_token;
     tok(context);
@@ -931,20 +963,7 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
             emit_cond_set(context->reg, cond);
         }
     } else if (op_token.data[0] == '*') {
-        if (lhs->tag == REG) {
-            const reg_t *reg = &lhs->reg;
-            const dtype_t *dtype = &reg->dtype;
-            declarator_t decl = dtype_top(dtype);
-            if (decl.tag == DK_ARRAY || decl.tag == DK_SLICE) {
-                reg_t dst = context->reg;
-                check_bounds(context, rhs.reg, decl.amount);
-                diagnostic_dyn_elem_access(context, rhs);
-                dst.rsize = sizeof (void *); // TODO move this out when fixing typecheck
-                emit_elem_addr(dst, lhs->reg, rhs.reg);
-            }
-        } else {
-            compile_err(&op_token, "not implemented for lhs == value");
-        }
+        operator_mul(context, lhs, &rhs);
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
     }
