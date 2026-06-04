@@ -549,12 +549,11 @@ void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
 }
 
 void check_bounds(parser_context *context, reg_t index, i32 len) {
-    const token_t *cur_token = &context->cur_token;
+    const token_t cur_token = context->cur_token;
 
     tok(context);
-    bool ok = expect(context, STR("!"));
-    if (!ok) {
-        compile_err(cur_token, "expected to check bounds with operator !\n");
+    if (!str_eq(context->cur_token.id, STR("!"))) {
+        compile_err(&cur_token, "expected to check bounds with operator !\n");
         return;
     }
 
@@ -562,7 +561,7 @@ void check_bounds(parser_context *context, reg_t index, i32 len) {
     if (stmt_ret_cond(context, COND_GE, index, len)) {
 
     } else {
-        compile_err(cur_token, "expected to handle check operator\n");
+        compile_err(&cur_token, "expected to handle check operator\n");
     }
 }
 

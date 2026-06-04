@@ -14,9 +14,16 @@ Arr.1..1
 
 Slice :: Arr..
 
-I :: 1
+// dynamic
 
-Arr * I
+dynamic =>
 
 ret 0
+
+dynamic: =>
+    [Arr] :: 5*i32{.. 0} =[]
+    I :: 1
+
+    Arr * I.. ! ret
+
 
