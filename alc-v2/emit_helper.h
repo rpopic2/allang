@@ -21,6 +21,7 @@ static buf text_buf;
 static buf cstr_buf;
 static char *cstr_begin;
 static unsigned string_lit_counts;
+extern const char *imm_prefix;
 
 static buf *fn_buf;
 
@@ -85,7 +86,7 @@ static void buf_comma(buf *buffer) {
 }
 
 static void buf_puti(buf *buffer, i64 i0) {
-    buf_snprintf(buffer, "0x%"PRIx64, i0);
+    buf_snprintf(buffer, "%s0x%"PRIx64, imm_prefix, i0);
 }
 
 void emit_r(buf *buffer, const char *op, reg_t reg) {

@@ -21,6 +21,8 @@ extern const char *local_string_prefix;
 extern const char *text_section_header;
 extern const char *string_section_header;
 
+const char *imm_prefix = "";
+
 const size_t default_register_size = 8;
 
 bool emit_need_escaping(void) {

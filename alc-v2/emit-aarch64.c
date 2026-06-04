@@ -18,6 +18,8 @@ extern const char *fn_annotation_fmt;
 extern const char *local_string_prefix;
 extern type_t *type_comptime_int;
 
+const char *imm_prefix = "#";
+
 const char *const cond_str[] = {
     "eq", "ne", "ge", "lt",
 };
