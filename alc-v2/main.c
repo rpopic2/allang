@@ -188,13 +188,23 @@ retry:;
     if (end_of_line) {
         unsigned char new_indent = 0;
         context->end_of_line = true;
-        while (src->cur[0] == '\n') {
-            ++lineno;
-            src->cur++;
-        }
-        while (src->cur[0] == ' ') {
-            src->cur++;
-            ++new_indent;
+        while (true) {
+            new_indent = 0;
+            while (src->cur[0] == '\n') {
+                ++lineno;
+                src->cur++;
+            }
+            while (src->cur[0] == ' ') {
+                src->cur++;
+                ++new_indent;
+            }
+            if (src->cur < src->end && src->cur[0] == '/' && src->cur[1] == '/') {
+                while (src->cur < src->end && src->cur[0] != '\n') {
+                    src->cur++;
+                }
+                continue;
+            }
+            break;
         }
         if (indent % 4 != 0) {
             compile_err(cur_token, "an indentation should be 4 spaces\n");
