@@ -2655,6 +2655,7 @@ int main(int argc, const char *argv[]) {
 
     src_t src = read_source(source_name);
     import_all_from(src);
+    emit_text(object_file);
     compile(src, object_file);
 
     emit_cstr(object_file);
