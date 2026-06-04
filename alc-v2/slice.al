@@ -28,9 +28,9 @@ dynamic: =>
     I :: 1
     J :: 2
 
-    Arr * I.. ! ret
+    S1 :: Arr * I.. ! ret
 
-    Arr * ..I ! ret
+    S2 :: Arr * ..I ! ret
 
     Arr * I..J ! ret
 

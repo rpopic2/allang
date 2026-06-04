@@ -410,8 +410,6 @@ void diagnositc_slice(const token_t *token, i64 begin_index, i64 end_index, i32 
     if (end_index > array) {
         compile_err(token, "end index out of bounds\n");
     }
-
-    printd("slice: begin=%lld end=%lld array=%d\n", (long long)begin_index, (long long)end_index, array);
 }
 
 regable read_regable(str s, const token_t *token) {
@@ -751,6 +749,22 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     }
 }
 
+bool resolve_comptime_default(reg_t *const r) {
+    if (r->dtype.base != type_comptime_int)
+        return false;
+    r->dtype.base = type_i32;
+    r->rsize = (reg_size)type_i32->size;
+    return true;
+}
+
+bool resolve_comptime_to(reg_t *const src, const reg_t *const target) {
+    if (src->dtype.base != type_comptime_int || target->dtype.base->tag != TK_FUND)
+        return false;
+    src->dtype.base = target->dtype.base;
+    src->rsize = target->rsize;
+    return true;
+}
+
 bool binary_op_store(const regable *restrict lhs, parser_context *restrict context) {
     const token_t *token = &context->cur_token;
     if (!streq(token->end + 1, "=["))
@@ -883,6 +897,7 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     }
     diagnostic_dyn_elem_access(context, begin);
 
+    reg_t dst = context->reg;
     if (begin->tag != NONE && end->tag != NONE) {
         emit_cmp_reg(begin->reg, end->reg);
         emit_branch_cond(COND_HI, context->symbol->name, STR("ret"), 0);
@@ -895,7 +910,6 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
         unreachable;
     }
 
-    reg_t dst = context->reg;
     dst.rsize = sizeof (void *); // TODO move this out when fixing typecheck
 
     reg_t dst2 = dst;
@@ -1204,7 +1218,7 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
 
     target_reg->rsize = src->rsize;
 
-    if (src->dtype.base == type_comptime_int || src->dtype.base == NULL) {
+    if (!resolve_comptime_default(src) && src->dtype.base == NULL) {
         src->dtype.base = type_i32;
         src->rsize = (reg_size)type_i32->size;
     }
@@ -1802,10 +1816,8 @@ bool decl_vars(parser_context *context) {
                 }
             }
         }
-        const type_t *base_type = context->reg.dtype.base;
-        if (base_type == type_comptime_int) {
-            context->reg.dtype.base = type_i32;
-        } else if (base_type == NULL) {
+        if (!resolve_comptime_default(&context->reg)
+                && context->reg.dtype.base == NULL) {
             context->reg.dtype.base = error_type;
         }
         reg_t arg = {
@@ -1888,11 +1900,7 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
                 break;
             context->reg.rsize = get_rsize(context->reg);
             if (rets_it < rets->cur) {
-                if (context->reg.dtype.base == type_comptime_int
-                        && rets_it->dtype.base->tag == TK_FUND) {
-                    context->reg.dtype.base = rets_it->dtype.base;
-                    context->reg.rsize = rets_it->rsize;
-                }
+                resolve_comptime_to(&context->reg, rets_it);
                 reg_typecheck(&context->cur_token, *rets_it, context->reg);
             }
             rets_it += 1;
@@ -2199,18 +2207,13 @@ bool stmt_reg_assign(parser_context *context) {
         if (src_reg.dtype.base == NULL) {
             compile_err(token, "assignment has no value to assign; expected the form '<value> ='\n");
             return true;
-        } else if (src_reg.dtype.base == type_comptime_int) {
-            src_reg.dtype.base = type_i32;
-            src_reg.rsize = (reg_size)type_i32->size;
+        } else {
+            resolve_comptime_default(&src_reg);
         }
         target_reg->rsize = src_reg.rsize;
         target_reg->dtype = src_reg.dtype;
     } else {
-        if (src_reg.dtype.base == type_comptime_int
-                && target_reg->dtype.base->tag == TK_FUND) {
-            src_reg.dtype.base = target_reg->dtype.base;
-            src_reg.rsize = target_reg->rsize;
-        }
+        resolve_comptime_to(&src_reg, target_reg);
     }
     reg_typecheck(token, *target_reg, src_reg);
     emit_mov_reg(*target_reg, src_reg);
@@ -2637,6 +2640,10 @@ int main(int argc, const char *argv[]) {
 
     TIMER_START(clock_make_output_name);
     size_t source_name_len = strlen(source_name);
+    if (source_name_len < strlen(".al")) {
+        fprintf(stderr, "usage: alc [filename]\n");
+        exit(EXIT_FAILURE);
+    }
     char *out_name = malloc(source_name_len + 1);
     if (!out_name)
         malloc_failed();
@@ -2661,6 +2668,7 @@ int main(int argc, const char *argv[]) {
 
     src_t src = read_source(source_name);
     import_all_from(src);
+    emit_text(object_file);
     compile(src, object_file);
 
     emit_cstr(object_file);
