@@ -419,6 +419,23 @@ void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written,
     }
 }
 
+void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
+    size_t pos = 0;
+    while (nbytes > 0) {
+        reg_size chunk = nbytes >= 8 ? 8 : nbytes >= 4 ? 4 : nbytes >= 2 ? 2 : 1;
+        reg_t piece = src;
+        piece.rsize = chunk;
+        emit_str(base, piece, (int)(offset + (i64)pos));
+        nbytes -= chunk;
+        pos += chunk;
+        if (nbytes > 0) {
+            reg_t full = src;
+            full.rsize = 8;
+            emit_ri(STR("shr"), full, (i64)chunk * 8);
+        }
+    }
+}
+
 void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {
     (void)dst; (void)type; (void)len; (void)args;
 }

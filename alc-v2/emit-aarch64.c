@@ -85,7 +85,7 @@ void buf_putreg(buf *buffer, reg_t reg) {
 // Advances *i past any members it consumes; caller's loop will re-increment.
 static void pack_small_values(const dyn_member_t *members, const dyn_agg_member *args,
                                ptrdiff_t *i, ptrdiff_t member_count,
-                               size_t first_size, i64 *value) {
+                               size_t first_size, i64 *value, bool is_arr) {
     size_t packed = first_size;
     while (packed < 2) {
         if (++(*i) >= member_count)
@@ -95,8 +95,7 @@ static void pack_small_values(const dyn_member_t *members, const dyn_agg_member 
             --(*i);
             break;
         }
-        member_t *next = &members->begin[*i];
-        size_t next_size = dtype_size(&next->dtype);
+        size_t next_size = is_arr ? first_size : dtype_size(&members->begin[*i].dtype);
         if (packed + next_size > 2) {
             --(*i);
             break;
@@ -109,12 +108,12 @@ static void pack_small_values(const dyn_member_t *members, const dyn_agg_member 
 static void emit_member_value(reg_t dst, const dyn_member_t *members, const dyn_agg_member *args,
                                ptrdiff_t *i, ptrdiff_t member_count,
                                size_t memb_size, size_t offset_bits,
-                               bool *dst_initialized) {
+                               bool *dst_initialized, bool is_arr) {
     i64 value = args->begin[*i].value;
     if (offset_bits >= 32 && dst.rsize < 8)
         dst.rsize = 8;
     if (offset_bits % 16 == 0) {
-        pack_small_values(members, args, i, member_count, memb_size, &value);
+        pack_small_values(members, args, i, member_count, memb_size, &value, is_arr);
     }
     if (value == 0)
         return;
@@ -202,7 +201,7 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
 
         agg_member *r = &args->begin[i];
         if (r->tag == VALUE) {
-            emit_member_value(dst, members, args, &i, member_count, memb_size, offset_bits, &dst_initialized);
+            emit_member_value(dst, members, args, &i, member_count, memb_size, offset_bits, &dst_initialized, is_arr);
         } else if (r->tag == REG) {
             emit_member_reg(dst, r->reg, memb_size, offset_bits, dst_initialized);
             dst_initialized = true;
@@ -284,6 +283,23 @@ void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written,
         lo.reg_type = RD_NONE;
     }
     emit_str(base, lo, (int)offset);
+}
+
+void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
+    size_t pos = 0;
+    while (nbytes > 0) {
+        reg_size chunk = nbytes >= 8 ? 8 : nbytes >= 4 ? 4 : nbytes >= 2 ? 2 : 1;
+        reg_t piece = src;
+        piece.rsize = chunk;
+        emit_str(base, piece, (int)(offset + (i64)pos));
+        nbytes -= chunk;
+        pos += chunk;
+        if (nbytes > 0) {
+            reg_t full = src;
+            full.rsize = 8;
+            emit_rri(STR("lsr"), full, full, (i64)chunk * 8);
+        }
+    }
 }
 
 
@@ -573,12 +589,25 @@ void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
     reg_t base = {.reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *)};
     emit_sub(base, FP, object.offset);
 
-    emit_rrrx(STR("add"), dst, base, index);
-    buf_comma(fn_buf);
-    const type_t *type = index.dtype.base;
-    put_xt(type);
-    buf_puti(fn_buf, __builtin_ctz((unsigned)type->size));
-    buf_putc(fn_buf, '\n');
+    const size_t elem_size = object.dtype.base->size;
+    const i64 shift = __builtin_ctz((unsigned)elem_size);
+    const type_t *itype = index.dtype.base;
+
+    if (itype->size >= 8) {
+        index.rsize = 8;
+        emit_rrrx(STR("add"), dst, base, index);
+        buf_comma(fn_buf);
+        buf_puts(fn_buf, STR("lsl "));
+        buf_puti(fn_buf, shift);
+        buf_putc(fn_buf, '\n');
+    } else {
+        index.rsize = 4;
+        emit_rrrx(STR("add"), dst, base, index);
+        buf_comma(fn_buf);
+        put_xt(itype);
+        buf_puti(fn_buf, shift);
+        buf_putc(fn_buf, '\n');
+    }
 }
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
