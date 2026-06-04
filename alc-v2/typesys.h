@@ -250,6 +250,14 @@ ARR_GENERIC(target, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u16, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u8, MAX_BLOCK_DEPTH)
 
+typedef struct {
+    str name;
+    str type_name;
+    size_t offset;
+    size_t size;
+} stack_slot_t;
+#define MAX_STACK_SLOTS 64
+
 typedef struct src {
     char *cur;
     char *start;
@@ -278,6 +286,8 @@ typedef struct parser_context {
     arr_u16 deferred_unnamed_br;
     arr_u8 nreg_mark;
     symbol_t *symbol;
+    stack_slot_t stack_slots[MAX_STACK_SLOTS];
+    int stack_slot_count;
 } parser_context;
 
 inline static int/*?*/ power_of_two_exponent(size_t n) {

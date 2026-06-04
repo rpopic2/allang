@@ -9,6 +9,7 @@
 #include <limits.h>
 
 #include "allocator.h"
+#include "diagnostics.h"
 #include "emit.h"
 #include "err.h"
 #include "hashmap.h"
@@ -28,6 +29,7 @@ bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
+void stack_report(parser_context *context);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
 int expr_line(parser_context *context);
 void compile(src_t src, FILE *object_file);
@@ -1224,6 +1226,14 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
             context->stack_size = ALIGN_TO(context->stack_size, 8);
         }
         *out_offset = context->stack_size;
+
+        if (context->stack_slot_count < MAX_STACK_SLOTS) {
+            stack_slot_t *slot = &context->stack_slots[context->stack_slot_count++];
+            slot->name = cur_target->name;
+            slot->type_name = src->dtype.base ? src->dtype.base->name : str_null;
+            slot->offset = (size_t)*out_offset;
+            slot->size = size;
+        }
     } else {
         *out_offset = target_reg->offset;
     }
@@ -1336,6 +1346,7 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
 
     type_t *type = dtype->base;
     struct_report(type);
+    struct_diagram(type);
     struct_expr_report(args, type, 0);
 
     if (streq(token->end + 1, "=[")) {
@@ -1606,6 +1617,29 @@ void struct_report(type_t *type) {
 #endif
 }
 
+void stack_report(parser_context *context) {
+#if !NDEBUG
+    if (context->stack_slot_count == 0)
+        return;
+
+    printd(CSI_GREEN"stack report for "), str_printd(context->name);
+    printd("=================\n"CSI_RESET);
+    printd("\tframe size: %d\n", context->stack_size);
+
+    for (int i = 0; i < context->stack_slot_count; ++i) {
+        const stack_slot_t *s = &context->stack_slots[i];
+        printd("\tslot %d: ", i);
+        str_printdnl(s->name);
+        printd(" ");
+        str_printdnl(s->type_name);
+        printd("\toffset: %zd, size: %zd\n", s->offset, s->size);
+    }
+    printd(CSI_GREEN"end report\n\n"CSI_RESET);
+#else
+    (void)context;
+#endif
+}
+
 bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
     bool break_out = false;
     const token_t *cur_token = &context->cur_token;
@@ -1697,6 +1731,7 @@ bool stmt_struct(parser_context *context) {
     }
     s->size = ALIGN_TO(s->size, (size_t)s->align);
     struct_report(s);
+    struct_diagram(s);
     return true;
 }
 
@@ -2416,6 +2451,8 @@ void function(src_t *src) {
             compile_err(&context->cur_token, "expected to return %d value(s)\n", context->symbol->ret_airity);
         }
     }
+    stack_report(context);
+    stack_diagram(context);
     emit_fn_prologue_epilogue(context);
     emit_ret();
     printd("end of fn\n");
