@@ -355,13 +355,13 @@ int extrat_scope_up(str *s) {
 void context_add_nreg(parser_context *context, const dtype_t *dtype) {
     context->nreg_count += dtype_reg_count(dtype);
 #define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
-    UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
+UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
 #undef UPDATE_IF_GREATER
 }
 
 str dot_iter(str *s, char c) {
     const char *begin = s->data;
-    if (*begin == c)
+    if (s->data < s->end && *begin == c)
         ++begin;
     while (s->data < s->end) {
         if ((++s->data)[0] == c)
@@ -429,7 +429,6 @@ regable read_regable(str s, const token_t *token) {
         member_t *member = NULL;
         type_t *type = reg->dtype.base;
         if (type == error_type) {
-            result.type = error_type;
             return result;
         }
 
@@ -553,7 +552,8 @@ void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
     }
 }
 
-void check_bounds(parser_context *context, reg_t index, i32 len) {
+enum inclusive {INCL, EXCL};
+void check_bounds(parser_context *context, reg_t index, i32 len, enum inclusive inclusive) {
     const token_t cur_token = context->cur_token;
 
     tok(context);
@@ -562,8 +562,9 @@ void check_bounds(parser_context *context, reg_t index, i32 len) {
         return;
     }
 
+    cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
     tok(context);
-    if (stmt_ret_cond(context, COND_GE, index, len)) {
+    if (stmt_ret_cond(context, cond, index, len)) {
 
     } else {
         compile_err(&cur_token, "expected to handle check operator\n");
@@ -677,7 +678,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             if (decl.tag != DK_ARRAY) {
                 compile_err(cur_token, "register was not an array\n");
             } else {
-                check_bounds(context, offset_regable.reg, decl.amount);
+                check_bounds(context, offset_regable.reg, decl.amount, EXCL);
             }
         }
     } else unreachable;
@@ -845,37 +846,97 @@ void anonymous_bcond(parser_context *context, cond_t cond) {
     emit_label(context->name, name, index);
 }
 
-void operator_mul(parser_context *context, const regable *lhs, const regable *rhs) {
-    if (lhs->tag != REG) {
-        compile_err(&context->cur_token, "not implemented for lhs == value\n");
-        return;
+void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
+    p(slice access)
+
+    tok(context);
+
+    token_t rhs_token = context->cur_token;
+    str id = rhs_token.id;
+
+    regable _begin = {0};
+    regable *begin = &_begin;
+    str first = dot_iter(&id, '.');
+    if (!str_empty(&first)) {
+        (void)dot_iter(&id, '.');
+        _begin = read_regable(first, &rhs_token);
     }
 
-    const reg_t *reg = &lhs->reg;
-    const dtype_t *dtype = &reg->dtype;
-    declarator_t decl = dtype_top(dtype);
-    if (decl.tag == DK_ARRAY || decl.tag == DK_SLICE) {
-        reg_t dst = context->reg;
-        check_bounds(context, rhs->reg, decl.amount);
-        diagnostic_dyn_elem_access(context, rhs);
-        dst.rsize = sizeof(void *); // TODO move this out when fixing typecheck
-        emit_elem_addr(dst, lhs->reg, rhs->reg);
-        reg_t tmp = {.offset = 0, .reg_type = SCRATCH, .rsize = sizeof (void *)};
-        reg_t rreg = rhs->reg;
-        rreg.rsize = sizeof (void *);
-        emit_mov(tmp, decl.amount);
-        reg_t dst2 = dst;
-        dst2.offset += 1;
-        emit_sub_reg(dst2, tmp, rreg);
+    str second = dot_iter(&id, '.');
+    regable _end = {0};
+    regable *end = &_end;
+    if (!str_empty(&second)) {
+        _end = read_regable(second, &rhs_token);
+    }
+
+    if (begin->tag == VALUE) {
+        compile_err(&rhs_token, "todo: not implemented when begin is value\n");
+    }
+    if (end->tag == VALUE) {
+        compile_err(&rhs_token, "todo: not implemented when end is value\n");
+    }
+    if (begin->tag != REG && end->tag != REG) {
+        compile_err(&rhs_token, "at least one should be reg. use static syntax for this.\n");
+        return;
+    }
+    diagnostic_dyn_elem_access(context, begin);
+
+    if (begin->tag != NONE && end->tag != NONE) {
+        emit_cmp_reg(begin->reg, end->reg);
+        emit_branch_cond(COND_HI, context->symbol->name, STR("ret"), 0);
+        check_bounds(context, end->reg, len, EXCL);
+    } else if (begin->tag != NONE) {
+        check_bounds(context, begin->reg, len, INCL);
+    } else if (end->tag != NONE) {
+        check_bounds(context, end->reg, len, EXCL);
     } else {
-        compile_err(&context->cur_token, "not implemented for lhs is not arr or slice\n");
+        unreachable;
+    }
+
+    reg_t dst = context->reg;
+    dst.rsize = sizeof (void *); // TODO move this out when fixing typecheck
+
+    reg_t dst2 = dst;
+    dst2.rsize = sizeof (void *);
+    dst2.offset += 1;
+
+    if (begin->tag != NONE) {
+        emit_elem_addr(dst, *lhs, begin->reg);
+        if (end->tag == NONE) {
+            begin->reg.rsize = sizeof(void *);
+            emit_mov(dst2, len);
+            emit_sub_reg(dst2, dst2, begin->reg);
+        } else {
+            reg_t tmp_dst2 = dst2;
+            tmp_dst2.rsize = begin->reg.rsize;
+            emit_sub_reg(tmp_dst2, end->reg, begin->reg);
+            tmp_dst2.dtype = begin->reg.dtype;
+            if (!dtype_eq(&end->reg.dtype, &begin->reg.dtype)) {
+                compile_err(&rhs_token, "type for begin and end range differs\n");
+            }
+            emit_mov_reg(dst2, tmp_dst2);
+        }
+    } else if (end->tag != NONE) {
+        emit_sub(dst, FP, lhs->offset);
+        emit_mov_reg(dst2, end->reg);
+    } else {
+        unreachable;
     }
 }
 
-void binary_op(const regable *restrict lhs, parser_context *restrict context) {
+void binary_op(parser_context *restrict context, const regable *restrict lhs) {
     token_t lhs_token = context->cur_token;
     tok(context);
     token_t op_token = context->cur_token;
+
+    if (lhs->tag == REG) {
+        declarator_t decl = dtype_top(&lhs->reg.dtype);
+        if (op_token.data[0] == '*'
+            && (decl.tag == DK_ARRAY || decl.tag == DK_SLICE)) {
+            dyn_slice_access(context, &lhs->reg, decl.amount);
+            return;
+        }
+    }
 
     tok(context);
     token_t rhs_token = context->cur_token;
@@ -962,8 +1023,6 @@ void binary_op(const regable *restrict lhs, parser_context *restrict context) {
         } else if (context->reg.reg_type == PARAM) {
             emit_cond_set(context->reg, cond);
         }
-    } else if (op_token.data[0] == '*') {
-        operator_mul(context, lhs, &rhs);
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
     }
@@ -1365,10 +1424,7 @@ bool expr_load(parser_context *context) {
         return true;
     }
     if (src.dtype.base->size > MAX_REG_SIZE) {
-        compile_err(
-                &context->cur_token,
-                "cannot load object of size bigger than 16 bytes to register\n"
-                );
+        compile_err(&context->cur_token, "cannot load object of size bigger than 16 bytes to register\n");
         printd("array: %d, type_size: %zd, rsize: %d\n", dtype_tryget_arr(&src.dtype), src.dtype.base->size, src.rsize);
         dyn_member_t *members = &src.dtype.base->struct_t.members;
         (void)members;
@@ -1488,7 +1544,7 @@ bool expr(parser_context *context) {
     if (binary_op_store(&lhs, context)) {
 
     } else if (token_end != ',' && token_end != '\n' && token_end != ')' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>") && !streq(token->end + 1, "=") && token_end != '}') {
-        binary_op(&lhs, context);
+        binary_op(context, &lhs);
     } else if(nullary_op(context, lhs)) {
         return true;
     }
@@ -1811,8 +1867,7 @@ void read_and_check_types(parser_context *context, arr_reg_t *rets) {
 }
 
 bool detect_mainfn_end(parser_context *context, bool start_of_line) {
-    if (context->cur_token.data == NULL
-            || (start_of_line && context->indent == context->cur_token.indent)) {
+    if (context->cur_token.data == NULL || (start_of_line && context->indent == context->cur_token.indent)) {
         if (start_of_line) {
             context->ended = true;
         }
@@ -2493,30 +2548,30 @@ void import_all_from(src_t src) {
 
 src_t read_source(const char *source_name) {
         TIMER_START(clock_read_source);
-    FILE *source_file = fopen(source_name, "r");
-    if (source_file == NULL) {
-        fprintf(stderr, "error: could not open file %s\n", source_name);
-        exit(EXIT_FAILURE);
+        FILE *source_file = fopen(source_name, "r");
+        if (source_file == NULL) {
+            fprintf(stderr, "error: could not open file %s\n", source_name);
+            exit(EXIT_FAILURE);
     }
-    fseek(source_file, 0, SEEK_END);
-    size_t source_len = (size_t)ftell(source_file);
-    rewind(source_file);
+        fseek(source_file, 0, SEEK_END);
+        size_t source_len = (size_t)ftell(source_file);
+        rewind(source_file);
 
-    char *source_start = malloc(source_len);
-    if (!source_start)
-        malloc_failed();
-    memset(source_start, 0, source_len);
+        char *source_start = malloc(source_len);
+        if (!source_start)
+            malloc_failed();
+        memset(source_start, 0, source_len);
 
-    size_t bytes_read = fread(source_start, sizeof (char), source_len, source_file);
-    if (bytes_read > source_len) {
-        fprintf(stderr, "error: buffer overflow. expected %zd bytes but read %zd bytes\n", source_len, bytes_read);
-        exit(EXIT_FAILURE);
+        size_t bytes_read = fread(source_start, sizeof (char), source_len, source_file);
+        if (bytes_read > source_len) {
+            fprintf(stderr, "error: buffer overflow. expected %zd bytes but read %zd bytes\n", source_len, bytes_read);
+            exit(EXIT_FAILURE);
     }
-    fclose(source_file);
-    TIMER_END(clock_read_source);
+        fclose(source_file);
+        TIMER_END(clock_read_source);
 
-    src_t src = (src_t){ .cur = source_start, .start = source_start, .end = source_start + source_len };
-    strncpy(src.filename, source_name, sizeof src.filename);
+        src_t src = (src_t){ .cur = source_start, .start = source_start, .end = source_start + source_len };
+        strncpy(src.filename, source_name, sizeof src.filename);
     return src;
 }
 

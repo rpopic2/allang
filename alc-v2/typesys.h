@@ -36,6 +36,17 @@ typedef struct dtype {
     usize decl_len;
 } dtype_t;
 
+static inline bool dtype_eq(const dtype_t *lhs, const dtype_t *rhs) {
+    if (lhs->decl_len != rhs->decl_len)
+        return false;
+
+    if (memcmp(&lhs->decl, &rhs->decl, sizeof lhs->decl) != 0)
+        return false;
+
+    bool base_eq = lhs->base == rhs->base;
+    return base_eq;
+}
+
 typedef struct member {
     dtype_t dtype;
     str name;
@@ -143,6 +154,10 @@ typedef struct reg {
     dtype_t dtype;
 } reg_t;
 
+static inline bool reg_eq(struct reg lhs, struct reg rhs) {
+    return lhs.offset == rhs.offset && lhs.rsize == rhs.rsize && lhs.reg_type == rhs.reg_type && dtype_eq(&lhs.dtype, &rhs.dtype);
+}
+
 enum tag {
     NONE, VALUE, REG, AGGREGATE
 };
@@ -151,7 +166,6 @@ typedef struct {
     union {
         struct {
             i64 value;
-            type_t *type;
         };
         reg_t reg;
     };

@@ -132,6 +132,13 @@ void emit_mov_reg(reg_t dst, reg_t src) {
     emit_rr(STR(op), dst, src);
 }
 
+void type_conv(reg_t dst, reg_t src) {
+    if (src.dtype.base) {
+        src.rsize = (reg_size)src.dtype.base->size;
+    }
+    emit_mov_reg(dst, src);
+}
+
 void emit_lea_begin(reg_t dst, reg_t lhs, str op) {
     emit_rx(STR("lea"), dst);
     buf_puts(fn_buf, STR(", ["));
@@ -525,7 +532,7 @@ void emit_branch(str fn_name, str label, int index) {
 }
 
 const char *const cond_str[] = {
-    "e", "ne", "ge", "l",
+    "e", "ne", "ge", "l", "g", "le", "ae", "a",
 };
 bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
     if (condition >= (cond_t)(sizeof cond_str / sizeof cond_str[0])) {

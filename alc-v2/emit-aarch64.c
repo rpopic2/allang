@@ -20,8 +20,9 @@ extern type_t *type_comptime_int;
 
 const char *imm_prefix = "#";
 
+// see enum cond
 const char *const cond_str[] = {
-    "eq", "ne", "ge", "lt",
+    "eq", "ne", "ge", "lt", "gt", "le", "hs", "hi",
 };
 
 const size_t default_register_size = 8;
@@ -356,12 +357,16 @@ void type_conv(reg_t dst, reg_t src) {
                     dst_ws, get_regoff(src));
         } else if (srct->size == 4) {
             buf_snprintf(fn_buf, "mov w%d, w%d\n", get_regoff(dst), get_regoff(src));
+        } else {
+            report_error("compiler_bug: use mov instead of type_conv\n");
         }
     }
 }
 
 void emit_mov_reg(reg_t dst, reg_t src) {
     const char *format;
+    if (reg_eq(dst, src))
+        return;
     if (dtype_tryget_addr(&dst.dtype)) {
         dst.rsize = 8;
     }

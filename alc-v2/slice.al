@@ -17,8 +17,6 @@ Slice :: Arr..
 I :: 1
 J :: 2
 
-Arr * I.. ! ret 1
-
 // dynamic
 
 dynamic =>
@@ -30,6 +28,9 @@ dynamic: =>
     I :: 1
     J :: 2
 
-    Arr * I ! ret
+    Arr * I.. ! ret
 
+    Arr * ..I ! ret
+
+    Arr * I..J ! ret
 
