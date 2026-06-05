@@ -67,7 +67,7 @@ u64 hash_fnv_1a(str id) {
     return hash;
 }
 
-HASHMAP_GENERIC(symbol_t, 64, hash_fnv_1a)
+HASHMAP_GENERIC(symbol_t, 128, hash_fnv_1a)
 HASHMAP_GENERIC(type_t, 128, hash_fnv_1a)
 
 hashmap_symbol_t fn_ids;
@@ -1183,6 +1183,7 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
 
     char next = token_str->data[2];
     target *cur_target;
+    reg_t indexed_target;
     if (next == ']') {
         cur_target = arr_target_top(&context->targets);
         if (cur_target == NULL) {
@@ -1197,14 +1198,13 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
         full_name.data += 2;
         full_name.end -= 1;
 
-        reg_t *out_reg;
-        str name = dot_iter(&full_name, '.');
-        if (!find_id(&local_ids, name, token, &out_reg, 0)) {
-            compile_err(token, "unknown id "), str_printerr(*token_str);
+        regable resolved = read_regable(full_name, token);
+        if (resolved.tag != REG) {
             return true;
         }
 
-        cur_target = &(target){.target_assigned = true, .reg = out_reg};
+        indexed_target = resolved.reg;
+        cur_target = &(target){.target_assigned = true, .reg = &indexed_target};
 
     } else {
         compile_err(token, "store target expected\n");
@@ -1330,6 +1330,17 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
             compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", dtype_size(&member_type));
             str_printerr(member_type.base->name);
             break;
+        }
+
+        if (is_arr) {
+            const size_t lo_bytes = size - chunk_offset;
+            if (!lo_written) {
+                reg_t zero = lo;
+                zero.rsize = 8;
+                emit_zero_out(zero);
+            }
+            emit_store_packed(dst, offset + (i64)chunk_offset, lo, lo_bytes);
+            continue;
         }
 
         reg_t hi = lo;

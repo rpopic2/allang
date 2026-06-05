@@ -26,7 +26,7 @@ inline static hashentry_##T *hashmap_##T##_find(hashmap_##T self, const str id) 
         } \
         printd("linear probe\n"); \
         index += 1; \
-        index %= array_len; \
+        index &= array_len - 1; \
         if (index == start) { \
             fprintf(stderr, "hash tabel is full!"); \
             abort(); \
