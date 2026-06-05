@@ -303,10 +303,7 @@ void emit_mov(reg_t dst, i64 value) {
             report_error("literal was too big");
         }
     } else {
-        if (!dst.dtype.base || !dst.dtype.base->sign)
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIx64), get_wx(dst.rsize), regidx, value);
-        else
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIi64), get_wx(dst.rsize), regidx, value);
+        emit_ri(STR("mov"), dst, value);
     }
 
 }
