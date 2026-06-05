@@ -47,6 +47,35 @@ foo:
 pattern:foo:\n\tbar:\n\t\tbaz=>\n\n\tprint
 
 
+## function end
+
+a function body ends under any of the following conditions:
+
+1. **(one-liner)** the body is on the same line as the signature — ends at end of that line.
+2. **(multi-line)** the first non-empty, non-comment line whose indentation is ≤ the signature's indentation. that line is **not** part of the body.
+3. **(EOF)** end of file is reached.
+
+e.g.
+
+```
+fn foo:         // signature at indent 0
+    body        // indent 4 — inside foo
+    more body   // indent 4 — inside foo
+
+fn bar:         // indent 0 = foo's signature indent → foo ends here, bar begins
+    body
+```
+
+```
+fn outer:       // indent 0
+    fn inner:   // indent 4 — signature of inner
+        body    // indent 8 — inside inner
+
+    cont        // indent 4 = inner's signature indent → inner ends, still inside outer
+```
+
+empty lines and comment-only lines are ignored when evaluating indentation for function-end detection.
+
 ## line
 
 ```
