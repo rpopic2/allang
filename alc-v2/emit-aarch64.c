@@ -249,7 +249,7 @@ void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
         offset += 16;
     }
     while (size >= 8) {
-        emit_str(dst, xzr, (int)offset);
+        emit_str_reg(dst, xzr, (int)offset);
         size -= 8;
         offset += 8;
     }
@@ -259,7 +259,7 @@ void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
     while (size) {
         if (size >= rsize) {
             zr.rsize = rsize;
-            emit_str(dst, zr, (int)offset);
+            emit_str_reg(dst, zr, (int)offset);
             size -= rsize;
             offset += rsize;
         }
@@ -285,7 +285,7 @@ void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written,
     if (!lo_written) {
         lo.reg_type = RD_NONE;
     }
-    emit_str(base, lo, (int)offset);
+    emit_str_reg(base, lo, (int)offset);
 }
 
 void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
@@ -294,7 +294,7 @@ void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
         reg_size chunk = nbytes >= 8 ? 8 : nbytes >= 4 ? 4 : nbytes >= 2 ? 2 : 1;
         reg_t piece = src;
         piece.rsize = chunk;
-        emit_str(base, piece, (int)(offset + (i64)pos));
+        emit_str_reg(base, piece, (int)(offset + (i64)pos));
         nbytes -= chunk;
         pos += chunk;
         if (nbytes > 0) {
@@ -498,7 +498,7 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     buf_snprintf(fn_buf, ", ");
 }
 
-void emit_str(reg_t dst, reg_t src, int offset) {
+void emit_str_reg(reg_t dst, reg_t src, int offset) {
     load_store_x("str", src, dst);
     buf_puti(fn_buf, offset);
     buf_snprintf(fn_buf, "]\n");
@@ -510,9 +510,27 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
     buf_snprintf(fn_buf, "]\n");
 }
 
-void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
+void emit_str_regoff(reg_t dst, reg_t src, reg_t offset) {
     load_store_x("str", src, dst);
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
+}
+
+static reg_t imm_to_reg(reg_t dst, i64 value) {
+    reg_t tmp = {
+        .reg_type = SCRATCH, .offset = 8,
+        .rsize = (reg_size)dst.dtype.base->size,
+        .dtype = {.base = dst.dtype.base},
+    };
+    emit_mov(tmp, value);
+    return tmp;
+}
+
+void emit_str_imm(reg_t dst, i64 value, int offset) {
+    emit_str_reg(dst, imm_to_reg(dst, value), offset);
+}
+
+void emit_str_imm_regoff(reg_t dst, i64 value, reg_t offset) {
+    emit_str_regoff(dst, imm_to_reg(dst, value), offset);
 }
 
 void str_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
@@ -548,7 +566,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
     if (elem_size == 1) {
         if (is_store)
-            emit_str_reg(dst, src, offset);
+            emit_str_regoff(dst, src, offset);
         else
             emit_ldr_reg(dst, src, offset);
         return;
@@ -580,7 +598,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     buf_snprintf(fn_buf, "\n");
 
     if (is_store)
-        emit_str_reg(dst, src, offset);
+        emit_str_regoff(dst, src, offset);
     else
         emit_ldr_reg(dst, src, offset);
 }
