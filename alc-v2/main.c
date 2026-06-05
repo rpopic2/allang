@@ -2099,8 +2099,10 @@ bool stmt_ret_pre(parser_context *context) {
 bool stmt_ret(parser_context *context) {
     if (!stmt_ret_pre(context))
         return false;
-    context->has_branched_ret = true;
-    emit_branch(context->symbol->name, STR("ret"), 0);
+    if (!context->ended) {
+        context->has_branched_ret = true;
+        emit_branch(context->symbol->name, STR("ret"), 0);
+    }
     return true;
 }
 
