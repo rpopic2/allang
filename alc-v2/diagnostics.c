@@ -45,7 +45,7 @@ static void mem_box_blank(int width) {
     printd("%*s│%*s│\n", MEM_BOX_GUTTER, "", width, "");
 }
 
-static void draw_mem_layout(const mem_box *boxes, int n, bool fp_relative) {
+static void draw_mem_layout(const mem_box *boxes, int n, bool fp_relative, long scale) {
     if (n == 0) {
         printd("\t<empty>\n");
         return;
@@ -53,6 +53,7 @@ static void draw_mem_layout(const mem_box *boxes, int n, bool fp_relative) {
 
     char namebuf[64], rightbuf[96];
     int width = 0;
+    long smallest = 0;
     for (int i = 0; i < n; ++i) {
         const mem_box *b = &boxes[i];
         int left_len = b->pad ? (int)sizeof "(padding)" - 1
@@ -64,7 +65,23 @@ static void draw_mem_layout(const mem_box *boxes, int n, bool fp_relative) {
         int need = left_len + right_len + 3;
         if (need > width)
             width = need;
+        if (!b->pad) {
+            long bytes = b->hi - b->lo;
+            if (smallest == 0 || bytes < smallest)
+                smallest = bytes;
+        }
     }
+    if (smallest == 0) {
+        for (int i = 0; i < n; ++i) {
+            long bytes = boxes[i].hi - boxes[i].lo;
+            if (smallest == 0 || bytes < smallest)
+                smallest = bytes;
+        }
+    }
+    if (smallest < 1)
+        smallest = 1;
+
+    long unit = scale < smallest ? smallest : scale;
 
     printd("\n");
     mem_box_divider(boxes[0].lo, fp_relative, width, "┌", "─", "┐");
@@ -92,9 +109,14 @@ static void draw_mem_layout(const mem_box *boxes, int n, bool fp_relative) {
         printd("%*s│ %s%s%s%*s%s │\n", MEM_BOX_GUTTER, "",
                color, name, CSI_RESET, gap, "", rightbuf);
 
-        long rows = bytes > MEM_BOX_MAX_ROWS ? MEM_BOX_MAX_ROWS : bytes;
+        long rows = bytes / unit;
+        if (rows < 1)
+            rows = 1;
+        bool capped = rows > MEM_BOX_MAX_ROWS;
+        if (capped)
+            rows = MEM_BOX_MAX_ROWS;
         for (long row = 1; row < rows; ++row) {
-            if (bytes > MEM_BOX_MAX_ROWS && row == rows - 1)
+            if (capped && row == rows - 1)
                 printd("%*s│%*s⋮%*s│\n", MEM_BOX_GUTTER, "",
                        (width - 1) / 2, "", width - 1 - (width - 1) / 2, "");
             else
@@ -107,7 +129,7 @@ static void draw_mem_layout(const mem_box *boxes, int n, bool fp_relative) {
     }
 }
 
-void struct_diagram(type_t *type) {
+void struct_diagram(type_t *type, long scale) {
     mem_box boxes[MAX_STACK_SLOTS];
     int n = 0;
     long prev_end = 0;
@@ -129,10 +151,10 @@ void struct_diagram(type_t *type) {
     if ((long)type->size > prev_end && n < MAX_STACK_SLOTS)
         boxes[n++] = (mem_box){.lo = prev_end, .hi = (long)type->size, .pad = true};
 
-    draw_mem_layout(boxes, n, false);
+    draw_mem_layout(boxes, n, false, scale);
 }
 
-void stack_diagram(parser_context *context) {
+void stack_diagram(parser_context *context, long scale) {
     if (context->stack_slot_count == 0)
         return;
 
@@ -170,12 +192,12 @@ void stack_diagram(parser_context *context) {
     if (prev_end < 0 && n < MAX_STACK_SLOTS)
         boxes[n++] = (mem_box){.lo = prev_end, .hi = 0, .pad = true};
 
-    draw_mem_layout(boxes, n, true);
+    draw_mem_layout(boxes, n, true, scale);
 }
 
 #else
 
-void struct_diagram(type_t *type) { (void)type; }
-void stack_diagram(parser_context *context) { (void)context; }
+void struct_diagram(type_t *type, long scale) { (void)type; (void)scale; }
+void stack_diagram(parser_context *context, long scale) { (void)context; (void)scale; }
 
 #endif

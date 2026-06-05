@@ -1367,7 +1367,7 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
 
     type_t *type = dtype->base;
     struct_report(type);
-    struct_diagram(type);
+    struct_diagram(type, DIAGRAM_SCALE_AUTO);
     struct_expr_report(args, type, 0);
 
     if (streq(token->end + 1, "=[")) {
@@ -1752,7 +1752,7 @@ bool stmt_struct(parser_context *context) {
     }
     s->size = ALIGN_TO(s->size, (size_t)s->align);
     struct_report(s);
-    struct_diagram(s);
+    struct_diagram(s, DIAGRAM_SCALE_AUTO);
     return true;
 }
 
@@ -2468,7 +2468,7 @@ void function(src_t *src) {
         }
     }
     stack_report(context);
-    stack_diagram(context);
+    stack_diagram(context, DIAGRAM_SCALE_AUTO);
     emit_fn_prologue_epilogue(context);
     emit_ret();
     printd("end of fn\n");
