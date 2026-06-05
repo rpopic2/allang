@@ -840,13 +840,13 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
         return true;
 
     reg_t src;
+    const bool src_is_imm = lhs->tag == VALUE;
     if (lhs->tag == VALUE) {
         src = (reg_t){
             .reg_type = SCRATCH, .offset = context->reg.offset,
             .rsize = context->reg.rsize,
             .dtype = {.base = context->reg.dtype.base},
         };
-        emit_mov(src, lhs->value);
 
         if (dst.dtype.base->tag == TK_FUND && src.dtype.base == type_comptime_int) {
             src.dtype = dst.dtype;
@@ -875,12 +875,18 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
             top = dtype_top(&dst.dtype);
         }
         if (top.tag == DK_ARRAY) {
+            if (src_is_imm)
+                emit_mov(src, lhs->value);
             emit_array_access(dst, src, offset.reg, STORE);
+        } else if (src_is_imm) {
+            emit_str_imm_regoff(dst, lhs->value, offset.reg);
         } else {
-            emit_str_reg(dst, src, offset.reg);
+            emit_str_regoff(dst, src, offset.reg);
         }
+    } else if (src_is_imm) {
+        emit_str_imm(dst, lhs->value, (int)offset.value);
     } else {
-        emit_str(dst, src, (int)offset.value);
+        emit_str_reg(dst, src, (int)offset.value);
     }
     return true;
 }
@@ -1906,7 +1912,7 @@ bool stmt_stack_store(parser_context *context, reg_t src) {
     if (!ok) {
         return false;
     }
-    emit_str(FP, src, -offset);
+    emit_str_reg(FP, src, -offset);
 
     printd("%s\n", __func__);
     return true;
