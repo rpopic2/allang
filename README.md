@@ -2,9 +2,9 @@
 by rpopic2
 
 ```
-- low level as assembly, but simple as python
-- explicit error handling, but not verbose
-- write optimized code without optimizers, and compile fast
+- low level as assembly, simple as python
+- explicit error handling, not verbose
+- write optimized code without optimizers, compile fast
 ```
 
 

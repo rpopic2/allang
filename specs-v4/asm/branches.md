@@ -12,7 +12,7 @@ id/fn ::= [_]a-z[a-zA-Z0-9_]
 
 ## function definition
 ```
-fn/def ::= id/fn: ([fn/params ]=>[fn/returns])\n\tblock
+fn/def ::= id/fn: [fn/params ]=>[ fn/returns]\n\tblock
 ```
 
 ### assembles to
@@ -91,4 +91,12 @@ I is
 
 I is 3
 and J is 4 ->
+
+## conditional select promotion
+
+```
+std.expect I is 0 =>
+```
+
+`I is 0` is just a cmp instruction. technically, it has a type of `cond_flag`. when used as a function parameter, it promotes to a boolean value-the register is set to 1 if I equals 0.
 

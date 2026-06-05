@@ -1,35 +1,15 @@
 #include "types.h"
 #include <stdio.h>
 #include <inttypes.h>
-#ifndef _WIN32
-#include <execinfo.h>
-#include <unistd.h>
-#endif
 
 #include "buffer.h"
 #include "emit.h"
-#include "str.h"
 #include "err.h"
+#include "str.h"
 #include "typesys.h"
 #include "emit_helper.h"
 
-#define INIT_BUFSIZ 0x400
 #define CALLEE_START 19
-
-#define DECL_PTR(T, X) T _##X; T *X = &_##X
-
-#define INSTR(s) "\t"s"\n"
-#define STR_FROM_INSTR(s) STR_FROM(INSTR(s))
-
-DECL_PTR(static buf, text_buf);
-DECL_PTR(static buf, cstr_buf);
-
-DECL_PTR(static buf, fn_header_buf);
-DECL_PTR(static buf, prologue_buf);
-DECL_PTR(static buf, fn_buf);
-
-char *cstr_begin = NULL;
-unsigned string_lit_counts = 0;
 
 extern const char *addrgen_adrp;
 extern const char *addrgen_add;
@@ -38,52 +18,22 @@ extern const char *fn_annotation_fmt;
 extern const char *local_string_prefix;
 extern type_t *type_comptime_int;
 
-void str_printerr(str s);
+const char *imm_prefix = "#";
 
+// see enum cond
 const char *const cond_str[] = {
-    "eq", "ne", "ge", "lt",
+    "eq", "ne", "ge", "lt", "gt", "le", "hs", "hi",
 };
 
 const size_t default_register_size = 8;
 
-void emit_init(void) {
-    buf_init(text_buf, INIT_BUFSIZ);
-    buf_puts(text_buf, STR_FROM(text_section_header));
+const reg_t FP = { .reg_type = FRAME, .rsize = sizeof (void *) };
 
-    buf_init(cstr_buf, INIT_BUFSIZ);
-    buf_puts(cstr_buf, STR_FROM(string_section_header));
-    cstr_begin = cstr_buf->cur;
-
-    emit_reset_fn();
-}
-
-void emit_reset_fn(void) {
-    buf_init(fn_header_buf, 0x100);
-    buf_init(prologue_buf, INIT_BUFSIZ);
-    buf_init(fn_buf, INIT_BUFSIZ);
-}
-
-void emit_fnbuf(FILE *out) {
-    buf_fwrite(fn_header_buf, out);
-    buf_fwrite(prologue_buf, out);
-    buf_fwrite(fn_buf, out);
-}
-
-void emit_text(FILE *out) {
-    buf_fwrite(text_buf, out);
-}
-
-void emit_cstr(FILE *out) {
-    if (cstr_begin < cstr_buf->cur) {
-        buf_fwrite(cstr_buf, out);
-    }
-}
+void str_printerr(str s);
 
 bool emit_need_escaping(void) {
     return false;
 }
-
-const reg_t FP = { .reg_type = FRAME, .rsize = sizeof (void *) };
 
 static int get_regoff(reg_t e) {
     if (e.reg_type == SCRATCH)
@@ -116,7 +66,7 @@ void buf_putreg(buf *buffer, reg_t reg) {
         return;
     }
     if (reg.reg_type == STACK) {
-        buf_puts(buffer, STR_FROM("sp"));
+        buf_puts(buffer, STR("sp"));
     } else {
         const char *format;
         if (reg.rsize <= 4) {
@@ -133,9 +83,9 @@ void buf_putreg(buf *buffer, reg_t reg) {
 
 // Pack consecutive sub-byte VALUE members into a single immediate.
 // Advances *i past any members it consumes; caller's loop will re-increment.
-static void pack_small_values(const dyn_member_t *members, dyn_agg_member *args,
-                               ptrdiff_t *i, ptrdiff_t member_count,
-                               size_t first_size, i64 *value) {
+static size_t pack_small_values(const dyn_member_t *members, const dyn_agg_member *args,
+                                ptrdiff_t *i, ptrdiff_t member_count,
+                                size_t first_size, i64 *value) {
     size_t packed = first_size;
     while (packed < 2) {
         if (++(*i) >= member_count)
@@ -145,8 +95,7 @@ static void pack_small_values(const dyn_member_t *members, dyn_agg_member *args,
             --(*i);
             break;
         }
-        member_t *next = &members->begin[*i];
-        size_t next_size = dtype_size(&next->type);
+        size_t next_size = members ? dtype_size(&members->begin[*i].dtype) : first_size;
         if (packed + next_size > 2) {
             --(*i);
             break;
@@ -154,35 +103,38 @@ static void pack_small_values(const dyn_member_t *members, dyn_agg_member *args,
         packed += next_size;
         *value |= next_r->value << (next_size * 8);
     }
+    return packed;
 }
 
-static void emit_member_value(reg_t dst, const dyn_member_t *members, dyn_agg_member *args,
-                               ptrdiff_t *i, ptrdiff_t member_count,
-                               size_t memb_size, size_t offset_bits,
-                               bool *dst_initialized) {
+static size_t emit_member_value(reg_t dst, const dyn_member_t *members, const dyn_agg_member *args,
+                                ptrdiff_t *i, ptrdiff_t member_count,
+                                size_t memb_size, size_t offset_bits,
+                                bool *dst_initialized) {
     i64 value = args->begin[*i].value;
+    size_t packed = memb_size;
     if (offset_bits >= 32 && dst.rsize < 8)
         dst.rsize = 8;
     if (offset_bits % 16 == 0) {
-        pack_small_values(members, args, i, member_count, memb_size, &value);
+        packed = pack_small_values(members, args, i, member_count, memb_size, &value);
     }
     if (value == 0)
-        return;
+        return packed;
 
     if (offset_bits % 16 != 0) {
         if (!*dst_initialized) {
-            emit_ri(STR_FROM("mov"), dst, value << offset_bits);
+            emit_ri(STR("mov"), dst, value << offset_bits);
             unreachable;
         }
-        emit_rri(STR_FROM("orr"), dst, dst, value << offset_bits);
-        return;
+        emit_rri(STR("orr"), dst, dst, value << offset_bits);
+        return packed;
     }
     if (!*dst_initialized) {
-        emit_risi(STR_FROM("movz"), dst, value, STR_FROM("lsl"), (i64)offset_bits);
+        emit_risi(STR("movz"), dst, value, STR("lsl"), (i64)offset_bits);
     } else {
-        emit_risi(STR_FROM("movk"), dst, value, STR_FROM("lsl"), (i64)offset_bits);
+        emit_risi(STR("movk"), dst, value, STR("lsl"), (i64)offset_bits);
     }
     *dst_initialized = true;
+    return packed;
 }
 
 static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offset_bits,
@@ -200,7 +152,7 @@ static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offse
             if (reg.rsize < dst.rsize) {
                 reg.rsize = dst.rsize;
             }
-            emit_rri(STR_FROM("and"), dst, reg, mask);
+            emit_rri(STR("and"), dst, reg, mask);
         } else {
             reg_t tmp_dst = dst;
             // no need to emit mov?
@@ -208,7 +160,7 @@ static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offse
                 tmp_dst.rsize = reg.rsize;
             }
             tmp_dst.rsize = (u8)memb_size;
-            emit_rr(STR_FROM("mov"), tmp_dst, reg);
+            emit_rr(STR("mov"), tmp_dst, reg);
         }
     } else {
         if (reg.rsize < dst.rsize) {
@@ -216,29 +168,29 @@ static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offse
         }
         i64 width = (i64)memb_size * 8;
         if (dst_initialized) {
-            emit_rrii(STR_FROM("bfi"),   dst, reg, (i64)offset_bits, width);
+            emit_rrii(STR("bfi"),   dst, reg, (i64)offset_bits, width);
         } else {
-            emit_rrii(STR_FROM("ubfiz"), dst, reg, (i64)offset_bits, width);
+            emit_rrii(STR("ubfiz"), dst, reg, (i64)offset_bits, width);
         }
     }
 }
 
-bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int *index, size_t *size) {
-    type_t *type = dtype->base;
-    const dyn_member_t *members = &type->struct_t.members;
+bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args, int *index, size_t *size, size_t limit) {
+    const type_t *type = dtype->base;
     ptrdiff_t member_count = args->cur - args->begin;
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
 
     bool is_arr = dtype_top(dtype).tag == DK_ARRAY;
+    const dyn_member_t *members = is_arr ? NULL : &type->struct_t.members;
     bool dst_initialized = false;
     size_t size_acc = 0;
     size_t base_offset_bits = 0;
 
     for (ptrdiff_t i = *index; i < member_count; ++i, *index = (int)i) {
         member_t *memb = is_arr
-            ? &(member_t){.type = *dtype, .offset = (size_t)i * dtype->base->size}
+            ? &(member_t){.dtype = *dtype, .offset = (size_t)i * dtype->base->size}
             : &members->begin[i];
-        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->type);
+        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->dtype);
         size_t offset_bits = memb->offset * 8;
 
         if (size_acc == 0) {
@@ -246,16 +198,16 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
         }
         offset_bits -= base_offset_bits;
 
-        if (size_acc + memb_size > 8)
+        if (size_acc + memb_size > limit)
             break;
-        size_acc += memb_size;
 
         agg_member *r = &args->begin[i];
         if (r->tag == VALUE) {
-            emit_member_value(dst, members, args, &i, member_count, memb_size, offset_bits, &dst_initialized);
+            size_acc += emit_member_value(dst, members, args, &i, member_count, memb_size, offset_bits, &dst_initialized);
         } else if (r->tag == REG) {
             emit_member_reg(dst, r->reg, memb_size, offset_bits, dst_initialized);
             dst_initialized = true;
+            size_acc += memb_size;
         } else {
             unreachable;
         }
@@ -265,43 +217,30 @@ bool eightbyte_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args, int 
     return dst_initialized;
 }
 
-void emit_make_struct(reg_t dst, dtype_t *dtype, dyn_agg_member *args) {
-    type_t *type = dtype->base;
-    size_t type_size = dtype_size(dtype);
-    if (type_size > MAX_REG_SIZE) {
-        compile_err(NULL, "compiler bug: type exceeds max reg size\n");
-    }
+void emit_zero_out(reg_t dst) {
+    emit_mov(dst, 0);
+}
 
-    dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
-
-    int index = 0;
-    size_t size = 0;
-
-    bool cleared = eightbyte_make_struct(dst, dtype, args, &index, &size);
-    if (!cleared) {
-        emit_mov(dst, 0);
-    }
-
-    size_t remaining_size = type_size - size;
-    if (remaining_size >= 8) {
-        dst.offset++;
-        bool cleared = eightbyte_make_struct(dst, dtype, args, &index, &size);
-        if (!cleared) {
-            emit_mov(dst, 0);
-        }
-    }
+void emit_cond_set(reg_t dst, cond_t cond) {
+    emit_rx(STR("cset"), dst);
+    buf_puts(fn_buf, STR(", "));
+    buf_puts(fn_buf, STR(cond_str[cond]));
+    buf_putc(fn_buf, '\n');
 }
 
 static void emit_stp(reg_t src1, reg_t src2, reg_t base, i64 offset) {
     emit_rrx(STR("stp"), src1, src2);
     buf_puts(fn_buf, STR(", ["));
     buf_putreg(fn_buf, base);
-    buf_snprintf(fn_buf, ", #%"PRId64"]\n", offset);
+    buf_comma(fn_buf);
+    buf_puti(fn_buf, offset);
+    buf_snprintf(fn_buf, "]\n");
 }
 
+const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8};
+const reg_t wzr = {.reg_type = RD_NONE, .rsize = 4};
+
 void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
-    const reg_t xzr = {.reg_type = RD_NONE, .rsize = 8, .dtype = {.base = type->base}};
-    reg_t wzr = {.reg_type = RD_NONE, .rsize = 4, .dtype = {.base = type->base}};
     size_t size = dtype_size(type);
 
     while (size >= 16) {
@@ -315,11 +254,12 @@ void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
         offset += 8;
     }
 
+    reg_t zr = wzr;
     reg_size rsize = 4;
     while (size) {
         if (size >= rsize) {
-            wzr.rsize = rsize;
-            emit_str(dst, wzr, (int)offset);
+            zr.rsize = rsize;
+            emit_str(dst, zr, (int)offset);
             size -= rsize;
             offset += rsize;
         }
@@ -327,83 +267,41 @@ void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
     }
 }
 
-void emit_store_struct(reg_t dst, i64 offset, dtype_t *dtype, dyn_agg_member *args) {
-    type_t *type = dtype->base;
-    const dyn_member_t *members = &type->struct_t.members;
-    ptrdiff_t member_count = args->cur - args->begin;
-    printd("%s\n", __func__);
-    int index = 0;
-    size_t size = 0;
-
-    bool is_arr = false;
-    if (dtype_empty(dtype)) {
-
-    } else if (dtype_top(dtype).tag == DK_ARRAY) {
-        is_arr = true;
-    } else {
-        unreachable;
+void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written,
+                           reg_t hi, bool hi_written, bool has_hi) {
+    if (has_hi) {
+        lo.rsize = 8;
+        hi.rsize = 8;
+        if (!lo_written) {
+            lo = xzr;
+        }
+        if (!hi_written) {
+            hi = xzr;
+        }
+        emit_stp(lo, hi, base, offset);
+        return;
     }
 
-    reg_size rsize = type->size > 8 ? 8 : (reg_size)type->size;
-    while (index < member_count) {
-        reg_t tmp = {.reg_type = SCRATCH, .dtype = {.base = type}, .rsize = rsize};
-        size_t member_off = size;
-        int tmp_index = index;
+    if (!lo_written) {
+        lo.reg_type = RD_NONE;
+    }
+    emit_str(base, lo, (int)offset);
+}
 
-        dtype_t *mem_type;
-        if (is_arr) {
-            mem_type = dtype;
-        } else {
-            mem_type = &members->begin[index].type;
+void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
+    size_t pos = 0;
+    while (nbytes > 0) {
+        reg_size chunk = nbytes >= 8 ? 8 : nbytes >= 4 ? 4 : nbytes >= 2 ? 2 : 1;
+        reg_t piece = src;
+        piece.rsize = chunk;
+        emit_str(base, piece, (int)(offset + (i64)pos));
+        nbytes -= chunk;
+        pos += chunk;
+        if (nbytes > 0) {
+            reg_t full = src;
+            full.rsize = 8;
+            emit_rri(STR("lsr"), full, full, (i64)chunk * 8);
         }
-        if (mem_type->base->tag == TK_STRUCT) {
-            const agg_member *arg = args->begin + index;
-            if (arg->tag == AGGREGATE) {
-                dtype_t inner;
-                if (dtype_empty(dtype)) {
-                    inner = *mem_type;
-                } else {
-                    inner = *dtype;
-                    dtype_pop(&inner);
-                }
-                emit_store_struct(dst, offset + (i64)size, &inner, args->begin[index].agg);
-            } else if (arg->tag == VALUE && arg->value == 0) {
-                emit_zerofill(dst, offset, mem_type);
-            }
-            size += dtype_size(mem_type);
-            index += 1;
-            continue;
-        }
-        bool cleared = eightbyte_make_struct(tmp, dtype, args, &index, &size);
-        if (tmp_index == index) {
-            compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", dtype_size(mem_type));
-            str_printerr(mem_type->base->name);
-            break;
-        }
-
-        size_t remaining_size = type->size - size;
-        if (remaining_size >= 8
-                && args->begin[index].tag != AGGREGATE) {
-            tmp.rsize = 8;
-            reg_t tmp2 = tmp;
-            tmp2.offset++;
-            bool cleared2 = eightbyte_make_struct(tmp2, dtype, args, &index, &size);
-            remaining_size = type->size - size;
-
-            if (!cleared) {
-                tmp.reg_type = RD_NONE;
-            }
-            if (!cleared2) {
-                tmp2.reg_type = RD_NONE;
-            }
-            emit_stp(tmp, tmp2, dst, offset + (i64)member_off);
-            continue;
-        }
-
-        if (!cleared) {
-            tmp.reg_type = RD_NONE;
-        }
-        emit_str(dst, tmp, (int)offset + (int)member_off);
     }
 }
 
@@ -421,35 +319,45 @@ void emit_mov(reg_t dst, i64 value) {
             dst.rsize = 8;
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
         } else {
-            compile_err(NULL, "literal was too big");
+            report_error("literal was too big");
         }
     } else {
-        if (!dst.dtype.base || !dst.dtype.base->sign)
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIx64), get_wx(dst.rsize), regidx, value);
-        else
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIi64), get_wx(dst.rsize), regidx, value);
+        emit_ri(STR("mov"), dst, value);
     }
 
 }
 
+void put_xt(const type_t *type) {
+    if (type->sign) {
+        buf_putc(fn_buf, 's');
+    } else {
+        buf_putc(fn_buf, 'u');
+    }
+
+    buf_puts(fn_buf, STR("xt"));
+
+    if (type->size == 1) {
+        buf_putc(fn_buf, 'b');
+    } else if (type->size == 2) {
+        buf_putc(fn_buf, 'h');
+    } else if (type->size == 4) {
+        buf_putc(fn_buf, 'w');
+    } else {
+        report_error("incorrect src size %zd\n", type->size);
+    }
+    buf_putc(fn_buf, ' ');
+}
+
 void type_conv(reg_t dst, reg_t src) {
-    type_t *srct = src.dtype.base;
-    if (!srct) // TODO is it okay to ignore?
+    const type_t *srct = src.dtype.base;
+    if (srct == NULL) {
+        report_error("compiler bug: type of the src reg was null\n");
         return;
+    }
 
     buf_putc(fn_buf, '\t');
     if (srct->sign) {
-        buf_puts(fn_buf, STR_FROM("sxt"));
-        if (srct->size == 1) {
-            buf_putc(fn_buf, 'b');
-        } else if (srct->size == 2) {
-            buf_putc(fn_buf, 'h');
-        } else if (srct->size == 4) {
-            buf_putc(fn_buf, 'w');
-        } else {
-            report_error("incorrect src size %d\n", srct->size);
-        }
-
+        put_xt(srct);
 
         buf_snprintf(fn_buf, " %s%d, ", get_wx(dst.rsize), get_regoff(dst));
         buf_snprintf(fn_buf, "%s%d\n", get_wx(src.rsize), get_regoff(src));
@@ -465,12 +373,16 @@ void type_conv(reg_t dst, reg_t src) {
                     dst_ws, get_regoff(src));
         } else if (srct->size == 4) {
             buf_snprintf(fn_buf, "mov w%d, w%d\n", get_regoff(dst), get_regoff(src));
+        } else {
+            report_error("compiler_bug: use mov instead of type_conv\n");
         }
     }
 }
 
 void emit_mov_reg(reg_t dst, reg_t src) {
     const char *format;
+    if (reg_eq(dst, src))
+        return;
     if (dtype_tryget_addr(&dst.dtype)) {
         dst.rsize = 8;
     }
@@ -489,29 +401,37 @@ void emit_mov_reg(reg_t dst, reg_t src) {
 }
 
 void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
-    buf_puts(fn_buf, STR_FROM("\tadd "));
+    if (rhs == 0) {
+        emit_mov_reg(dst, lhs);
+        return;
+    }
+    buf_puts(fn_buf, STR("\tadd "));
     buf_putreg(fn_buf, dst);
-    buf_puts(fn_buf, STR_FROM(", "));
+    buf_puts(fn_buf, STR(", "));
     buf_putreg(fn_buf, lhs);
-    buf_puts(fn_buf, STR_FROM(", "));
+    buf_puts(fn_buf, STR(", "));
     buf_snprintf(fn_buf, "#%"PRId64"\n", rhs);
 }
 
 void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    buf_puts(fn_buf, STR_FROM("\tadd "));
+    buf_puts(fn_buf, STR("\tadd "));
     buf_putreg(fn_buf, dst);
-    buf_puts(fn_buf, STR_FROM(", "));
+    buf_puts(fn_buf, STR(", "));
     buf_putreg(fn_buf, lhs);
-    buf_puts(fn_buf, STR_FROM(", "));
+    buf_puts(fn_buf, STR(", "));
     buf_putreg(fn_buf, rhs);
     buf_putc(fn_buf, '\n');
 }
 
 void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
-    emit_rri(STR_FROM("sub"), dst, lhs, rhs);
+    if (rhs == 0) {
+        emit_mov_reg(dst, lhs);
+        return;
+    }
+    emit_rri(STR("sub"), dst, lhs, rhs);
 }
 void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    emit_rrr(STR_FROM("sub"), dst, lhs, rhs);
+    emit_rrr(STR("sub"), dst, lhs, rhs);
 }
 
 void emit_cmp(reg_t lhs, i64 rhs) {
@@ -537,16 +457,16 @@ void emit_string_lit(reg_t dst, const str *s) {
     buf_snprintf(fn_buf, addrgen_adrp, regidx, buffer);
     buf_snprintf(fn_buf, addrgen_add, regidx, regidx, buffer);
 
-    buf_snprintf(cstr_buf, "%s:\n", buffer);
-    buf_puts(cstr_buf, STR_FROM("\t.asciz "));
-    buf_puts(cstr_buf, *s);
-    buf_putc(cstr_buf, '\n');
+    buf_snprintf(&cstr_buf, "%s:\n", buffer);
+    buf_puts(&cstr_buf, STR("\t.asciz "));
+    buf_puts(&cstr_buf, *s);
+    buf_putc(&cstr_buf, '\n');
 
     free(buffer);
 }
 
 void emit_lsl(reg_t dst, reg_t lhs, i64 rhs) {
-    emit_rri(STR_FROM("lsl"), dst, lhs, rhs);
+    emit_rri(STR("lsl"), dst, lhs, rhs);
 }
 
 static void load_store_x(const char *op, reg_t r0, reg_t r1) {
@@ -556,10 +476,7 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
         size = 8;
     }
     if (r0.rsize <= 0) {
-        compile_err(NULL, "cannot %s size of zero\n", op);
-
-        printd("dump r0 | size: %d, reg_type: %d, offset: %d\n", r0.rsize, r0.reg_type, r0.offset);
-        report_error("");
+        report_error(NULL, "cannot %s size of zero\n", op);
     } else if (size <= 1) {
         if (*op == 'l' && r0.dtype.base->sign)
             suffix = "sb";
@@ -583,12 +500,14 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
 
 void emit_str(reg_t dst, reg_t src, int offset) {
     load_store_x("str", src, dst);
-    buf_snprintf(fn_buf, ("#%d]\n"), offset);
+    buf_puti(fn_buf, offset);
+    buf_snprintf(fn_buf, "]\n");
 }
 
 void emit_ldr(reg_t dst, reg_t src, int offset) {
     load_store_x("ldr", dst, src);
-    buf_snprintf(fn_buf, ("#%d]\n"), offset);
+    buf_puti(fn_buf, offset);
+    buf_snprintf(fn_buf, "]\n");
 }
 
 void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
@@ -624,7 +543,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
 
     if (elem_size == 0) {
-        compile_err(NULL, "element size was zero\n");
+        report_error("element size was zero\n");
         return;
     }
     if (elem_size == 1) {
@@ -666,67 +585,93 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         emit_ldr_reg(dst, src, offset);
 }
 
+void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
+    reg_t base = {.reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *)};
+    emit_sub(base, FP, object.offset);
+
+    const size_t elem_size = object.dtype.base->size;
+    const i64 shift = __builtin_ctz((unsigned)elem_size);
+    const type_t *itype = index.dtype.base;
+
+    if (itype->size >= 8) {
+        index.rsize = 8;
+        emit_rrrx(STR("add"), dst, base, index);
+        buf_comma(fn_buf);
+        buf_puts(fn_buf, STR("lsl "));
+        buf_puti(fn_buf, shift);
+        buf_putc(fn_buf, '\n');
+    } else {
+        index.rsize = 4;
+        emit_rrrx(STR("add"), dst, base, index);
+        buf_comma(fn_buf);
+        put_xt(itype);
+        buf_puti(fn_buf, shift);
+        buf_putc(fn_buf, '\n');
+    }
+}
+
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
     load_store_x("ldr", dst, src);
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
 }
 
 void emit_branch(str fn_name, str label, int index) {
-    buf_puts(fn_buf, STR_FROM("\tb "));
+    buf_puts(fn_buf, STR("\tb "));
     put_label(fn_name, label, index);
-    buf_puts(fn_buf, STR_FROM("\n"));
+    buf_puts(fn_buf, STR("\n"));
 }
 
 bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
-    buf_puts(fn_buf, STR_FROM("\tb."));
+    buf_puts(fn_buf, STR("\tb."));
     if (condition >= (cond_t)(sizeof (cond_str) / sizeof cond_str[0])) {
         fprintf(stderr, CSI_RED"unknown condition %d\n", condition);
         return false;
     }
-    buf_puts(fn_buf, STR_FROM(cond_str[condition]));
+    buf_puts(fn_buf, STR(cond_str[condition]));
     buf_putc(fn_buf, ' ');
     put_label(fn_name, label, index);
-    buf_puts(fn_buf, STR_FROM("\n"));
+    buf_puts(fn_buf, STR("\n"));
     return true;
 }
 
 void emit_label(str fn_name, str label, int index) {
     put_label(fn_name, label, index);
-    buf_puts(fn_buf, STR_FROM(":\n"));
+    buf_puts(fn_buf, STR(":\n"));
 }
 
-void emit_fn_prologue_epilogue(const parser_context *context) {
-    prologue_buf->cur = prologue_buf->start;
-    if (!context->calls_fn
-            && context->max_nreg_count == 0
-            && context->stack_size == 0)
+void emit_fn_prologue_epilogue(const parser_context *parser_context) {
+    context->prologue_buf.cur = context->prologue_buf.start;
+    if (!parser_context->calls_fn
+            && parser_context->max_nreg_count == 0
+            && parser_context->stack_size == 0)
         return;
 
-    int regs_to_save = context->max_nreg_count;
+    int regs_to_save = parser_context->max_nreg_count;
     if (regs_to_save + CALLEE_START >= 28) {
-        compile_err(&context->cur_token, "used up all callee-saved registers. found %d (expected less than %d", context->max_nreg_count, 28 - CALLEE_START);
+        compile_err(&parser_context->cur_token, "used up all callee-saved registers. found %d (expected less than %d", parser_context->max_nreg_count, 28 - CALLEE_START);
         return;
     }
-    bool calls_fn = context->calls_fn;
-    if (calls_fn) {
+    bool calls_fn = parser_context->calls_fn;
+    bool needs_fp = calls_fn || parser_context->stack_size > 0;
+    if (needs_fp) {
         regs_to_save += 2;
     }
 
     int stack_size =
         ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16)
-        + ALIGN_TO(context->stack_size, 16);
+        + ALIGN_TO(parser_context->stack_size, 16);
     printd("\nstack report for: ");
-    str_printd(context->name);
-    printd("\t- regs to save: %d, stack size: %d\n", regs_to_save, context->stack_size);
+    str_printd(parser_context->name);
+    printd("\t- regs to save: %d, stack size: %d\n", regs_to_save, parser_context->stack_size);
     printd("\t- aligned regs: %d, aligned stack: %d\n",
             ALIGN_TO(regs_to_save * (signed)sizeof (u64), 16),
-            ALIGN_TO(context->stack_size, 16));
+            ALIGN_TO(parser_context->stack_size, 16));
     printd("\t- result stack: %d\n", stack_size);
 
-    int cur_stackoff = ALIGN_TO(context->stack_size, 16);
+    int cur_stackoff = ALIGN_TO(parser_context->stack_size, 16);
     const int stack_objs_size = cur_stackoff;
     if (stack_objs_size > 0) {
-        buf_snprintf(prologue_buf, INSTR("sub sp, sp, #%d"), stack_size);
+        buf_snprintf(&context->prologue_buf, INSTR("sub sp, sp, #0x%x"), stack_size);
     }
 
     int remaining = regs_to_save;
@@ -737,17 +682,17 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
         int reg0 = CALLEE_START + remaining - 1;
         int reg1 = reg0 - 1;
         int off = cur_stackoff;
-        if (calls_fn) {
+        if (needs_fp) {
             reg0 = 29, reg1 = 30;
         }
-        const char *stp_format = INSTR("stp x%d, x%d, [sp, #%d]");
-        const char *ldp_format = INSTR("ldp x%d, x%d, [sp, #%d]");
+        const char *stp_format = INSTR("stp x%d, x%d, [sp, #0x%x]");
+        const char *ldp_format = INSTR("ldp x%d, x%d, [sp, #0x%x]");
         if (cur_stackoff == 0) {
-            stp_format = INSTR("stp x%d, x%d, [sp, #-%d]!");
+            stp_format = INSTR("stp x%d, x%d, [sp, #-0x%x]!");
             defer_ldp = true;
             off = stack_size;
         }
-        buf_snprintf(prologue_buf, stp_format, reg0, reg1, off);
+        buf_snprintf(&context->prologue_buf, stp_format, reg0, reg1, off);
         if (!defer_ldp)
             buf_snprintf(fn_buf, ldp_format, reg0, reg1, off);
         else
@@ -758,96 +703,69 @@ void emit_fn_prologue_epilogue(const parser_context *context) {
     while (remaining > 1) {
         int reg0 = CALLEE_START + remaining - 1;
         int reg1 = reg0 - 1;
-        buf_snprintf(prologue_buf, INSTR("stp x%d, x%d, [sp, #%d]"),
+        buf_snprintf(&context->prologue_buf, INSTR("stp x%d, x%d, [sp, #0x%x]"),
                 reg0, reg1, cur_stackoff);
-        buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [sp, #%d]"),
+        buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [sp, #0x%x]"),
                 reg0, reg1, cur_stackoff);
         remaining -= 2;
         cur_stackoff += 16;
     }
     if (remaining == 1) {
         remaining -= 1;
-        const char *stp_format = INSTR("str x%d, [sp, #%d]");
-        const char *ldp_format = INSTR("ldr x%d, [sp, #%d]");
+        const char *stp_format = INSTR("str x%d, [sp, #0x%x]");
+        const char *ldp_format = INSTR("ldr x%d, [sp, #0x%x]");
         int off = cur_stackoff;
         if (cur_stackoff == 0) {
-            stp_format = INSTR("str x%d, [sp, #%d]!");
-            ldp_format = INSTR("ldr x%d, [sp], #%d");
+            stp_format = INSTR("str x%d, [sp, #-0x%x]!");
+            ldp_format = INSTR("ldr x%d, [sp], #0x%x");
             off = stack_size;
         }
         int reg0 = CALLEE_START + remaining;
-        buf_snprintf(prologue_buf, stp_format,
+        buf_snprintf(&context->prologue_buf, stp_format,
                 reg0, off);
-        buf_snprintf(fn_buf, ldp_format,
+        buf_snprintf(&context->fn_buf, ldp_format,
                 reg0, off);
         cur_stackoff += 16;
     }
 
-    if (stack_objs_size == 0) {
-        buf_puts(prologue_buf, STR_FROM_INSTR("mov x29, sp"));
-    } else {
-        buf_snprintf(prologue_buf, INSTR("add x29, sp, #%d"), stack_objs_size);
+    if (needs_fp) {
+        if (stack_objs_size == 0) {
+            buf_puts(&context->prologue_buf, STR_FROM_INSTR("mov x29, sp"));
+        } else {
+            buf_snprintf(&context->prologue_buf, INSTR("add x29, sp, #0x%x"), stack_objs_size);
+        }
     }
 
     if (defer_ldp) {
-        const char *ldp_format = INSTR("ldp x%d, x%d, [sp], #%d");
-        buf_snprintf(fn_buf, ldp_format, deferred0, deferred1, stack_size);
+        const char *ldp_format = INSTR("ldp x%d, x%d, [sp], #0x%x");
+        buf_snprintf(&context->fn_buf, ldp_format, deferred0, deferred1, stack_size);
     }
     if (stack_objs_size > 0) {
-        buf_snprintf(fn_buf, INSTR("add sp, sp, #%d"), stack_size);
+        buf_snprintf(&context->fn_buf, INSTR("add sp, sp, #0x%x"), stack_size);
     }
 }
 
 void emit_fn_call(const str *s) {
-    buf_puts(fn_buf, STR_FROM("\tbl "));
-    buf_puts(fn_buf, STR_FROM(fn_prefix));
-    buf_puts(fn_buf, *s);
-    buf_putc(fn_buf, '\n');
+    buf_puts(&context->fn_buf, STR("\tbl "));
+    buf_puts(&context->fn_buf, STR(fn_prefix));
+    buf_puts(&context->fn_buf, *s);
+    buf_putc(&context->fn_buf, '\n');
 }
 
 void emit_fn(str fn_name) {
-    buf_puts(fn_header_buf, STR_FROM("\n\t.globl "));
-    buf_puts(fn_header_buf, STR_FROM(fn_prefix));
-	buf_puts(fn_header_buf, fn_name);
-    buf_puts(fn_header_buf, STR_FROM("\n\t.p2align 2\n"));
+    buf_puts(&context->fn_header_buf, STR("\n\t.globl "));
+    buf_puts(&context->fn_header_buf, STR(fn_prefix));
+	buf_puts(&context->fn_header_buf, fn_name);
+    buf_puts(&context->fn_header_buf, STR("\n\t.p2align 2\n"));
     if (*fn_annotation_fmt) {
-        buf_snprintf(fn_header_buf, fn_annotation_fmt,
+        buf_snprintf(&context->fn_header_buf, fn_annotation_fmt,
                      (int)str_len(fn_name), fn_name.data);
     }
-    buf_puts(fn_header_buf, STR_FROM(fn_prefix));
-	buf_puts(fn_header_buf, fn_name);
-    buf_puts(fn_header_buf, STR_FROM(":\n"));
+    buf_puts(&context->fn_header_buf, STR(fn_prefix));
+	buf_puts(&context->fn_header_buf, fn_name);
+    buf_puts(&context->fn_header_buf, STR(":\n"));
 }
 
 void emit_ret(void) {
-    buf_puts(fn_buf, STR_FROM_INSTR("ret"));
+    buf_puts(&context->fn_buf, STR_FROM_INSTR("ret"));
 }
-
-#ifndef _WIN32
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((format(printf, 1, 2)))
-#endif
-void report_error(const char *format, ...) {
-    int size = 0x1000;
-    void *array[size];
-    size = backtrace(array, size);
-
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, CSI_RED"error: "CSI_RESET);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    compile_err(NULL, "");
-
-    backtrace_symbols_fd(array, size, STDERR_FILENO);
-}
-#else
-void report_error(const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, CSI_RED"error: "CSI_RESET);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    compile_err(NULL, "");
-}
-#endif

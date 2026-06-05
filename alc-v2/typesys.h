@@ -6,9 +6,9 @@
 #include "types.h"
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 typedef struct dtype dtype_t;
+typedef struct emit_context emit_context_t;
 
 enum type_kind {
     TK_NONE, TK_FUND, TK_STRUCT, TK_UNION,
@@ -21,7 +21,7 @@ enum sign_t {
 typedef u8 sign_t;
 
 enum dtype_kind {
-    DK_ADDR, DK_ARRAY, DK_CHECK
+    DK_ADDR, DK_ARRAY, DK_CHECK, DK_SLICE
 };
 
 typedef struct delarator {
@@ -36,8 +36,19 @@ typedef struct dtype {
     usize decl_len;
 } dtype_t;
 
+static inline bool dtype_eq(const dtype_t *lhs, const dtype_t *rhs) {
+    if (lhs->decl_len != rhs->decl_len)
+        return false;
+
+    if (memcmp(&lhs->decl, &rhs->decl, sizeof lhs->decl) != 0)
+        return false;
+
+    bool base_eq = lhs->base == rhs->base;
+    return base_eq;
+}
+
 typedef struct member {
-    dtype_t type;
+    dtype_t dtype;
     str name;
     size_t offset;
 } member_t;
@@ -119,9 +130,21 @@ static inline size_t dtype_size(const dtype_t *self) {
         if (top.amount <= 0)
             fprintf(stderr, "array length was <= 0 (%d)", top.amount);
         return self->base->size * (usize)top.amount;
+    } else if (top.tag == DK_CHECK) {
+        dtype_t stripped = *self;
+        dtype_pop(&stripped);
+        return dtype_size(&stripped);
     } else {
         unreachable;
     }
+}
+
+static inline int dtype_reg_count(const dtype_t *self) {
+    for (usize i = 0; i < self->decl_len; ++i) {
+        if (self->decl[i].tag == DK_SLICE)
+            return 2;
+    }
+    return 1;
 }
 
 typedef struct reg {
@@ -131,6 +154,10 @@ typedef struct reg {
     dtype_t dtype;
 } reg_t;
 
+static inline bool reg_eq(struct reg lhs, struct reg rhs) {
+    return lhs.offset == rhs.offset && lhs.rsize == rhs.rsize && lhs.reg_type == rhs.reg_type && dtype_eq(&lhs.dtype, &rhs.dtype);
+}
+
 enum tag {
     NONE, VALUE, REG, AGGREGATE
 };
@@ -139,7 +166,6 @@ typedef struct {
     union {
         struct {
             i64 value;
-            type_t *type;
         };
         reg_t reg;
     };
@@ -187,6 +213,7 @@ typedef struct token {
         };
         str id;
     };
+    const char *filename;
     unsigned short lineno;
     unsigned char indent;
     eob_t eob;   // end of block
@@ -212,6 +239,8 @@ typedef struct {
     u8 airity;
     u8 ret_airity;
     bool is_fn;
+    bool is_called;
+    bool is_placeholder;
     arr_reg_t params;
     arr_reg_t rets;
 } symbol_t;
@@ -221,8 +250,23 @@ ARR_GENERIC(target, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u16, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u8, MAX_BLOCK_DEPTH)
 
+typedef struct {
+    str name;
+    str type_name;
+    size_t offset;
+    size_t size;
+} stack_slot_t;
+#define MAX_STACK_SLOTS 64
+
+typedef struct src {
+    char *cur;
+    char *start;
+    char *end;
+    char filename[FILENAME_MAX];
+} src_t;
+
 typedef struct parser_context {
-    iter *src;
+    src_t *src;
     reg_t reg;
     int stack_size;
     u16 unnamed_labels;
@@ -242,6 +286,8 @@ typedef struct parser_context {
     arr_u16 deferred_unnamed_br;
     arr_u8 nreg_mark;
     symbol_t *symbol;
+    stack_slot_t stack_slots[MAX_STACK_SLOTS];
+    int stack_slot_count;
 } parser_context;
 
 inline static int/*?*/ power_of_two_exponent(size_t n) {

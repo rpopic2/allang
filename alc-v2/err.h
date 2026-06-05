@@ -2,6 +2,7 @@
 
 typedef struct token token_t;
 void compile_err(const token_t *token, const char *format, ...);
+void compile_warning(const token_t *token, const char *format, ...);
 
 #if NDEBUG
 #define printd(...) ((void)0)
@@ -17,9 +18,10 @@ void compile_err(const token_t *token, const char *format, ...);
 #define str_printdnl(S) str_fprintnl(S, stdout)
 #define pf(...) printf(__VA_ARGS__), putc('\n', stdout);
 #define p(s) printf(#s), putc('\n', stdout);
-#define pi(i) printf(#i": %lld\n", (long long)(i));
+#define pd(i) printf(#i": %lld\n", (long long)(i));
 #define pp(i) printf(#i": %p\n", (void *)(i));
 #define pc(i) printf(#i": '%c'\n", i);
+#define pcs(s) printf(#s": '%s'\n", s);
 #define ps(s) printf(#s": "), str_print(s);
 #endif
 
