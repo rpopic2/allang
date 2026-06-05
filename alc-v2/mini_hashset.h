@@ -5,6 +5,7 @@
 #include "str.h"
 #include "types.h"
 #include "typesys.h"
+#include "inttypes.h"
 
 // hash entry
 
@@ -13,12 +14,12 @@ typedef struct {
     reg_t value;
 } hash_entry;
 
-bool hash_entry_valid(const hash_entry *entry) {
-    return entry->key.data;
+bool entry_valid(const str *entry) {
+    return entry->data;
 }
 
-void hash_entry_invalidate(hash_entry *entry) {
-    entry->key.data = NULL;
+void entry_invalidate(str *entry) {
+    entry->data = NULL;
 }
 
 // mini hashset
@@ -41,7 +42,7 @@ inline static hash_entry *find_entry(mini_hashset self, const str id) {
     str_printdnl(id), printd(" -> hash was: %"PRIu64"\n", index);
     u64 start = index;
 
-    while (hash_entry_valid(&self[index])) {
+    while (entry_valid(&self[index].key)) {
         if (str_eq(self[index].key, id)) {
             break;
         }
@@ -57,7 +58,7 @@ inline static hash_entry *find_entry(mini_hashset self, const str id) {
 
 inline static bool has_entry(mini_hashset self, const str *s) {
     hash_entry *entry = find_entry(self, *s);
-    return hash_entry_valid(entry);
+    return entry_valid(&entry->key);
 }
 
 inline static reg_t *overwrite_id(mini_hashset self, str id, const reg_t *value) {
@@ -68,7 +69,7 @@ inline static reg_t *overwrite_id(mini_hashset self, str id, const reg_t *value)
 
 inline static reg_t *add_id(mini_hashset self, str id, const reg_t *value) {
     hash_entry *entry = find_entry(self, id);
-    if (hash_entry_valid(entry)) {
+    if (entry_valid(&entry->key)) {
         return NULL;
     } else {
         entry->key = id, entry->value = *value;
@@ -104,7 +105,7 @@ static inline void arr_mini_hashset_pop(arr_mini_hashset *arr) {
         return;
     for (int i = 0; i < array_len; ++i) {
         // arr->cur[0][i].key = str_null;
-        hash_entry_invalidate(arr->cur[0] + i);
+        entry_invalidate(&(arr->cur[0] + i)->key);
     }
     arr->cur--;
     printd("array is now %zd\n", arr->cur - arr->data);
@@ -123,10 +124,59 @@ inline static bool find_id(arr_mini_hashset *arr, str id, const token_t *token, 
     }
     hash_entry *entry = find_entry(*target, id);
     *out = &entry->value;
-    if (!hash_entry_valid(entry)) {
+    if (!entry_valid(&entry->key)) {
         return false;
     }
     return true;
+}
+
+// constant entry
+
+typedef struct const_entry {
+    i64 value;
+} const_entry_t;
+
+#define CONST_MINI_HASHSET_SIZE 64
+
+typedef struct const_hashmap {
+    str keys[CONST_MINI_HASHSET_SIZE];
+    const_entry_t values[CONST_MINI_HASHSET_SIZE];
+} const_hashmap_t;
+
+inline static u64 const_hashmap_find_index(const_hashmap_t *self, str id) {
+    u64 index = hash(id) % array_len;
+    const u64 start = index;
+
+    while (entry_valid(&self->keys[index])) {
+        if (str_eq(self->keys[index], id)) {
+            break;
+        }
+        index += 1;
+        index &= (array_len - 1);
+        if (index == start) {
+            fprintf(stderr, "hash tabel is full!");
+            abort();
+        }
+    }
+    return index;
+}
+
+inline static bool const_hashmap_tryadd(const_hashmap_t *self, str id, i64 value) {
+    u64 index = const_hashmap_find_index(self, id);
+    if (entry_valid(&self->keys[index])) {
+        return false;
+    }
+    self->keys[index] = id;
+    self->values[index] = (const_entry_t){.value = value};
+    return true;
+}
+
+inline static const_entry_t *const_hashmap_tryfind(const_hashmap_t *self, str id) {
+    u64 index = const_hashmap_find_index(self, id);
+    if (!entry_valid(&self->keys[index])) {
+        return NULL;
+    }
+    return &self->values[index];
 }
 
 #undef entries

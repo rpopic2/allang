@@ -72,6 +72,7 @@ HASHMAP_GENERIC(type_t, 128, hash_fnv_1a)
 
 hashmap_symbol_t fn_ids;
 hashmap_type_t types;
+const_hashmap_t const_ids;
 
 inline static bool is_id(char c) {
     return isalnum(c) || c == '_';
@@ -210,6 +211,25 @@ retry:;
     }
     return true;
 }
+
+void consume_until(parser_context *context, str s) {
+    while (tok(context)) {
+        str cur = context->cur_token.id;
+        if (str_eq(cur, s)) {
+            break;
+        }
+    }
+}
+
+void consume_line(parser_context *context) {
+    u16 start = lineno;
+    while (tok(context)) {
+        p(consum)
+        if (start != lineno)
+            break;
+    }
+}
+
 
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((format(printf, 2, 3)))
@@ -415,6 +435,13 @@ regable read_regable(str s, const token_t *token) {
         reg_t *reg = NULL;
 
         str name = dot_iter(&s, '.');
+        const_entry_t *entry = const_hashmap_tryfind(&const_ids, name);
+        if (entry != NULL) {
+            result.tag = VALUE;
+            result.value = entry->value;
+            return result;
+        }
+
         if (!find_id(&local_ids, name, token, &reg, scope_up)
             || reg->reg_type == RD_NONE) {
             compile_err(token, "unknown id "), str_printerr(token->id);
@@ -1011,8 +1038,29 @@ void binary_op(parser_context *restrict context, const regable *restrict lhs) {
             compile_err(&lhs_token, "lslv not implemented\n");
         }
     } else if (streq(op_token.data, "is")) {
+        cond_t cond = COND_EQ;
+        if (streq(op_token.data + 2, "nt")) {
+            cond = COND_NE;
+        }
+
         if (lhs->tag == VALUE) {
-            compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
+            if (rhs.tag == VALUE) {
+                bool take_branch = lhs->value == rhs.value;
+                if (cond == COND_NE) {
+                    take_branch = !take_branch;
+                }
+                if (take_branch) {
+                    p(eq!)
+                    tok(context);
+                    // TODO need to constant-fold named_bcond/anoyn_bcond/cond_set
+                } else {
+                    p(ne!)
+                    consume_line(context);
+                }
+                return;
+            } else {
+                compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
+            }
         }
 
         if (rhs.tag == VALUE)
@@ -1020,11 +1068,6 @@ void binary_op(parser_context *restrict context, const regable *restrict lhs) {
         else if (rhs.tag == REG)
             emit_cmp_reg(lhs->reg, rhs.reg);
         else unreachable;
-
-        cond_t cond = COND_EQ;
-        if (streq(op_token.data + 2, "nt")) {
-            cond = COND_NE;
-        }
 
         if (is_id(rhs_token.end[1])) {
             cond = cond_flip(cond);
@@ -1802,6 +1845,25 @@ bool stmt_stack_store(parser_context *context, reg_t src) {
 
 bool decl_vars(parser_context *context) {
     const token_t *token = &context->cur_token;
+
+    if (isupper(token->data[0]) && token->end[-1] == ':') {
+        str name = token->id;
+        name.end -= 1;
+
+        tok(context);
+        regable reg = read_regable(token->id, token);
+        if (reg.tag != VALUE) {
+            compile_err(token, "expected constant expression\n");
+            return true;
+        }
+        i64 value = reg.value;
+        bool ok = const_hashmap_tryadd(&const_ids, name, value);
+        if (!ok) {
+            compile_err(token, "redifinition of constant\n");
+        }
+        return true;
+    }
+
     if (!streq(token->end, " ::")) {
         return false;
     }
@@ -1982,15 +2044,6 @@ bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_
     context->has_branched_ret = true;
     emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
     return true;
-}
-
-void consume_until(parser_context *context, str s) {
-    while (tok(context)) {
-        str cur = context->cur_token.id;
-        if (str_eq(cur, s)) {
-            break;
-        }
-    }
 }
 
 bool stmt(parser_context *context) {
