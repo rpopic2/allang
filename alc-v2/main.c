@@ -1267,14 +1267,14 @@ void make_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args) {
 
     int index = 0;
     size_t size = 0;
-    bool lo_written = emit_eightbyte_struct(dst, dtype, args, &index, &size);
+    bool lo_written = emit_eightbyte_struct(dst, dtype, args, &index, &size, 8);
     if (!lo_written) {
         emit_zero_out(dst);
     }
 
     if (type_size - size >= 8) {
         dst.offset++;
-        bool hi_written = emit_eightbyte_struct(dst, dtype, args, &index, &size);
+        bool hi_written = emit_eightbyte_struct(dst, dtype, args, &index, &size, 8);
         if (!hi_written) {
             emit_zero_out(dst);
         }
@@ -1324,8 +1324,14 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
 
         const size_t chunk_offset = size;
         int start_index = index;
+        size_t limit = 8;
+        if (is_arr) {
+            const size_t remaining = (size_t)(member_count - index) * dtype->base->size;
+            const size_t capped = remaining > 8 ? 8 : remaining;
+            limit = capped >= 8 ? 8 : capped >= 4 ? 4 : capped >= 2 ? 2 : 1;
+        }
         reg_t lo = {.reg_type = SCRATCH, .offset = 0, .rsize = rsize, .dtype = {.base = type}};
-        bool lo_written = emit_eightbyte_struct(lo, dtype, args, &index, &size);
+        bool lo_written = emit_eightbyte_struct(lo, dtype, args, &index, &size, limit);
         if (start_index == index) {
             compile_err(NULL, "member size expected less than 16, but was %zd. member name: ", dtype_size(&member_type));
             str_printerr(member_type.base->name);
@@ -1350,7 +1356,7 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
                 && index < member_count
                 && args->begin[index].tag != AGGREGATE;
         if (has_hi) {
-            hi_written = emit_eightbyte_struct(hi, dtype, args, &index, &size);
+            hi_written = emit_eightbyte_struct(hi, dtype, args, &index, &size, 8);
         }
         emit_store_eightbytes(dst, offset + (i64)chunk_offset, lo, lo_written, hi, hi_written, has_hi);
     }
@@ -2575,7 +2581,9 @@ void import_all_from(src_t src) {
     printd("import start\n");
     src_t *srcp = &src;
     arr_mini_hashset_init(&local_ids);
-    parser_context context = { .src = srcp };
+    symbol_t global = {.name = STR(src.filename)};
+    global.name.end -= strlen(".al");
+    parser_context context = { .src = srcp, .symbol = &global };
     while (srcp->cur < srcp->end) {
         tok(&context);
         token_t *t = &context.cur_token;

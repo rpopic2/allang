@@ -278,7 +278,8 @@ void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
 /* Pack up to 8 bytes of struct fields into dst using x86_64 instructions.
    Returns true if dst was written to, false if it remains unset. */
 bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args,
-                           int *index, size_t *size_out) {
+                           int *index, size_t *size_out, size_t limit) {
+    (void)limit;
     type_t *type = dtype->base;
     ptrdiff_t member_count = args->cur - args->begin;
 

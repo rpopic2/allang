@@ -18,7 +18,7 @@ PASS=0
 FAIL=0
 FAIL_NAMES=()
 
-for AL_FILE in *.al; do
+for AL_FILE in tests/*.al; do
     NAME="${AL_FILE%.*}"
     printf "  %-30s" "$AL_FILE"
 

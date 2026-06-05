@@ -33,7 +33,7 @@ typedef enum load_store {
 } load_store_t;
 
 // aggregates
-bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args, int *index, size_t *size);
+bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args, int *index, size_t *size, size_t limit);
 void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written, reg_t hi, bool hi_written, bool has_hi);
 void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes);
 void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type);

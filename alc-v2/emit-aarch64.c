@@ -175,7 +175,7 @@ static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offse
     }
 }
 
-bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args, int *index, size_t *size) {
+bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args, int *index, size_t *size, size_t limit) {
     const type_t *type = dtype->base;
     ptrdiff_t member_count = args->cur - args->begin;
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
@@ -198,7 +198,7 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
         }
         offset_bits -= base_offset_bits;
 
-        if (size_acc + memb_size > 8)
+        if (size_acc + memb_size > limit)
             break;
 
         agg_member *r = &args->begin[i];
