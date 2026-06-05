@@ -1,5 +1,6 @@
 #pragma once
 
+#include "allocator.h"
 #include "arr.h"
 #include "dyn.h"
 #include "str.h"
@@ -233,7 +234,7 @@ typedef struct {
 } target;
 
 #define MAX_PARAMS 8
-ARR_GENERIC(reg_t, MAX_PARAMS)
+list_GENERIC(reg_t)
 typedef struct {
     str name;
     u8 airity;
@@ -241,8 +242,8 @@ typedef struct {
     bool is_fn;
     bool is_called;
     bool is_placeholder;
-    arr_reg_t params;
-    arr_reg_t rets;
+    list_reg_t params;
+    list_reg_t rets;
 } symbol_t;
 
 #define MAX_BLOCK_DEPTH 10
