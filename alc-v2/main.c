@@ -1676,6 +1676,16 @@ bool expr(parser_context *context) {
         return true;
     }
     if (expr_load(context)) {
+        regable lhs = {.tag = REG, .reg = context->reg};
+        const char *next = context->cur_token.end;
+        if (next[0] == ' ') {
+            next += 1;
+            bool is_binop = ((next[0] == '+' || next[0] == '-') && next[1] == ' ')
+                    || streq(next, "is ") || streq(next, "isnt ")
+                    || streq(next, "shl ");
+            if (is_binop)
+                binary_op(context, &lhs);
+        }
         return true;
     }
     regable lhs = read_regable(token->id, token);
