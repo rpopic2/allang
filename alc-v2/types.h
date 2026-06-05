@@ -31,6 +31,7 @@ typedef enum cond {
 } cond_t;
 
 #define unreachable (printf("unreachable %s:%s:%d\n", __FILE__, __func__, __LINE__), __builtin_unreachable())
+#define nop (void)0
 #define malloc_failed() (printf("malloc failed %s:%s:%d\n", __FILE__, __func__, __LINE__), abort())
 
 #define ALIGN_TO(expr, align) (((expr) + (align) - 1) & ~((align) - 1))

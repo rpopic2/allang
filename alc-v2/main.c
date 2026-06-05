@@ -230,6 +230,40 @@ void consume_line(parser_context *context) {
     }
 }
 
+void consume_block(parser_context *context) {
+    const token_t *cur_token = &context->cur_token;
+    int start_indent = cur_token->indent;
+    bool check_start = true;
+    while (true) {
+        tok(context);
+        if (check_start) {
+            check_start = false;
+            if (cur_token->indent != start_indent + 4) {
+                compile_err(cur_token, "indented block expected\n");
+            }
+        }
+        if (str_len(cur_token->id) == 0) {
+            return;
+        }
+        consume_line(context);
+
+        if (cur_token->eob == EOB) {
+            if (cur_token->indent == start_indent + 4) {
+                printd("end of a block ret\n\n");
+                return;
+            }
+        }
+    }
+}
+
+void consume_line_or_block(parser_context *context) {
+    bool one_liner = context->cur_token.end[0] != '\n';
+    if (one_liner) {
+        consume_line(context);
+    } else {
+        consume_block(context);
+    }
+}
 
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((format(printf, 2, 3)))
@@ -850,6 +884,7 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
 }
 
 void named_bcond(parser_context *context, cond_t cond) {
+    // TODO considering removing named branch other that break-> and loop->
     tok(context);
     token_t jump_target = context->cur_token;
     if (!streq(jump_target.end - 2, "->")) {
@@ -859,10 +894,7 @@ void named_bcond(parser_context *context, cond_t cond) {
     emit_branch_cond(cond, context->name, jump_target.id, 0);
 }
 
-void anonymous_bcond(parser_context *context, cond_t cond) {
-    str name = STR("lbb");
-    int index = context->unnamed_labels++;
-    emit_branch_cond(cond, context->name, name, index);
+void anonymous_bcond_block(parser_context *context) {
     tok(context);
 
     bool one_liner = context->cur_token.end[0] != '\n';
@@ -881,9 +913,18 @@ void anonymous_bcond(parser_context *context, cond_t cond) {
     } else {
         parse_block(context);
     }
+}
+
+void anonymous_bcond(parser_context *context, cond_t cond) {
+    str name = STR("lbb");
+    int index = context->unnamed_labels++;
+    emit_branch_cond(cond, context->name, name, index);
+
+    anonymous_bcond_block(context);
 
     emit_label(context->name, name, index);
 }
+
 
 void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     printd("slice access\n");
@@ -1043,41 +1084,65 @@ void binary_op(parser_context *restrict context, const regable *restrict lhs) {
             cond = COND_NE;
         }
 
+        enum { FOLD_NONE, FOLD_SKIP, FOLD_TAKEN, } fold = FOLD_NONE;
+        bool fold_taken = false;
         if (lhs->tag == VALUE) {
             if (rhs.tag == VALUE) {
-                bool take_branch = lhs->value == rhs.value;
+                fold_taken = lhs->value == rhs.value;
                 if (cond == COND_NE) {
-                    take_branch = !take_branch;
+                    fold_taken = !fold_taken;
                 }
-                if (take_branch) {
-                    p(eq!)
-                    tok(context);
-                    // TODO need to constant-fold named_bcond/anoyn_bcond/cond_set
-                } else {
-                    p(ne!)
-                    consume_line(context);
-                }
-                return;
+                fold = FOLD_SKIP + fold_taken;
             } else {
                 compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
             }
         }
 
-        if (rhs.tag == VALUE)
-            emit_cmp(lhs->reg, rhs.value);
-        else if (rhs.tag == REG)
-            emit_cmp_reg(lhs->reg, rhs.reg);
-        else unreachable;
+        if (fold == FOLD_NONE) {
+            if (rhs.tag == VALUE)
+                emit_cmp(lhs->reg, rhs.value);
+            else if (rhs.tag == REG)
+                emit_cmp_reg(lhs->reg, rhs.reg);
+            else unreachable;
+        }
 
         if (is_id(rhs_token.end[1])) {
-            cond = cond_flip(cond);
-            named_bcond(context, cond);
+            switch (fold) {
+            case FOLD_NONE:
+                cond = cond_flip(cond);
+                named_bcond(context, cond);
+                break;
+            case FOLD_TAKEN:
+            case FOLD_SKIP:
+                compile_err(&rhs_token, "not implemented when folded\n");
+                break;
+            }
         } else if (streq(rhs_token.end + 1, "->")) {
             cond = cond_flip(cond);
-            anonymous_bcond(context, cond);
+            switch (fold) {
+            case FOLD_NONE:
+                anonymous_bcond(context, cond);
+                break;
+            case FOLD_TAKEN:
+                anonymous_bcond_block(context);
+                break;
+            case FOLD_SKIP:
+                tok(context);
+                consume_line_or_block(context);
+                break;
+            }
         } else if (context->reg.reg_type == PARAM) {
-            emit_cond_set(context->reg, cond);
+            switch (fold) {
+            case FOLD_NONE:
+                emit_cond_set(context->reg, cond);
+                break;
+            case FOLD_TAKEN:
+            case FOLD_SKIP:
+                emit_mov(context->reg, fold_taken);
+                break;
+            }
         }
+
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
     }
