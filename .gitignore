@@ -1,5 +1,7 @@
 a.out
 *.dSYM
+*.o
+*.pch
 
 .DS_Store
 compile_commands.json
