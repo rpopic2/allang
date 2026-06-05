@@ -2294,7 +2294,21 @@ bool directives(parser_context *context) {
             compile_err(token, "filename was too long\n");
             return true;
         }
-        src_t src = read_source(filename_cstr);
+        char resolved[FILENAME_MAX];
+        const char *cur_filename = context->src->filename;
+        const char *slash = strrchr(cur_filename, '/');
+        if (filename_cstr[0] != '/' && slash != NULL) {
+            size_t dir_len = (size_t)(slash - cur_filename) + 1;
+            int n = snprintf(resolved, sizeof resolved, "%.*s%s", (int)dir_len, cur_filename, filename_cstr);
+            if (n < 0 || (size_t)n >= sizeof resolved) {
+                compile_err(token, "resolved filename was too long\n");
+                return true;
+            }
+        } else {
+            strncpy(resolved, filename_cstr, sizeof resolved);
+            resolved[sizeof resolved - 1] = '\0';
+        }
+        src_t src = read_source(resolved);
         u16 tmp_lineno = lineno;
         lineno = 1;
         skip_function(&src);

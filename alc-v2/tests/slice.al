@@ -1,4 +1,4 @@
-#compile_all tests/expect.al
+#compile_all expect.al
 
 [Arr] :: 5*i32{.. 0} =[]
 

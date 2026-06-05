@@ -144,3 +144,9 @@ note that allang does not have a notion of compilation unit. all .al files are c
 
 compile_all is equivalant to compile directive, but will import all private symbols.
 
+## directive paths
+
+paths in directives are resolved relative to the directory of the file that contains the directive, not the compiler's current working directory.
+
+paths must use forward slashes (`/`) as the separator, even on Windows. backslashes are not supported.
+
