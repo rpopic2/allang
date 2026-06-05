@@ -2127,13 +2127,11 @@ bool stmt(parser_context *context) {
     } else if (streq(token->data, ">>")) {
         u16 index = context->unnamed_labels++;
         arr_u16 *stack = &context->deferred_unnamed_br;
-        u16 *target;
         if (arr_u16_is_empty(stack)) {
-            target = stack->data;
+            arr_u16_push(stack, index);
         } else {
-            target = stack->cur - 1;
+            *(stack->cur - 1) = index;
         }
-        *target = index;
         emit_branch(context->name, STR("unnamed"), index);
         return true;
     } else if (streq(token->data, "<<")) {
@@ -2257,12 +2255,12 @@ void stmt_label(parser_context *context) {
     for (int i = 0; i < symbol->airity; ++i) {
         reg_t *param = &symbol->params.data[i];
         reg_t arg_reg = {.reg_type = PARAM, .offset = i, .dtype = param->dtype, .rsize = param->rsize};
-        context_add_nreg(context, &param->dtype);
         reg_t r = {
             .reg_type = NREG, .offset = context->nreg_count,
             .rsize = param->rsize,
             .dtype = param->dtype,
         };
+        context_add_nreg(context, &param->dtype);
         emit_mov_reg(r, arg_reg);
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {

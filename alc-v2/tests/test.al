@@ -1,4 +1,5 @@
 #declare printf: Format addr u8 => Num_Printed i32
+#declare _Exit: Status i32
 
 printf "Hello World\n" =>
 
@@ -40,6 +41,11 @@ foo K, [J] =>
 
 Hi :: get_hi =>
 [Hi_Stack] :: get_hi => =[]
+
+test_arith_op =>
+test_fwd_branch =>
+test_addr_param =>
+test_arr_stride =>
 
 ret 0
 
@@ -516,3 +522,28 @@ cast_chain: (=>)
     C :: i32{B}
     D :: i64{C}
     ret
+
+// tests REG+VALUE arithmetic dtype propagation (binary_op bug fix)
+test_arith_op: =>
+    R :: arith_reg_val 3, 5 =>
+    R isnt 7 -> _Exit 1 =>
+
+// >> jumps forward past _Exit 2 to ret; exercises >> push-when-empty fix
+test_fwd_branch: =>
+    >>
+    _Exit 2 =>
+    <<
+
+// loads from an addr u32 parameter; exercises PARAM rsize propagation fix
+test_addr_param: =>
+    [X] :: u32{42} =[]
+    V :: addr_fns X =>
+    V isnt 42 -> _Exit 3 =>
+
+// initialises a 4*i16 array and reads back elements; exercises element-stride fix
+test_arr_stride: =>
+    [Arr] :: 4*i16{.0 10 .1 20 .2 30 .3 40 .. 0} =[]
+    V0 :: [Arr.0]
+    V0 isnt 10 -> _Exit 4 =>
+    V2 :: [Arr.2]
+    V2 isnt 30 -> _Exit 4 =>
