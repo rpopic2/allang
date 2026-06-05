@@ -32,6 +32,7 @@ void struct_report(type_t *type);
 void stack_report(parser_context *context);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
 bool stmt_ret(parser_context *context);
+void stmt_label(parser_context *context);
 int expr_line(parser_context *context);
 void compile(src_t src, FILE *object_file);
 src_t read_source(const char *source_name);
@@ -2143,6 +2144,9 @@ bool stmt(parser_context *context) {
         }
         emit_label(context->name, STR("unnamed"), index);
         return true;
+    } else if ((islower(token->data[0]) || token->data[0] == '_') && streq(token->end - 1, ":")) {
+        stmt_label(context);
+        return true;
     }
 
     return decl_vars(context);
@@ -2440,8 +2444,6 @@ bool control_flow(parser_context *context) {
     if (streq(token->end - 2, "->")) {
         str label = {.data = token->data, .end = token->end - 2};
         emit_branch(context->symbol->name, label, 0);
-    } else if (streq(token->end - 1, ":")) {
-        stmt_label(context);
     } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
         fn_call(context);
     } else {
