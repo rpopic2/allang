@@ -1684,7 +1684,7 @@ bool expr(parser_context *context) {
                     || streq(next, "is ") || streq(next, "isnt ")
                     || streq(next, "shl ");
             if (is_binop)
-                binary_op(&lhs, context);
+                binary_op(context, &lhs);
         }
         return true;
     }
