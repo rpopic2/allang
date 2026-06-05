@@ -27,7 +27,7 @@ enum register_dst {
 };
 
 typedef enum cond {
-    COND_EQ, COND_NE, COND_GE, COND_LT, COND_GT, COND_LE, COND_HS, COND_HI
+    COND_EQ, COND_NE, COND_GE, COND_LT, COND_GT, COND_LE, COND_HS, COND_LO, COND_HI, COND_LS
 } cond_t;
 
 #define unreachable (printf("unreachable %s:%s:%d\n", __FILE__, __func__, __LINE__), __builtin_unreachable())

@@ -49,6 +49,22 @@ slice_u32 =>
 slice_u64 =>
 slice_usize =>
 
+cmp_lt_i32_true =>
+cmp_lt_i32_false =>
+cmp_lt_i32_neg =>
+cmp_gt_i32_true =>
+cmp_gt_i32_false =>
+cmp_le_i32_true =>
+cmp_le_i32_equal =>
+cmp_le_i32_false =>
+cmp_ge_i32_true =>
+cmp_ge_i32_equal =>
+cmp_ge_i32_false =>
+cmp_lt_u32_true =>
+cmp_lt_u32_false =>
+cmp_le_u32_equal =>
+cmp_ge_u32_true =>
+
 printf "all index tests passed\n" =>
 ret 0
 
@@ -411,3 +427,101 @@ slice_usize: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Begin :: usize{1}
     Arr * Begin.. ! ret
+
+// --- comparison operator tests ---
+
+cmp_lt_i32_true: =>
+    A :: i32{3}
+    B :: i32{5}
+    A < B ->
+        ret
+    _Exit 80 =>
+
+cmp_lt_i32_false: =>
+    A :: i32{5}
+    B :: i32{3}
+    A < B -> _Exit 81 =>
+    ret
+
+cmp_lt_i32_neg: =>
+    A :: i32{-1}
+    A < 0 ->
+        ret
+    _Exit 82 =>
+
+cmp_gt_i32_true: =>
+    A :: i32{5}
+    B :: i32{3}
+    A > B ->
+        ret
+    _Exit 83 =>
+
+cmp_gt_i32_false: =>
+    A :: i32{3}
+    B :: i32{5}
+    A > B -> _Exit 84 =>
+    ret
+
+cmp_le_i32_true: =>
+    A :: i32{3}
+    B :: i32{5}
+    A <= B ->
+        ret
+    _Exit 85 =>
+
+cmp_le_i32_equal: =>
+    A :: i32{5}
+    A <= 5 ->
+        ret
+    _Exit 86 =>
+
+cmp_le_i32_false: =>
+    A :: i32{5}
+    B :: i32{3}
+    A <= B -> _Exit 87 =>
+    ret
+
+cmp_ge_i32_true: =>
+    A :: i32{5}
+    B :: i32{3}
+    A >= B ->
+        ret
+    _Exit 88 =>
+
+cmp_ge_i32_equal: =>
+    A :: i32{5}
+    A >= 5 ->
+        ret
+    _Exit 89 =>
+
+cmp_ge_i32_false: =>
+    A :: i32{3}
+    B :: i32{5}
+    A >= B -> _Exit 90 =>
+    ret
+
+cmp_lt_u32_true: =>
+    A :: u32{100}
+    B :: u32{200}
+    A < B ->
+        ret
+    _Exit 91 =>
+
+cmp_lt_u32_false: =>
+    A :: u32{200}
+    B :: u32{100}
+    A < B -> _Exit 92 =>
+    ret
+
+cmp_le_u32_equal: =>
+    A :: u32{100}
+    A <= 100 ->
+        ret
+    _Exit 93 =>
+
+cmp_ge_u32_true: =>
+    A :: u32{200}
+    B :: u32{100}
+    A >= B ->
+        ret
+    _Exit 94 =>
