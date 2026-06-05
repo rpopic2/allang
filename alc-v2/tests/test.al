@@ -1,4 +1,5 @@
 #declare printf: Format addr u8 => Num_Printed i32
+#declare _Exit: Status i32
 
 printf "Hello World\n" =>
 
@@ -40,6 +41,11 @@ foo K, [J] =>
 
 Hi :: get_hi =>
 [Hi_Stack] :: get_hi => =[]
+
+test_arith_op =>
+test_fwd_branch =>
+test_addr_param =>
+test_arr_stride =>
 
 ret 0
 
@@ -457,12 +463,87 @@ slice: =>
     }
 
     [Data] :: u32{1} =[]
-    Slice :: slice{.Begin Data .Size 1}
+    [Slice] :: slice{.Begin Data .Size 1} =[]
     [Slice.Begin]
-    [Slice]
     ret
 
 slice2: =>
     [Data] :: u32{1} =[]
     [Slice] :: slice{.Begin Data .Size 1} =[]
     ret
+
+literals: (=>)
+    T :: true
+    F :: false
+    C :: 'A'
+    N :: i32{-3}
+    Big :: 0xDEADBEEF
+    ret
+
+arith_reg_val: (X i32, Y i32 => R i32)
+    A :: X + 1
+    B :: Y - 2
+    ret A + B
+
+control_flow: (X i32 =>)
+    X is 0 ->
+        done->
+    X is 1 ->
+        Y :: 99
+    done:
+    X is 2 ->
+        >>
+        Z :: 1
+        <<
+    ret
+
+addr_fns: (P addr u32 => R u32)
+    ret [P]
+
+scope_deep: (=>)
+    A ::
+        B ::
+            C :: 3
+            C =
+        B =
+    A is 3 ->
+        ret
+    ret
+
+typed_arrays: (=>)
+    [A8] :: 4*u8{.. 0} =[]
+    [A16] :: 4*u16{.0 1 .1 2 .. 0} =[]
+    [A64] :: 4*i64{.0 100 .1 200 .. 0} =[]
+    ret
+
+cast_chain: (=>)
+    A :: i8{127}
+    B :: i16{A}
+    C :: i32{B}
+    D :: i64{C}
+    ret
+
+// tests REG+VALUE arithmetic dtype propagation (binary_op bug fix)
+test_arith_op: =>
+    R :: arith_reg_val 3, 5 =>
+    R isnt 7 -> _Exit 1 =>
+
+// >> jumps forward past _Exit 2 to ret; exercises >> push-when-empty fix
+test_fwd_branch: =>
+    >>
+    _Exit 2 =>
+    <<
+
+// loads from an addr u32 parameter; exercises PARAM rsize propagation fix
+test_addr_param: =>
+    [X] :: u32{42} =[]
+    V :: addr_fns X =>
+    V isnt 42 -> _Exit 3 =>
+
+// initialises a 4*i16 array and reads back elements; exercises element-stride fix
+test_arr_stride: =>
+    [Arr] :: 4*i16{.0 10 .1 20 .2 30 .3 40 .. 0} =[]
+    V0 :: [Arr.0]
+    V0 isnt 10 -> _Exit 4 =>
+    V2 :: [Arr.2]
+    V2 isnt 30 -> _Exit 4 =>
