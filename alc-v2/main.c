@@ -58,20 +58,6 @@ type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .
 type_t *error_type = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("error_type")};
 
 
-u64 hashmap_hash(str id) {
-    u64 index = (u64)id.data[0];
-    u64 end = (u64)id.end[-1];
-    u64 len = str_len(id);
-    return index ^ end ^ len;
-}
-
-u64 type_hash(str id) {
-    u64 index = (u64)id.data[0];
-    u64 end = (u64)id.end[-1];
-    u64 len = str_len(id);
-    return (index ^ end ^ len) | 1;
-}
-
 u64 hash_fnv_1a(str id) {
     u64 hash = 0xcbf29ce484222325;
     while (id.data != id.end) {
@@ -81,8 +67,8 @@ u64 hash_fnv_1a(str id) {
     return hash;
 }
 
-HASHMAP_GENERIC(symbol_t, 64, hashmap_hash)
-HASHMAP_GENERIC(type_t, 128, type_hash)
+HASHMAP_GENERIC(symbol_t, 64, hash_fnv_1a)
+HASHMAP_GENERIC(type_t, 128, hash_fnv_1a)
 
 hashmap_symbol_t fn_ids;
 hashmap_type_t types;
@@ -188,13 +174,23 @@ retry:;
     if (end_of_line) {
         unsigned char new_indent = 0;
         context->end_of_line = true;
-        while (src->cur[0] == '\n') {
-            ++lineno;
-            src->cur++;
-        }
-        while (src->cur[0] == ' ') {
-            src->cur++;
-            ++new_indent;
+        while (true) {
+            new_indent = 0;
+            while (src->cur[0] == '\n') {
+                ++lineno;
+                src->cur++;
+            }
+            while (src->cur[0] == ' ') {
+                src->cur++;
+                ++new_indent;
+            }
+            if (src->cur < src->end && src->cur[0] == '/' && src->cur[1] == '/') {
+                while (src->cur < src->end && src->cur[0] != '\n') {
+                    src->cur++;
+                }
+                continue;
+            }
+            break;
         }
         if (indent % 4 != 0) {
             compile_err(cur_token, "an indentation should be 4 spaces\n");
@@ -410,8 +406,6 @@ void diagnositc_slice(const token_t *token, i64 begin_index, i64 end_index, i32 
     if (end_index > array) {
         compile_err(token, "end index out of bounds\n");
     }
-
-    printd("slice: begin=%"PRId64" end=%"PRId64" array=%d\n", begin_index, end_index, array);
 }
 
 regable read_regable(str s, const token_t *token) {
@@ -865,7 +859,7 @@ void anonymous_bcond(parser_context *context, cond_t cond) {
 }
 
 void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
-    p(slice access)
+    printd("slice access\n");
 
     tok(context);
 
@@ -2404,15 +2398,21 @@ void function(src_t *src) {
     }
     arr_target_init(&context->targets);
 
+    u8 label_indent = 0;
     if (!is_main) {
         tok(context);
         str_printd(context->cur_token.id);
         if (context->cur_token.data == NULL)
             return;
+        label_indent = context->cur_token.indent;
         stmt_label(context);
     }
     if (dead_fn_elim && !context->symbol->is_called) {
         skip_function(src);
+        return;
+    }
+    if (!is_main && context->symbol->is_fn && indent <= label_indent) {
+        compile_err(&context->cur_token, "function definition has no body: "), str_printerr(context->symbol->name);
         return;
     }
     context->indent = context->cur_token.indent;
