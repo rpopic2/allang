@@ -899,6 +899,7 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     }
     diagnostic_dyn_elem_access(context, begin);
 
+    reg_t dst = context->reg;
     if (begin->tag != NONE && end->tag != NONE) {
         emit_cmp_reg(begin->reg, end->reg);
         emit_branch_cond(COND_HI, context->symbol->name, STR("ret"), 0);
@@ -911,7 +912,6 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
         unreachable;
     }
 
-    reg_t dst = context->reg;
     dst.rsize = sizeof (void *); // TODO move this out when fixing typecheck
 
     reg_t dst2 = dst;
