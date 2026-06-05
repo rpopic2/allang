@@ -19,6 +19,15 @@ statements are not considered as a block.
 
 end of a block is where indentation of a line becomes less than the indentation of a block.
 
+a block may be written as a **one-liner**: when the block body appears on the same line as the block-opening token, the block ends at end of that line. one-liners are only valid for blocks (e.g. `if`/`->` branches, `::` declarations), not for function definitions.
+
+e.g.
+
+```
+I is 5 -> ret 0         // one-liner block: body on same line as ->
+I :: 3                  // one-liner block: assignment on same line as ::
+```
+
 e.g.
 
 ```
@@ -49,11 +58,12 @@ pattern:foo:\n\tbar:\n\t\tbaz=>\n\n\tprint
 
 ## function end
 
+function definitions always require an indented body; there are no one-liner functions.
+
 a function body ends under any of the following conditions:
 
-1. **(one-liner)** the body is on the same line as the signature — ends at end of that line.
-2. **(multi-line)** the first non-empty, non-comment line whose indentation is ≤ the signature's indentation. that line is **not** part of the body.
-3. **(EOF)** end of file is reached.
+1. **(dedent)** the first non-empty, non-comment line whose indentation is ≤ the signature's indentation. that line is **not** part of the body.
+2. **(EOF)** end of file is reached.
 
 e.g.
 
