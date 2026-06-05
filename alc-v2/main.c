@@ -31,6 +31,7 @@ target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
 void stack_report(parser_context *context);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
+bool stmt_ret(parser_context *context);
 int expr_line(parser_context *context);
 void compile(src_t src, FILE *object_file);
 src_t read_source(const char *source_name);
@@ -901,7 +902,9 @@ void anonymous_bcond_block(parser_context *context) {
     if (one_liner) {
         do {
             tok(context);
-            if (expr_line(context)) {
+            if (stmt_ret(context)) {
+
+            } else if (expr_line(context)) {
 
             } else if (fn_call(context)) {
 
