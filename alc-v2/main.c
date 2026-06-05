@@ -58,20 +58,6 @@ type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .
 type_t *error_type = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("error_type")};
 
 
-u64 hashmap_hash(str id) {
-    u64 index = (u64)id.data[0];
-    u64 end = (u64)id.end[-1];
-    u64 len = str_len(id);
-    return index ^ end ^ len;
-}
-
-u64 type_hash(str id) {
-    u64 index = (u64)id.data[0];
-    u64 end = (u64)id.end[-1];
-    u64 len = str_len(id);
-    return (index ^ end ^ len) | 1;
-}
-
 u64 hash_fnv_1a(str id) {
     u64 hash = 0xcbf29ce484222325;
     while (id.data != id.end) {
@@ -81,8 +67,8 @@ u64 hash_fnv_1a(str id) {
     return hash;
 }
 
-HASHMAP_GENERIC(symbol_t, 64, hashmap_hash)
-HASHMAP_GENERIC(type_t, 128, type_hash)
+HASHMAP_GENERIC(symbol_t, 64, hash_fnv_1a)
+HASHMAP_GENERIC(type_t, 128, hash_fnv_1a)
 
 hashmap_symbol_t fn_ids;
 hashmap_type_t types;
