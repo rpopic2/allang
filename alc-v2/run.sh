@@ -1,4 +1,9 @@
 
+if [ $# -eq 0 ]; then
+    echo "usage: run.sh [<emit-arch.c> <emit-os.c>] <source.al>" >&2
+    exit 1
+fi
+
 if [[ "$(uname -m)" == x86* ]]; then
     EXTRA_FLAGS+=" -masm=intel"
 fi

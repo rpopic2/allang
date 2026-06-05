@@ -1,24 +1,21 @@
 #import test
 
-store_struct: (Dst reg_t, Dtype addr dtype_t, Args addr dyn_agg_member) =>
-once:
+store_struct: Dst reg_t, Dtype addr dtype_t, Args addr dyn_agg_member =>
+	% once
 	Member.Count :: [Args.Cur] - [Args.Begin]
-	Is Array ::
-		isnt Array =
-		Dtype .is_empty =>
-		! Dtype .top =>.Tag is DK_ARRAY
-		? is Array =
-
 	&Index :: 0
 	&Size :: usize{0}
-	Rsize ::
-		[Dtype.Size] =
-		> 8 ? 8 : Self
+	%
 
 loop:
 	break if Index < Member.Count
 	
 	Member_Type ::
+		#once Is Array ::
+			isnt Array =
+			Dtype .is_empty =>
+			! Dtype .top =>.Tag is DK_ARRAY
+			? is Array =
 		Is Array ? Dtype =
 		Isnt Array ? [[Dtype.Members.Begin] * Index .Type ! break] =
 	Arg :: Args * Index ! panic
@@ -40,6 +37,9 @@ loop:
 		loop->
 
 	Start_Index :: Index
+	Rsize :: %once
+		[Dtype.Size] =
+		> 8) ? 8 : Self
 	&Lo :: reg_t{.RegType SCRATCH .Offset 0 .Rsize Rsize .Dtype {.Base Dtype.Base}} =[]
  	Lo.Written :: emit_eightbyte_struct Lo, Dtype, Args, &Index &Size =>
 

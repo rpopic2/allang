@@ -21,6 +21,8 @@ extern const char *local_string_prefix;
 extern const char *text_section_header;
 extern const char *string_section_header;
 
+const char *imm_prefix = "";
+
 const size_t default_register_size = 8;
 
 bool emit_need_escaping(void) {
@@ -128,6 +130,13 @@ void emit_mov_reg(reg_t dst, reg_t src) {
         dst.rsize = src.rsize;
     }
     emit_rr(STR(op), dst, src);
+}
+
+void type_conv(reg_t dst, reg_t src) {
+    if (src.dtype.base) {
+        src.rsize = (reg_size)src.dtype.base->size;
+    }
+    emit_mov_reg(dst, src);
 }
 
 void emit_lea_begin(reg_t dst, reg_t lhs, str op) {
@@ -269,7 +278,8 @@ void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
 /* Pack up to 8 bytes of struct fields into dst using x86_64 instructions.
    Returns true if dst was written to, false if it remains unset. */
 bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args,
-                           int *index, size_t *size_out) {
+                           int *index, size_t *size_out, size_t limit) {
+    (void)limit;
     type_t *type = dtype->base;
     ptrdiff_t member_count = args->cur - args->begin;
 
@@ -298,12 +308,12 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
         member_t local_memb;
         member_t *memb;
         if (is_arr) {
-            local_memb = (member_t){.type = *dtype, .offset = (size_t)i * dtype->base->size};
+            local_memb = (member_t){.dtype = *dtype, .offset = (size_t)i * dtype->base->size};
             memb = &local_memb;
         } else {
             memb = &type->struct_t.members.begin[i];
         }
-        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->type);
+        size_t memb_size = is_arr ? dtype->base->size : dtype_size(&memb->dtype);
         size_t offset_bits = memb->offset * 8;
         size_t local_offset_bits = offset_bits % 64;
 
@@ -410,6 +420,23 @@ void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written,
     }
 }
 
+void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
+    size_t pos = 0;
+    while (nbytes > 0) {
+        reg_size chunk = nbytes >= 8 ? 8 : nbytes >= 4 ? 4 : nbytes >= 2 ? 2 : 1;
+        reg_t piece = src;
+        piece.rsize = chunk;
+        emit_str(base, piece, (int)(offset + (i64)pos));
+        nbytes -= chunk;
+        pos += chunk;
+        if (nbytes > 0) {
+            reg_t full = src;
+            full.rsize = 8;
+            emit_ri(STR("shr"), full, (i64)chunk * 8);
+        }
+    }
+}
+
 void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {
     (void)dst; (void)type; (void)len; (void)args;
 }
@@ -439,6 +466,12 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         return;
     }
 
+    if (offset.rsize == 1 || offset.rsize == 2) {
+        reg_t wide = offset;
+        wide.rsize = 8;
+        emit_mov_reg(wide, offset);
+        offset = wide;
+    }
     offset.rsize = 8;
     src.rsize = 8;
 
@@ -489,6 +522,37 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         emit_ldr(dst, idx, 0);
 }
 
+void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
+    reg_t base = {.reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *)};
+    if (object.reg_type == STACK) {
+        const reg_t frame = {.reg_type = FRAME, .rsize = sizeof (void *)};
+        emit_sub(base, frame, object.offset);
+    } else {
+        emit_mov_reg(base, object);
+    }
+
+    const size_t elem_size = object.dtype.base->size;
+    if (index.rsize == 1 || index.rsize == 2) {
+        reg_t wide = index;
+        wide.rsize = 8;
+        emit_mov_reg(wide, index);
+        index = wide;
+    }
+    index.rsize = 8;
+    if (elem_size <= 8 && (elem_size == 1 || power_of_two_exponent(elem_size))) {
+        emit_lea_begin(dst, base, STR("+"));
+        buf_putreg(fn_buf, index);
+        buf_snprintf(fn_buf, "*%zu]\n", elem_size);
+    } else {
+        reg_t idx = {.reg_type = SCRATCH, .offset = 1, .rsize = 8};
+        emit_mov_reg(idx, index);
+        buf_snprintf(fn_buf, "\timul ");
+        buf_putreg(fn_buf, idx);
+        buf_snprintf(fn_buf, ", %zu\n", elem_size);
+        emit_add_reg(dst, base, idx);
+    }
+}
+
 /* --- control flow --- */
 
 void emit_branch(str fn_name, str label, int index) {
@@ -498,7 +562,7 @@ void emit_branch(str fn_name, str label, int index) {
 }
 
 const char *const cond_str[] = {
-    "e", "ne", "ge", "l",
+    "e", "ne", "ge", "l", "g", "le", "ae", "a",
 };
 bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
     if (condition >= (cond_t)(sizeof cond_str / sizeof cond_str[0])) {

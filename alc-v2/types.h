@@ -27,10 +27,11 @@ enum register_dst {
 };
 
 typedef enum cond {
-    COND_EQ, COND_NE, COND_GE, COND_LT
+    COND_EQ, COND_NE, COND_GE, COND_LT, COND_GT, COND_LE, COND_HS, COND_HI
 } cond_t;
 
 #define unreachable (printf("unreachable %s:%s:%d\n", __FILE__, __func__, __LINE__), __builtin_unreachable())
+#define nop (void)0
 #define malloc_failed() (printf("malloc failed %s:%s:%d\n", __FILE__, __func__, __LINE__), abort())
 
 #define ALIGN_TO(expr, align) (((expr) + (align) - 1) & ~((align) - 1))
@@ -38,5 +39,6 @@ typedef enum cond {
 
 #define CSI_RED "\x1b[31m"
 #define CSI_GREEN "\x1b[32m"
+#define CSI_YELLOW "\x1b[33m"
 #define CSI_RESET "\x1b[0m"
 

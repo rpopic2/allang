@@ -60,3 +60,10 @@ variables are decided at runtime.
 all constants are immutable.
 variables can be mutable or immutable.
 
+# compile errors and warnings
+
+both compile errors and compile warnings generate assembly/machine code.
+if a compile error occurred, the behavior of the generated code is undefined.
+if only compile warnings occurred, the generated code is well-defined and correct,
+but may indicate suboptimal or non-idiomatic usage.
+

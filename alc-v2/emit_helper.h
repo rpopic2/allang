@@ -21,6 +21,7 @@ static buf text_buf;
 static buf cstr_buf;
 static char *cstr_begin;
 static unsigned string_lit_counts;
+extern const char *imm_prefix;
 
 static buf *fn_buf;
 
@@ -85,7 +86,10 @@ static void buf_comma(buf *buffer) {
 }
 
 static void buf_puti(buf *buffer, i64 i0) {
-    buf_snprintf(buffer, "0x%"PRIx64, i0);
+    if (i0 < 0)
+        buf_snprintf(buffer, "%s-0x%"PRIx64, imm_prefix, -i0);
+    else
+        buf_snprintf(buffer, "%s0x%"PRIx64, imm_prefix, i0);
 }
 
 void emit_r(buf *buffer, const char *op, reg_t reg) {
@@ -157,10 +161,14 @@ static void emit_rrii(str op, reg_t r0, reg_t r1, i64 i0, i64 i1) {
     buf_putc(fn_buf, '\n');
 }
 
-static void emit_rrrsi(str op, reg_t r0, reg_t r1, reg_t r2, str s, i64 i0) {
+static void emit_rrrx(str op, reg_t r0, reg_t r1, reg_t r2) {
     emit_rrx(op, r0, r1);
-    buf_comma(fn_buf);
+    buf_puts(fn_buf, STR(", "));
     buf_putreg(fn_buf, r2);
+}
+
+static void emit_rrrsi(str op, reg_t r0, reg_t r1, reg_t r2, str s, i64 i0) {
+    emit_rrrx(op, r0, r1, r2);
     buf_comma(fn_buf);
     buf_puts(fn_buf, s);
     buf_comma(fn_buf);
