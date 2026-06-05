@@ -83,9 +83,9 @@ void buf_putreg(buf *buffer, reg_t reg) {
 
 // Pack consecutive sub-byte VALUE members into a single immediate.
 // Advances *i past any members it consumes; caller's loop will re-increment.
-static void pack_small_values(const dyn_member_t *members, const dyn_agg_member *args,
-                               ptrdiff_t *i, ptrdiff_t member_count,
-                               size_t first_size, i64 *value, bool is_arr) {
+static size_t pack_small_values(const dyn_member_t *members, const dyn_agg_member *args,
+                                ptrdiff_t *i, ptrdiff_t member_count,
+                                size_t first_size, i64 *value) {
     size_t packed = first_size;
     while (packed < 2) {
         if (++(*i) >= member_count)
@@ -95,7 +95,7 @@ static void pack_small_values(const dyn_member_t *members, const dyn_agg_member 
             --(*i);
             break;
         }
-        size_t next_size = is_arr ? first_size : dtype_size(&members->begin[*i].dtype);
+        size_t next_size = members ? dtype_size(&members->begin[*i].dtype) : first_size;
         if (packed + next_size > 2) {
             --(*i);
             break;
@@ -103,20 +103,22 @@ static void pack_small_values(const dyn_member_t *members, const dyn_agg_member 
         packed += next_size;
         *value |= next_r->value << (next_size * 8);
     }
+    return packed;
 }
 
-static void emit_member_value(reg_t dst, const dyn_member_t *members, const dyn_agg_member *args,
-                               ptrdiff_t *i, ptrdiff_t member_count,
-                               size_t memb_size, size_t offset_bits,
-                               bool *dst_initialized, bool is_arr) {
+static size_t emit_member_value(reg_t dst, const dyn_member_t *members, const dyn_agg_member *args,
+                                ptrdiff_t *i, ptrdiff_t member_count,
+                                size_t memb_size, size_t offset_bits,
+                                bool *dst_initialized) {
     i64 value = args->begin[*i].value;
+    size_t packed = memb_size;
     if (offset_bits >= 32 && dst.rsize < 8)
         dst.rsize = 8;
     if (offset_bits % 16 == 0) {
-        pack_small_values(members, args, i, member_count, memb_size, &value, is_arr);
+        packed = pack_small_values(members, args, i, member_count, memb_size, &value);
     }
     if (value == 0)
-        return;
+        return packed;
 
     if (offset_bits % 16 != 0) {
         if (!*dst_initialized) {
@@ -124,7 +126,7 @@ static void emit_member_value(reg_t dst, const dyn_member_t *members, const dyn_
             unreachable;
         }
         emit_rri(STR("orr"), dst, dst, value << offset_bits);
-        return;
+        return packed;
     }
     if (!*dst_initialized) {
         emit_risi(STR("movz"), dst, value, STR("lsl"), (i64)offset_bits);
@@ -132,6 +134,7 @@ static void emit_member_value(reg_t dst, const dyn_member_t *members, const dyn_
         emit_risi(STR("movk"), dst, value, STR("lsl"), (i64)offset_bits);
     }
     *dst_initialized = true;
+    return packed;
 }
 
 static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offset_bits,
@@ -174,11 +177,11 @@ static void emit_member_reg(reg_t dst, reg_t reg, size_t memb_size, size_t offse
 
 bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member *args, int *index, size_t *size) {
     const type_t *type = dtype->base;
-    const dyn_member_t *members = &type->struct_t.members;
     ptrdiff_t member_count = args->cur - args->begin;
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
 
     bool is_arr = dtype_top(dtype).tag == DK_ARRAY;
+    const dyn_member_t *members = is_arr ? NULL : &type->struct_t.members;
     bool dst_initialized = false;
     size_t size_acc = 0;
     size_t base_offset_bits = 0;
@@ -197,14 +200,14 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
 
         if (size_acc + memb_size > 8)
             break;
-        size_acc += memb_size;
 
         agg_member *r = &args->begin[i];
         if (r->tag == VALUE) {
-            emit_member_value(dst, members, args, &i, member_count, memb_size, offset_bits, &dst_initialized, is_arr);
+            size_acc += emit_member_value(dst, members, args, &i, member_count, memb_size, offset_bits, &dst_initialized);
         } else if (r->tag == REG) {
             emit_member_reg(dst, r->reg, memb_size, offset_bits, dst_initialized);
             dst_initialized = true;
+            size_acc += memb_size;
         } else {
             unreachable;
         }
