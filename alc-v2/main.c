@@ -67,7 +67,7 @@ u64 hash_fnv_1a(str id) {
     return hash;
 }
 
-HASHMAP_GENERIC(symbol_t, 64, hash_fnv_1a)
+HASHMAP_GENERIC(symbol_t, 128, hash_fnv_1a)
 HASHMAP_GENERIC(type_t, 128, hash_fnv_1a)
 
 hashmap_symbol_t fn_ids;
