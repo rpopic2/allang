@@ -341,9 +341,9 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
         compile_err(token, "expected closing \"\n");
     }
     if (!escape) {
-        context->reg.rsize = sizeof (char *);
         context->reg.dtype = (dtype_t){.base = hashmap_type_t_tryfind(types, STR("u8"))};
         dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+        context->reg.rsize = dtype_regsize(&context->reg.dtype);
         emit_string_lit(context->reg, (str *)token);
         return;
     }
@@ -598,8 +598,8 @@ regable read_regable(str s, const token_t *diagnostic) {
         if (mem_size > MAX_REG_SIZE) {
             compile_err(diagnostic, "this member does not fit in register\n");
         }
-        result.reg.rsize = (reg_size)mem_size;
         result.reg.dtype = member->dtype;
+        result.reg.rsize = dtype_regsize(&result.reg.dtype);
         bool is_basetype_addr = dtype_tryget_addr(&reg->dtype) > 0;
         if (is_basetype_addr) {
             dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
@@ -775,7 +775,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         if (first) {
             reg.dtype = first->dtype;
             reg.offset -= (i32)first->offset;
-            reg.rsize = (reg_size)dtype_size(&first->dtype);
+            reg.rsize = dtype_regsize(&first->dtype);
         } else if (dtype_tryget(dtype, DK_SLICE)) {
             reg.rsize = (reg_size)dtype_size(dtype);
         } else {
@@ -1690,17 +1690,11 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
 }
 
 reg_size get_rsize(reg_t reg) {
-    if (dtype_tryget_addr(&reg.dtype)) {
-        return (reg_size)sizeof (void *);
-    }
-    size_t size = reg.dtype.base->size;
-    if (size > MAX_REG_SIZE) {
+    if (reg.dtype.base && reg.dtype.base->size > MAX_REG_SIZE) {
         compile_err(NULL, "compiler bug: this register size exceeds max register size\n");
         return 0;
     }
-    if (size == 0)
-        return 0;
-    return (reg_size)next_pow2((u32)size);
+    return dtype_regsize(&reg.dtype);
 }
 
 void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable offset) {
@@ -2657,10 +2651,8 @@ symbol_t *fn_call(parser_context *context) {
     if (symbol->ret_airity == 1) {
         reg_t *return_reg = &symbol->rets.begin[0];
         context->reg.dtype = return_reg->dtype;
-
-        size_t return_size = dtype_size(&return_reg->dtype);
-        assert(return_size <= MAX_REG_SIZE);
-        context->reg.rsize = (reg_size)return_size;
+        assert(dtype_size(&return_reg->dtype) <= MAX_REG_SIZE);
+        context->reg.rsize = dtype_regsize(&context->reg.dtype);
     } else if (symbol->ret_airity > 1) {
         compile_err(token, "returning two values is not implemented\n");
     }

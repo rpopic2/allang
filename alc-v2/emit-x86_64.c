@@ -371,7 +371,7 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
     /* Shift scratch — must differ from dst. When packing the hi eightbyte
        dst is SCRATCH[1], so bump past it (and past the lo eightbyte SCRATCH[0],
        which must survive until the store). */
-    reg_t shift_tmp = {.reg_type = SCRATCH, .offset = 1, .rsize = 8};
+    reg_t shift_tmp = reg_phys(SCRATCH, 1, 8);
     if (dst.reg_type == SCRATCH && dst.offset >= shift_tmp.offset) {
         shift_tmp.offset = dst.offset + 1;
     }
@@ -418,7 +418,7 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
             reg_t reg = arg->reg;
             if (reg.reg_type == STACK) {
                 /* STACK reg is a variable at rbp-offset; compute its address first */
-                const reg_t frame = {.reg_type = FRAME, .rsize = 8};
+                const reg_t frame = reg_phys(FRAME, 0, 8);
                 emit_sub(shift_tmp, frame, (i64)reg.offset);
                 reg = shift_tmp;
             }
@@ -530,7 +530,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
             tmp_src.reg_type = SCRATCH;
             tmp_src.offset = 2;
             tmp_src.rsize = 8;
-            const reg_t frame = {.reg_type = FRAME, .rsize = 8};
+            const reg_t frame = reg_phys(FRAME, 0, 8);
             emit_sub(tmp_src, frame, src.offset);
             src = tmp_src;
         }
@@ -584,7 +584,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
 
     /* General case: compute byte offset = index * elem_size, then access */
-    reg_t idx = {.reg_type = SCRATCH, .offset = 1, .rsize = 8};
+    reg_t idx = reg_phys(SCRATCH, 1, 8);
     emit_mov_reg(idx, offset);
     buf_snprintf(fn_buf, "\timul ");
     buf_putreg(fn_buf, idx);
@@ -598,9 +598,9 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
 }
 
 void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
-    reg_t base = {.reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *)};
+    reg_t base = reg_phys(SCRATCH, 0, sizeof(void *));
     if (object.reg_type == STACK) {
-        const reg_t frame = {.reg_type = FRAME, .rsize = sizeof (void *)};
+        const reg_t frame = reg_phys(FRAME, 0, sizeof(void *));
         emit_sub(base, frame, object.offset);
     } else {
         emit_mov_reg(base, object);
@@ -619,7 +619,7 @@ void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
         buf_putreg(fn_buf, index);
         buf_snprintf(fn_buf, "*%zu]\n", elem_size);
     } else {
-        reg_t idx = {.reg_type = SCRATCH, .offset = 1, .rsize = 8};
+        reg_t idx = reg_phys(SCRATCH, 1, 8);
         emit_mov_reg(idx, index);
         buf_snprintf(fn_buf, "\timul ");
         buf_putreg(fn_buf, idx);
@@ -698,7 +698,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
         stack_size += 8; // for aligning stack to 0x10 bytes on 'call' (x64 abi)
 
     for (int i = 0; i < regs_to_save; ++i) {
-        emit_r(&context->prologue_buf, "push", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
+        emit_r(&context->prologue_buf, "push", reg_phys(NREG, i, sizeof(void *)));
     }
     if (locals_size) {
         if (shadow_size)
@@ -713,7 +713,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
     if (stack_size)
         buf_snprintf(fn_buf, "\tadd rsp, 0x%zx\n", stack_size);
     for (int i = regs_to_save - 1; i >= 0; --i) {
-        emit_r(fn_buf, "pop", (reg_t){.reg_type = NREG, .offset = i, .rsize = sizeof (void *)});
+        emit_r(fn_buf, "pop", reg_phys(NREG, i, sizeof(void *)));
     }
     if (locals_size)
         buf_puts(fn_buf, STR_FROM_INSTR("pop rbp"));

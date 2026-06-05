@@ -170,6 +170,15 @@ static inline size_t dtype_size(const dtype_t *self) {
     }
 }
 
+static inline reg_size dtype_regsize(const dtype_t *self) {
+    if (dtype_tryget_addr(self))
+        return (reg_size)sizeof(void *);
+    if (!self->base || !self->base->size)
+        return 0;
+    size_t sz = self->base->size;
+    return (reg_size)(sz <= 1 ? 1 : sz <= 2 ? 2 : sz <= 4 ? 4 : 8);
+}
+
 static inline int dtype_reg_count(const dtype_t *self) {
     for (usize i = 0; i < self->decl_len; ++i) {
         if (self->decl[i].tag == DK_SLICE)
@@ -188,6 +197,10 @@ typedef struct reg {
 
 static inline bool reg_eq(struct reg lhs, struct reg rhs) {
     return lhs.offset == rhs.offset && lhs.rsize == rhs.rsize && lhs.reg_type == rhs.reg_type && dtype_eq(&lhs.dtype, &rhs.dtype);
+}
+
+static inline reg_t reg_phys(register_dst type, int offset, reg_size sz) {
+    return (reg_t){.reg_type = type, .offset = offset, .rsize = sz};
 }
 
 enum tag {

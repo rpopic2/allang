@@ -662,7 +662,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
 }
 
 void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
-    reg_t base = {.reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *)};
+    reg_t base = reg_phys(SCRATCH, 0, sizeof(void *));
     if (object.reg_type == STACK)
         emit_sub(base, FP, object.offset);
     else
