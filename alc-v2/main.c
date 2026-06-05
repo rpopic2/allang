@@ -2520,6 +2520,7 @@ void function(src_t *src) {
     arr_u8_init(&context->nreg_mark);
     bool is_main = src->cur == src->start;
     if (is_main) {
+        context->end_of_line = true;
         symbol_t tmp = {
             .airity = 2,
             .ret_airity = 1,
