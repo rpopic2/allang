@@ -247,19 +247,22 @@ void emit_str_reg(reg_t dst, reg_t src, int offset) {
 const reg_t rax = {.rsize = sizeof (void *), .reg_type = SCRATCH, .dtype = {.decl = {{.tag = DK_ADDR, .amount = 1}}, .decl_len = 1}};
 const reg_t rbp = {.rsize = sizeof (void *), .reg_type = FRAME, .dtype = {.decl = {{.tag = DK_ADDR, .amount = 1}}, .decl_len = 1}};
 
-void emit_str_imm(reg_t dst, i64 value, int offset) {
-    int index = rsize_log2((reg_size)dst.dtype.base->size);
-    if (index >= 3 && (value < INT32_MIN || value > INT32_MAX)) {
-        reg_t tmp = rax;
-        tmp.dtype.base = dst.dtype.base;
-        emit_mov(tmp, value);
-        emit_str_reg(dst, tmp, offset);
-        return;
-    }
+static void emit_mem_imm(int index, reg_t dst, int offset, i64 value) {
     buf_puts(fn_buf, STR("\tmov "));
     buf_snprintf(fn_buf, "%s ptr [", ptr_names[index]);
     buf_putreg(fn_buf, dst);
     buf_snprintf(fn_buf, " + %d], %"PRId64"\n", offset, value);
+}
+
+void emit_str_imm(reg_t dst, i64 value, int offset) {
+    int index = rsize_log2((reg_size)dst.dtype.base->size);
+    if (index >= 3 && (value < INT32_MIN || value > INT32_MAX)) {
+        /* a 64-bit immediate has no direct mem form; store it as two dwords */
+        emit_mem_imm(2, dst, offset, (i64)(i32)(u32)value);
+        emit_mem_imm(2, dst, offset + 4, (i64)(i32)(u32)((u64)value >> 32));
+        return;
+    }
+    emit_mem_imm(index, dst, offset, value);
 }
 
 void emit_ldr(reg_t dst, reg_t src, int offset) {

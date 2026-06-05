@@ -18,6 +18,7 @@ store_u8 =>
 store_u16 =>
 store_u32 =>
 store_u64 =>
+store_imm64 =>
 
 dyn_i8 =>
 dyn_i16 =>
@@ -243,6 +244,23 @@ store_u64: =>
     C isnt 14 -> _Exit 57 =>
     Z :: [Arr.1]
     Z isnt 0 -> _Exit 57 =>
+
+// --- storing bare immediates that exceed a 32-bit immediate, exercising the
+//     wide emit_str_imm path (on x86_64 a 64-bit immediate has no direct
+//     mem form, so it is stored as two 32-bit halves). ---
+
+store_imm64: =>
+    [Arr] :: 3*i64{.. 0} =[]
+    4294967296 =[Arr.0]
+    4294967297 =[Arr.2]
+    A :: [Arr.0]
+    Expected_A :: i64{4294967296}
+    A isnt Expected_A -> _Exit 58 =>
+    B :: [Arr.2]
+    Expected_B :: i64{4294967297}
+    B isnt Expected_B -> _Exit 58 =>
+    Z :: [Arr.1]
+    Z isnt 0 -> _Exit 58 =>
 
 // --- dynamic indexing of an i32 array with an index of every integer type ---
 
