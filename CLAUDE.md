@@ -17,7 +17,7 @@ The emit backend files for your architecture and OS must be passed explicitly:
 ## Done When
 
 - `test-all.sh` passes.
-- aarch64 emits assembly without error (no need to run it).
+- aarch64 emits assembly without error (no need to run it when you are in cloud conatiner).
 - `emit-ll.c` backend needs no testing.
 - `examples/` contains ill-formed code; only `tests/` are valid programs.
 
