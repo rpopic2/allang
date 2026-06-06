@@ -509,6 +509,7 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     buf_snprintf(fn_buf, ("\t%s%s "), op, suffix);
     buf_putreg(fn_buf, r0);
     buf_snprintf(fn_buf, ", [");
+    r1.rsize = 8;
     buf_putreg(fn_buf, r1);
     buf_snprintf(fn_buf, ", ");
 }

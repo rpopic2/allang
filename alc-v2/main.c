@@ -1641,7 +1641,6 @@ bool expr_load(parser_context *context) {
         compile_err(&context->cur_token, "cannot load object of size bigger than 16 bytes to register\n");
         printd("array: %d, type_size: %zd, rsize: %d\n", dtype_tryget_arr(&src.dtype), src.dtype.base->size, src.rsize);
         dyn_member_t *members = &src.dtype.base->struct_t.members;
-        (void)members;
         printd("memb_cnt: %zd\n", members->cur - members->begin);
         str_printd(src.dtype.base->name);
     }
