@@ -1026,7 +1026,14 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     }
 }
 
-void binary_op(parser_context *restrict context, const regable *restrict lhs) {
+bool binary_op(parser_context *restrict context, const regable *restrict lhs) {
+    char op_char = context->cur_token.id.end[1];
+    const char *op_ptr = context->cur_token.id.end + 1;
+    if (op_char != '+' && op_char != '-' && op_char != '*' && op_char != '/' && op_char != '<' && op_char != '>'
+        && !streq(op_ptr, "shl") && !streq(op_ptr, "shr") && !streq(op_ptr, "is")) {
+        return false;
+    }
+
     token_t lhs_token = context->cur_token;
     tok(context);
     token_t op_token = context->cur_token;
@@ -1036,7 +1043,7 @@ void binary_op(parser_context *restrict context, const regable *restrict lhs) {
         if (op_token.data[0] == '*'
             && (decl.tag == DK_ARRAY || decl.tag == DK_SLICE)) {
             dyn_slice_access(context, &lhs->reg, decl.amount);
-            return;
+            return true;
         }
     }
 
@@ -1062,7 +1069,7 @@ void binary_op(parser_context *restrict context, const regable *restrict lhs) {
         compile_err(&rhs_token, "expected operand, but found "), str_printerr(rhs_token.id);
         compile_err(&lhs_token, "lhs was: "), str_printerr(lhs_token.id);
         compile_err(&lhs_token, "operator was: "), str_printerr(op_token.id);
-        return;
+        return true;
     } else if (rhs.tag == REG && rhs.reg.reg_type == NREG) {
         check_unassigned(rhs, context);
     }
@@ -1215,6 +1222,7 @@ void binary_op(parser_context *restrict context, const regable *restrict lhs) {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
     }
     printd("binary_op\n");
+    return true;
 }
 
 dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *dtype) {
@@ -1742,12 +1750,7 @@ bool expr(parser_context *context) {
         regable lhs = {.tag = REG, .reg = context->reg};
         const char *next = context->cur_token.end;
         if (next[0] == ' ') {
-            next += 1;
-            bool is_binop = ((next[0] == '+' || next[0] == '-') && next[1] == ' ')
-                    || streq(next, "is ") || streq(next, "isnt ")
-                    || streq(next, "shl ");
-            if (is_binop)
-                binary_op(context, &lhs);
+            binary_op(context, &lhs);
         }
         return true;
     }
@@ -1766,8 +1769,8 @@ bool expr(parser_context *context) {
     char token_end = token->end[0];
     if (binary_op_store(&lhs, context)) {
 
-    } else if (token_end != ',' && token_end != '\n' && token_end != ')' && !streq(token->end + 1, "=[]") && !streq(token->end + 1, "=>") && !streq(token->end + 1, "=") && token_end != '}') {
-        binary_op(context, &lhs);
+    } else if (binary_op(context, &lhs)) {
+
     } else if(nullary_op(context, lhs)) {
         return true;
     }
