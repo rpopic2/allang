@@ -27,7 +27,7 @@ for AL_FILE in tests/*.al; do
     if [ $ALC_EXIT -ne 0 ]; then
         printf "FAIL (alc)\n"
         ((FAIL++))
-        FAIL_NAMES+=("$AL_FILE (alc: $(echo "$ALC_OUT" | tail -1))")
+        FAIL_NAMES+=("$AL_FILE (alc: $(echo "$ALC_OUT" | grep "error"))")
         continue
     fi
 

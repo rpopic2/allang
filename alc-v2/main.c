@@ -272,16 +272,14 @@ __attribute__((format(printf, 2, 3)))
 #endif
 void compile_err(const token_t *token, const char *format, ...) {
     has_compile_err = true;
-    fputs(CSI_RED, stderr);
     if (token) {
-        fprintf(stderr, "error in %s:%d: ", token->filename, token->lineno);
+        fprintf(stderr, CSI_RED"error"CSI_RESET": %s:%d: ", token->filename, token->lineno);
     }
 
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
-    fputs(CSI_RESET, stderr);
 }
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -302,21 +300,15 @@ void compile_warning(const token_t *token, const char *format, ...) {
 }
 
 void str_printerr(str s) {
-    fputs(CSI_RED, stderr);
     str_fprint(s, stderr);
-    fputs(CSI_RESET, stderr);
 }
 
 void str_printerrnl(str s) {
-    fputs(CSI_RED, stderr);
     str_fprintnl(s, stderr);
-    fputs(CSI_RESET, stderr);
 }
 
 void puterr(const char *s) {
-    fputs(CSI_RED, stderr);
     fputs(s, stderr);
-    fputs(CSI_RESET, stderr);
 }
 
 
