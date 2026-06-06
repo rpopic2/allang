@@ -1,5 +1,6 @@
 #pragma once
 
+#include "allocator.h"
 #include "arr.h"
 #include "dyn.h"
 #include "str.h"
@@ -9,6 +10,7 @@
 
 typedef struct dtype dtype_t;
 typedef struct emit_context emit_context_t;
+typedef struct allocator allocator;
 
 enum type_kind {
     TK_NONE, TK_FUND, TK_STRUCT, TK_UNION,
@@ -23,6 +25,9 @@ typedef u8 sign_t;
 typedef enum dtype_kind {
     DK_ADDR, DK_ARRAY, DK_CHECK, DK_SLICE
 } dtype_kind_t;
+static const char *dtype_kind_string[] = {
+   "addr", "array", "!", "slice", 
+};
 
 typedef struct delarator {
     enum dtype_kind tag : 2;

@@ -56,6 +56,7 @@ bool import_all = true;
 bool dead_fn_elim = false;
 
 type_t *type_i32;
+type_t *type_usize;
 type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("comptime int")};
 type_t *error_type = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("error_type")};
 
@@ -504,7 +505,15 @@ regable read_regable(str s, const token_t *token) {
             str mem_name = dot_iter(&s, '.');
             if (str_empty(&mem_name))
                 break;
-            if (array || slice) {
+            if (slice && str_eq_lit(mem_name, "Length")) {
+                member = &(member_t){
+                    .name = mem_name,
+                    .dtype = (dtype_t){
+                        .base = type_usize,
+                    },
+                    .offset = 1,
+                };
+            } else if (array || slice) {
                 char *end_ptr = NULL;
                 long long index = strtoll(mem_name.data, &end_ptr, 0);
                 if (end_ptr == mem_name.data) {
@@ -801,33 +810,41 @@ bool typecheck_regable(const token_t *token, const type_t *ltype, const regable 
     return true;
 }
 
+static inline str dtype_to_str(const dtype_t *self, allocator *alloc) {
+    char *begin = allocator_alloc_undefined(alloc, 0);
+    char *head = begin;
+    for (usize _i = self->decl_len; _i > 0; --_i) {
+        usize i = _i - 1;
+        dtype_kind_t tag = self->decl[i].tag;
+        const char *s = dtype_kind_string[tag];
+        head = allocator_alloc_undefined(alloc, strlen(s));
+        memcpy(head, s, strlen(s));
+        head = allocator_alloc_undefined(alloc, 1);
+        *head = ' ';
+    }
+    str name = self->base->name;
+    head = allocator_alloc_undefined(alloc, str_len(name));
+    memcpy(head, name.data, str_len(name));
+    head = allocator_alloc_undefined(alloc, 1);
+    *head = '\0';
+    return (str){.data = begin, .end = head};
+}
+
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
-    type_t *ltype = lhs.dtype.base;
-    type_t *rtype = rhs.dtype.base;
-    i32 laddr = dtype_tryget_addr(&lhs.dtype);
-    i32 raddr = dtype_tryget_addr(&rhs.dtype);
-    if (typecheck(token, ltype, rtype) && laddr == raddr)
+    if (dtype_eq(&lhs.dtype, &rhs.dtype))
         return;
 
-    if (laddr != raddr) {
-        compile_err(token, "\t- address of %d indirection(s) expected, but found %d indirection(s)\n", laddr, raddr);
-    }
-    size_t lsize = dtype_size(&lhs.dtype);
-    size_t rsize = dtype_size(&rhs.dtype);
-    if (lsize != rsize) {
-        compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
-    }
-    assert(ltype);
-    assert(rtype);
-    bool lsign = ltype->sign;
-    bool rsign = rtype->sign;
-    if (lsign != rsign) {
-        if (lsign) {
-            compile_err(token, "\t- expected signed, but found unsigned\n");
-        } else {
-            compile_err(token, "\t- expected unsigned, but found signed\n");
-        }
-    }
+    char buf[1024];
+    allocator alloc;
+    allocator_init(&alloc, buf, sizeof buf);
+    str lname = dtype_to_str(&lhs.dtype, &alloc);
+    str rname = dtype_to_str(&rhs.dtype, &alloc);
+    compile_err(token, "expected type '");
+    str_printerrnl(lname);
+    fprintf(stderr, "', but found type '");
+    str_printerrnl(rname);
+    fprintf(stderr, "'\n");
+    pd(rhs.dtype.decl_len)
 }
 
 bool arithmetic_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
@@ -2830,6 +2847,9 @@ void register_fund_types(void) {
         type_t *t = hashmap_type_t_overwrite(types, name, &s);
         if (str_eq_lit(name, "i32")) {
             type_i32 = t;
+        }
+        if (str_eq_lit(name, "usize")) {
+            type_usize = t;
         }
     }
 }

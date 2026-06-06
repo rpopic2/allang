@@ -8,7 +8,7 @@ typedef struct allocator {
     size_t size;
 } allocator;
 
-void allocator_init(allocator *self, void *data, size_t size) {
+static inline void allocator_init(allocator *self, void *data, size_t size) {
     *self = (allocator){
         .data = data,
         .size = size,
@@ -16,7 +16,7 @@ void allocator_init(allocator *self, void *data, size_t size) {
     };
 }
 
-void *allocator_alloc_undefined(allocator *self, size_t size) {
+static inline void *allocator_alloc_undefined(allocator *self, size_t size) {
     void *ret = self->end;
     self->end += size;
     if (self->end >= (self->data + self->size)) {
@@ -26,7 +26,7 @@ void *allocator_alloc_undefined(allocator *self, size_t size) {
     return ret;
 }
 
-void *allocator_alloc(allocator *self, size_t size) {
+static inline void *allocator_alloc(allocator *self, size_t size) {
     void *ret = allocator_alloc_undefined(self, size);
     memset(ret, 0, size);
     return ret;
