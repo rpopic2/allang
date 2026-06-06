@@ -157,6 +157,14 @@ void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
 }
 
 void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
+    if (lhs.rsize != rhs.rsize) {
+        reg_t wide   = lhs.rsize > rhs.rsize ? lhs : rhs;
+        const reg_t narrow = lhs.rsize > rhs.rsize ? rhs : lhs;
+        wide.rsize = dst.rsize;
+        emit_mov_reg(dst, narrow);
+        emit_rr(STR("add"), dst, wide);
+        return;
+    }
     emit_lea_begin(dst, lhs, STR("+"));
     rhs.rsize = 8; /* index must be 64-bit */
     buf_putreg(fn_buf, rhs);
@@ -170,8 +178,23 @@ void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
 }
 
 void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    emit_rr(STR("mov"), dst, lhs);
-    emit_rr(STR("sub"), dst, rhs);
+    if (lhs.rsize == rhs.rsize) {
+        emit_rr(STR("mov"), dst, lhs);
+        emit_rr(STR("sub"), dst, rhs);
+        return;
+    }
+    reg_t wlhs = lhs;
+    reg_t wrhs = rhs;
+    wlhs.rsize = dst.rsize;
+    wrhs.rsize = dst.rsize;
+    if (rhs.rsize < lhs.rsize) {
+        emit_mov_reg(dst, rhs);
+        emit_rr(STR("sub"), dst, wlhs);
+        emit_r(fn_buf, "neg", dst);     /* rhs-lhs then negate = lhs-rhs */
+        return;
+    }
+    emit_mov_reg(dst, lhs);
+    emit_rr(STR("sub"), dst, wrhs);
 }
 
 void emit_cmp(reg_t lhs, i64 rhs) {
@@ -179,7 +202,23 @@ void emit_cmp(reg_t lhs, i64 rhs) {
 }
 
 void emit_cmp_reg(reg_t lhs, reg_t rhs) {
-    emit_rr(STR("cmp"), lhs, rhs);
+    if (lhs.rsize == rhs.rsize) {
+        emit_rr(STR("cmp"), lhs, rhs);
+        return;
+    }
+    reg_t tmp = {.reg_type = SCRATCH, .offset = 0};
+    tmp.rsize = lhs.rsize > rhs.rsize ? lhs.rsize : rhs.rsize;
+    if (rhs.rsize < lhs.rsize) {
+        reg_t wlhs = lhs;
+        wlhs.rsize = tmp.rsize;
+        emit_mov_reg(tmp, rhs);
+        emit_rr(STR("cmp"), wlhs, tmp);
+        return;
+    }
+    reg_t wrhs = rhs;
+    wrhs.rsize = tmp.rsize;
+    emit_mov_reg(tmp, lhs);
+    emit_rr(STR("cmp"), tmp, wrhs);
 }
 
 void emit_string_lit(reg_t dst, const str *s) {

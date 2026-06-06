@@ -818,34 +818,32 @@ bool arithmetic_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
 
     if (laddr != raddr) {
         compile_err(token, "\t- address of %d indirection(s) expected, but found %d indirection(s)\n", laddr, raddr);
+        return false;
     }
 
-    type_t *ltype = lhs.dtype.base;
-    type_t *rtype = rhs.dtype.base;
+    const type_t *const ltype = lhs.dtype.base;
+    const type_t *const rtype = rhs.dtype.base;
     if (ltype == rtype)
         return true;
-
-    size_t lsize = dtype_size(&lhs.dtype);
-    size_t rsize = dtype_size(&rhs.dtype);
 
     assert(ltype);
     assert(rtype);
 
-    bool lsign = ltype->sign;
-    bool rsign = rtype->sign;
+    const bool lsign = ltype->sign;
+    const bool rsign = rtype->sign;
 
-    if (lsign == rsign && lsize == rsize)
+    if (lsign == rsign)
         return true;
 
-    if (lsize >= rsize) {
-        compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
-    }
-    if (lsign != rsign) {
-        if (lsign) {
-            compile_err(token, "\t- expected signed, but found unsigned\n");
-        } else {
-            compile_err(token, "\t- expected unsigned, but found signed\n");
-        }
+    const size_t signed_size = lsign ? ltype->size : rtype->size;
+    const size_t unsigned_size = lsign ? rtype->size : ltype->size;
+    if (signed_size > unsigned_size)
+        return true;
+
+    if (lsign) {
+        compile_err(token, "\t- expected signed, but found unsigned\n");
+    } else {
+        compile_err(token, "\t- expected unsigned, but found signed\n");
     }
     return false;
 }
@@ -1059,8 +1057,8 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
 bool binary_op(parser_context *restrict context, regable *restrict lhs) {
     char op_char = context->cur_token.id.end[1];
     const char *op_ptr = context->cur_token.id.end + 1;
-    if (op_char != '+' && op_char != '-' && op_char != '*' && op_char != '/' && op_char != '<' && op_char != '>'
-        && !streq(op_ptr, "shl") && !streq(op_ptr, "shr") && !streq(op_ptr, "is")) {
+    if (op_char != '+' && op_char != '-' && op_char != '*' && op_char != '<' && op_char != '>'
+        && !streq(op_ptr, "shl") && !streq(op_ptr, "is")) {
         return false;
     }
 
@@ -1092,9 +1090,12 @@ bool binary_op(parser_context *restrict context, regable *restrict lhs) {
     } else if (lhs->tag == REG) {
         if (rhs.tag == REG) {
             arithmetic_typecheck(&rhs_token, lhs->reg, rhs.reg);
-            context->reg.dtype = rhs.reg.dtype;
+            const reg_t *const wide = rhs.reg.rsize > lhs->reg.rsize ? &rhs.reg : &lhs->reg;
+            context->reg.dtype = wide->dtype;
+            context->reg.rsize = wide->rsize;
+        } else {
+            context->reg.rsize = lhs->reg.rsize;
         }
-        context->reg.rsize = lhs->reg.rsize;
     }
 
     if (rhs.tag == NONE) {

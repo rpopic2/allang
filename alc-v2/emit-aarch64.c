@@ -428,14 +428,25 @@ void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
     buf_snprintf(fn_buf, "#%"PRId64"\n", rhs);
 }
 
+static void buf_put_ext(buf *buffer, reg_t narrow) {
+    const type_t *const t = narrow.dtype.base;
+    buf_putc(buffer, (t && t->sign) ? 's' : 'u');
+    buf_puts(buffer, STR("xt"));
+    const size_t size = t ? t->size : narrow.rsize;
+    buf_putc(buffer, size == 1 ? 'b' : size == 2 ? 'h' : 'w');
+}
+
 void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    buf_puts(fn_buf, STR("\tadd "));
-    buf_putreg(fn_buf, dst);
-    buf_puts(fn_buf, STR(", "));
-    buf_putreg(fn_buf, lhs);
-    buf_puts(fn_buf, STR(", "));
-    buf_putreg(fn_buf, rhs);
-    buf_putc(fn_buf, '\n');
+    if (lhs.rsize != rhs.rsize) {
+        const reg_t wide   = lhs.rsize > rhs.rsize ? lhs : rhs;
+        const reg_t narrow = lhs.rsize > rhs.rsize ? rhs : lhs;
+        emit_rrrx(STR("add"), dst, wide, narrow);
+        buf_comma(fn_buf);
+        buf_put_ext(fn_buf, narrow);
+        buf_putc(fn_buf, '\n');
+        return;
+    }
+    emit_rrr(STR("add"), dst, lhs, rhs);
 }
 
 void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
@@ -446,17 +457,42 @@ void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
     emit_rri(STR("sub"), dst, lhs, rhs);
 }
 void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    emit_rrr(STR("sub"), dst, lhs, rhs);
+    if (lhs.rsize == rhs.rsize) {
+        emit_rrr(STR("sub"), dst, lhs, rhs);
+        return;
+    }
+    if (rhs.rsize < lhs.rsize) {
+        emit_rrrx(STR("sub"), dst, lhs, rhs);
+        buf_comma(fn_buf);
+        buf_put_ext(fn_buf, rhs);
+        buf_putc(fn_buf, '\n');
+        return;
+    }
+    const reg_t tmp = {.reg_type = SCRATCH, .offset = 8, .rsize = dst.rsize, .dtype = lhs.dtype};
+    emit_mov_reg(tmp, lhs);
+    emit_rrr(STR("sub"), dst, tmp, rhs);
 }
 
 void emit_cmp(reg_t lhs, i64 rhs) {
-    buf_snprintf(fn_buf, INSTR("cmp w%d, #%"PRId64),
-            get_regoff(lhs), rhs);
+    buf_snprintf(fn_buf, INSTR("cmp %s%d, #%"PRId64),
+            get_wx(lhs.rsize), get_regoff(lhs), rhs);
 }
 
 void emit_cmp_reg(reg_t lhs, reg_t rhs) {
-    buf_snprintf(fn_buf, INSTR("cmp w%d, w%d"),
-            get_regoff(lhs), get_regoff(rhs));
+    if (lhs.rsize == rhs.rsize) {
+        emit_rr(STR("cmp"), lhs, rhs);
+        return;
+    }
+    if (rhs.rsize < lhs.rsize) {
+        emit_rrx(STR("cmp"), lhs, rhs);
+        buf_comma(fn_buf);
+        buf_put_ext(fn_buf, rhs);
+        buf_putc(fn_buf, '\n');
+        return;
+    }
+    const reg_t tmp = {.reg_type = SCRATCH, .offset = 8, .rsize = rhs.rsize, .dtype = lhs.dtype};
+    emit_mov_reg(tmp, lhs);
+    emit_rr(STR("cmp"), tmp, rhs);
 }
 
 void emit_string_lit(reg_t dst, const str *s) {
