@@ -106,6 +106,15 @@ static size_t pack_small_values(const dyn_member_t *members, const dyn_agg_membe
     return packed;
 }
 
+static void emit_mov_lane(reg_t dst, i64 chunk, i64 offset_bits, bool *initialized) {
+    if (*initialized) {
+        emit_risi(STR("movk"), dst, chunk, STR("lsl"), offset_bits);
+    } else {
+        emit_risi(STR("movz"), dst, chunk, STR("lsl"), offset_bits);
+        *initialized = true;
+    }
+}
+
 static size_t emit_member_value(reg_t dst, const dyn_member_t *members, const dyn_agg_member *args,
                                 ptrdiff_t *i, ptrdiff_t member_count,
                                 size_t memb_size, size_t offset_bits,
@@ -128,12 +137,7 @@ static size_t emit_member_value(reg_t dst, const dyn_member_t *members, const dy
         emit_rri(STR("orr"), dst, dst, value << offset_bits);
         return packed;
     }
-    if (!*dst_initialized) {
-        emit_risi(STR("movz"), dst, value, STR("lsl"), (i64)offset_bits);
-    } else {
-        emit_risi(STR("movk"), dst, value, STR("lsl"), (i64)offset_bits);
-    }
-    *dst_initialized = true;
+    emit_mov_lane(dst, value, (i64)offset_bits, dst_initialized);
     return packed;
 }
 
@@ -306,20 +310,31 @@ void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
 }
 
 
+static void emit_mov_wide(reg_t dst, i64 value) {
+    if (value > UINT32_MAX) {
+        dst.rsize = 8;
+    }
+    const int lanes = dst.rsize > 4 ? 4 : 2;
+    bool initialized = false;
+    for (int lane = 0; lane < lanes; lane++) {
+        const i64 chunk = (value >> (lane * 16)) & 0xFFFF;
+        if (chunk == 0) {
+            continue;
+        }
+        emit_mov_lane(dst, chunk, (i64)(lane * 16), &initialized);
+    }
+    if (!initialized) {
+        emit_mov_lane(dst, 0, 0, &initialized);
+    }
+}
+
 void emit_mov(reg_t dst, i64 value) {
     int regidx = get_regoff(dst);
     if (dst.dtype.base == type_comptime_int) {
-        if (value <= INT32_MAX) {
+        if (value <= UINT16_MAX) {
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId32), get_wx(dst.rsize), regidx, (i32)value);
-        } else if (value <= INT64_MAX) {
-            dst.rsize = 8;
-            //emit_ri(STR("mov"), dst, value);
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
-        } else if ((u64)value <= UINT64_MAX) {
-            dst.rsize = 8;
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
         } else {
-            report_error("literal was too big");
+            emit_mov_wide(dst, value);
         }
     } else {
         emit_ri(STR("mov"), dst, value);
