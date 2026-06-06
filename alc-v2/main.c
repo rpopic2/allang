@@ -226,7 +226,6 @@ void consume_until(parser_context *context, str s) {
 void consume_line(parser_context *context) {
     u16 start = lineno;
     while (tok(context)) {
-        p(consum)
         if (start != lineno)
             break;
     }
@@ -484,6 +483,7 @@ regable read_regable(str s, const token_t *token) {
         }
 
         int array = dtype_tryget_arr(&reg->dtype);
+        int slice = dtype_tryget(&reg->dtype, DK_SLICE);
         i32 begin_index = 0;
         while (true) {
             bool is_slice = array && streq(s.data, "..");
@@ -504,7 +504,7 @@ regable read_regable(str s, const token_t *token) {
             str mem_name = dot_iter(&s, '.');
             if (str_empty(&mem_name))
                 break;
-            if (array) {
+            if (array || slice) {
                 char *end_ptr = NULL;
                 long long index = strtoll(mem_name.data, &end_ptr, 0);
                 if (end_ptr == mem_name.data) {
@@ -522,6 +522,9 @@ regable read_regable(str s, const token_t *token) {
                     },
                     .offset = type->size * (size_t)index
                 };
+                if (slice) {
+                    dtype_push(&member->dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)index});
+                }
                 if (index > INT_MAX) {
                     compile_err(token, "index was too big: %lld", index);
                 }
@@ -618,6 +621,7 @@ enum inclusive {INCL, EXCL};
 void check_bounds(parser_context *context, reg_t index, i32 len, enum inclusive inclusive) {
     const token_t cur_token = context->cur_token;
 
+    reg_t stash = context->reg;
     tok(context);
     if (!str_eq(context->cur_token.id, STR("!"))) {
         compile_err(&cur_token, "expected to check bounds with operator !\n");
@@ -631,6 +635,7 @@ void check_bounds(parser_context *context, reg_t index, i32 len, enum inclusive 
     } else {
         compile_err(&cur_token, "expected to handle check operator\n");
     }
+    context->reg = stash;
 }
 
 bool diagnostic_dyn_elem_access(const parser_context *context, const regable *offset_regable) {
@@ -701,7 +706,8 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         if (dtype_empty(dtype) && type
                 && type->tag == TK_STRUCT) {
             const dyn_member_t *m = &type->struct_t.members;
-            if (m->begin != m->cur && dtype_tryget_addr(&m->begin->dtype) > 0) {
+            const dtype_t *cur_dtype = &m->begin->dtype;
+            if (m->begin != m->cur && dtype_tryget_addr(cur_dtype)) {
                 first = m->begin;
             }
         }
@@ -709,11 +715,23 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             reg.dtype = first->dtype;
             reg.offset -= (i32)first->offset;
             reg.rsize = (reg_size)dtype_size(&first->dtype);
+        } else if (dtype_tryget(dtype, DK_SLICE)) {
+            reg.dtype = reg.dtype;
+            reg.offset = 0;
+            reg.rsize = (reg_size)dtype_size(dtype);
         } else {
-            compile_err(cur_token, "a register conatining addr is expected\n");
+            compile_err(cur_token, "a register containing addr is expected\n");
         }
     }
     if (offset_regable.tag == VALUE) {
+        i32 slice = dtype_tryget(&reg.dtype, DK_SLICE);
+        if (slice) {
+            reg_t count_reg = reg;
+            count_reg.offset += 1;
+            count_reg.rsize = sizeof (void *);
+            offset_regable.value = slice;
+            check_bounds(context, count_reg, slice, INCL);
+        }
         size_t stride;
         if (reg.dtype.base == NULL) {
             compile_err(cur_token, "compiler bug: reg type was NULL\n");
@@ -1737,7 +1755,6 @@ bool nullary_op(parser_context *context, regable lhs) {
                 emit_mov(dst, top.amount);
             }
         } else {
-            pd(reg_type)
             nop;
         }
     } else {
@@ -1905,8 +1922,13 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
     const token_t *cur_token = &context->cur_token;
     *out = (dtype_t){0};
 
-    while (str_eq_lit(cur_token->id, "addr")) {
-        dtype_push(out, (declarator_t){DK_ADDR, .amount = 1});
+    while (true) {
+        bool addr = str_eq_lit(cur_token->id, "addr");
+        bool slice = str_eq_lit(cur_token->id, "slice");
+        if (!addr && !slice)
+            break;
+        dtype_kind_t dk = addr ? DK_ADDR : DK_SLICE;
+        dtype_push(out, (declarator_t){dk, .amount = 1});
         tok(context);
         if (cur_token->end[0] == ')') {
             break_out = true;
@@ -2193,6 +2215,8 @@ bool stmt_ret_pre(parser_context *context) {
         return false;
 
     context->reg.reg_type = RET;
+    context->reg.offset = 0;
+
 
     int arg_count = 0;
     if (context->cur_token.end[0] != '\n') {
@@ -2372,16 +2396,34 @@ void stmt_label(parser_context *context) {
         printf("expected %zd, but %d\n", arr_reg_t_len(&symbol->params), symbol->airity);
         unreachable;
     }
-    for (int i = 0; i < symbol->airity; ++i) {
+    int regoff = 0;
+    for (int i = 0; i < symbol->airity; ++i, ++regoff) {
         reg_t *param = &symbol->params.data[i];
-        reg_t arg_reg = {.reg_type = PARAM, .offset = i, .dtype = param->dtype, .rsize = param->rsize};
+        reg_size rsize = (reg_size)dtype_size(&param->dtype);
+        bool is_fat = false;
+        if (rsize > sizeof (void *)) {
+            rsize = 8;
+            is_fat = true;
+        }
+        reg_t arg_reg = {
+            .reg_type = PARAM,
+            .offset = regoff,
+            .dtype = param->dtype,
+            .rsize = rsize,
+        };
         reg_t r = {
-            .reg_type = NREG, .offset = context->nreg_count,
-            .rsize = param->rsize,
+            .reg_type = NREG,
+            .offset = context->nreg_count,
+            .rsize = rsize,
             .dtype = param->dtype,
         };
         context_add_nreg(context, &param->dtype);
         emit_mov_reg(r, arg_reg);
+        if (is_fat) {
+            arg_reg.offset += 1;
+            r.offset += 1;
+            emit_mov_reg(r, arg_reg);
+        }
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {
             compile_err(&context->cur_token, "parameter ids should be unique\n");

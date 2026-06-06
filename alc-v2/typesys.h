@@ -20,9 +20,9 @@ enum sign_t {
 };
 typedef u8 sign_t;
 
-enum dtype_kind {
+typedef enum dtype_kind {
     DK_ADDR, DK_ARRAY, DK_CHECK, DK_SLICE
-};
+} dtype_kind_t;
 
 typedef struct delarator {
     enum dtype_kind tag : 2;
@@ -95,6 +95,10 @@ static inline declarator_t dtype_pop(dtype_t *self) {
     return self->decl[--self->decl_len];
 }
 
+static inline void dtype_pushone(dtype_t *self, dtype_kind_t kind) {
+    dtype_push(self, (declarator_t){.tag = kind, .amount = 1});
+}
+
 static inline dtype_t dtype_dup_strip(dtype_t *self) {
     dtype_t ret = *self;
     dtype_pop(&ret);
@@ -112,6 +116,13 @@ static inline i32 dtype_tryget_arr(const dtype_t *self) {
     else return top.amount;
 }
 
+static inline i32 dtype_tryget(const dtype_t *self, dtype_kind_t kind) {
+    declarator_t top = dtype_top(self);
+    if (top.tag != kind)
+        return 0;
+    else return top.amount;
+}
+
 static inline i32 dtype_tryget_addr(const dtype_t *self) {
     declarator_t top = dtype_top(self);
     if (top.tag != DK_ADDR)
@@ -124,9 +135,9 @@ static inline size_t dtype_size(const dtype_t *self) {
         return self->base->size;
     }
     declarator_t top = dtype_top(self);
-    if (top.tag == DK_ADDR)
+    if (top.tag == DK_ADDR) {
         return sizeof (void *);
-    else if (top.tag == DK_ARRAY) {
+    } else if (top.tag == DK_ARRAY) {
         if (top.amount <= 0)
             fprintf(stderr, "array length was <= 0 (%d)", top.amount);
         return self->base->size * (usize)top.amount;
@@ -134,6 +145,8 @@ static inline size_t dtype_size(const dtype_t *self) {
         dtype_t stripped = *self;
         dtype_pop(&stripped);
         return dtype_size(&stripped);
+    } else if (top.tag == DK_SLICE) {
+        return sizeof (void *) * 2;
     } else {
         unreachable;
     }

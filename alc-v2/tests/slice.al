@@ -34,3 +34,6 @@ dynamic: =>
 
     Arr * I..J ! ret
 
+get_at_three: S slice i32 => i32
+    I :: [S.3] ! ret 1
+    ret 0
