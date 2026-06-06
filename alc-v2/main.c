@@ -812,6 +812,44 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     }
 }
 
+bool arithmetic_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
+    i32 laddr = dtype_tryget_addr(&lhs.dtype);
+    i32 raddr = dtype_tryget_addr(&rhs.dtype);
+
+    if (laddr != raddr) {
+        compile_err(token, "\t- address of %d indirection(s) expected, but found %d indirection(s)\n", laddr, raddr);
+    }
+
+    type_t *ltype = lhs.dtype.base;
+    type_t *rtype = rhs.dtype.base;
+    if (ltype == rtype)
+        return true;
+
+    size_t lsize = dtype_size(&lhs.dtype);
+    size_t rsize = dtype_size(&rhs.dtype);
+
+    assert(ltype);
+    assert(rtype);
+
+    bool lsign = ltype->sign;
+    bool rsign = rtype->sign;
+
+    if (lsign == rsign && lsize == rsize)
+        return true;
+
+    if (lsize >= rsize) {
+        compile_err(token, "\t- register of size %zd expected, but was %zd\n", lsize, rsize);
+    }
+    if (lsign != rsign) {
+        if (lsign) {
+            compile_err(token, "\t- expected signed, but found unsigned\n");
+        } else {
+            compile_err(token, "\t- expected unsigned, but found signed\n");
+        }
+    }
+    return false;
+}
+
 bool resolve_comptime_default(reg_t *const r) {
     if (r->dtype.base != type_comptime_int)
         return false;
@@ -1018,7 +1056,7 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     }
 }
 
-bool binary_op(parser_context *restrict context, const regable *restrict lhs) {
+bool binary_op(parser_context *restrict context, regable *restrict lhs) {
     char op_char = context->cur_token.id.end[1];
     const char *op_ptr = context->cur_token.id.end + 1;
     if (op_char != '+' && op_char != '-' && op_char != '*' && op_char != '/' && op_char != '<' && op_char != '>'
@@ -1026,6 +1064,7 @@ bool binary_op(parser_context *restrict context, const regable *restrict lhs) {
         return false;
     }
 
+    bool keep_value = false;
     token_t lhs_token = context->cur_token;
     tok(context);
     token_t op_token = context->cur_token;
@@ -1035,6 +1074,7 @@ bool binary_op(parser_context *restrict context, const regable *restrict lhs) {
         if (op_token.data[0] == '*'
             && (decl.tag == DK_ARRAY || decl.tag == DK_SLICE)) {
             dyn_slice_access(context, &lhs->reg, decl.amount);
+            *lhs = (regable){.tag = REG, .reg = context->reg};
             return true;
         }
     }
@@ -1051,7 +1091,7 @@ bool binary_op(parser_context *restrict context, const regable *restrict lhs) {
         }
     } else if (lhs->tag == REG) {
         if (rhs.tag == REG) {
-            reg_typecheck(&rhs_token, lhs->reg, rhs.reg);
+            arithmetic_typecheck(&rhs_token, lhs->reg, rhs.reg);
             context->reg.dtype = rhs.reg.dtype;
         }
         context->reg.rsize = lhs->reg.rsize;
@@ -1061,13 +1101,15 @@ bool binary_op(parser_context *restrict context, const regable *restrict lhs) {
         compile_err(&rhs_token, "expected operand, but found "), str_printerr(rhs_token.id);
         compile_err(&lhs_token, "lhs was: "), str_printerr(lhs_token.id);
         compile_err(&lhs_token, "operator was: "), str_printerr(op_token.id);
+        *lhs = (regable){.tag = REG, .reg = context->reg};
         return true;
     } else if (rhs.tag == REG && rhs.reg.reg_type == NREG) {
         check_unassigned(rhs, context);
     }
     if (op_token.data[0] == '+') {
         if (lhs->tag == VALUE && rhs.tag == VALUE) {
-            emit_mov(context->reg, lhs->value + rhs.value);
+            lhs->value += rhs.value;
+            keep_value = true;
         } else if (lhs->tag == VALUE && rhs.tag == REG) {
             emit_add(context->reg, rhs.reg, lhs->value);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
@@ -1212,6 +1254,9 @@ bool binary_op(parser_context *restrict context, const regable *restrict lhs) {
         }
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
+    }
+    if (!keep_value) {
+        *lhs = (regable){.tag = REG, .reg = context->reg};
     }
     printd("binary_op\n");
     return true;
@@ -1663,7 +1708,8 @@ bool nullary_op(parser_context *context, regable lhs) {
         emit_mov(context->reg, lhs.value);
     } else if (lhs.tag == REG) {
         const reg_t *nreg = &lhs.reg;
-        if (nreg->reg_type == NREG) {
+        register_dst reg_type = nreg->reg_type;
+        if (reg_type == NREG) {
             if (context->reg.reg_type == PARAM) {
                 context->reg.dtype = nreg->dtype;
                 context->reg.rsize = nreg->rsize;
@@ -1673,7 +1719,7 @@ bool nullary_op(parser_context *context, regable lhs) {
                 return true;
             }
             emit_mov_reg(context->reg, lhs.reg);
-        } else if (nreg->reg_type == STACK) {
+        } else if (reg_type == STACK) {
             context->reg.rsize = sizeof (void *);
             if (nreg->dtype.base == NULL) {
                 compile_err(token, "taking address of stack object with unknown type\n");
@@ -1689,12 +1735,20 @@ bool nullary_op(parser_context *context, regable lhs) {
                 emit_mov(dst, top.amount);
             }
         } else {
-            unreachable;
+            pd(reg_type)
+            nop;
         }
     } else {
         unreachable;
     }
     return false;
+}
+
+bool binary_op_chain(parser_context *context, regable acc) {
+    while (binary_op(context, &acc)) {
+
+    }
+    return nullary_op(context, acc);
 }
 
 bool expr(parser_context *context) {
@@ -1739,10 +1793,10 @@ bool expr(parser_context *context) {
         return true;
     }
     if (expr_load(context)) {
-        regable lhs = {.tag = REG, .reg = context->reg};
         const char *next = context->cur_token.end;
         if (next[0] == ' ') {
-            binary_op(context, &lhs);
+            regable lhs = {.tag = REG, .reg = context->reg};
+            binary_op_chain(context, lhs);
         }
         return true;
     }
@@ -1758,13 +1812,10 @@ bool expr(parser_context *context) {
         context->reg.rsize = 0;
         context->reg.dtype = (dtype_t){.base = type_comptime_int};
     }
-    char token_end = token->end[0];
     if (binary_op_store(&lhs, context)) {
 
-    } else if (binary_op(context, &lhs)) {
+    } else if (binary_op_chain(context, lhs)) {
 
-    } else if(nullary_op(context, lhs)) {
-        return true;
     }
     if (explicit_type) {
         tok(context);
@@ -2464,12 +2515,6 @@ symbol_t *fn_call(parser_context *context) {
 
     if (context->reg.offset > 0)
         tok(context);
-
-    const str *cur_token_str = &token->id;
-
-    if (!str_eq_lit(*cur_token_str, "=>")) {
-        compile_err(token, "function call operator '=>' expected\n");
-    }
 
     str fn_name = symbol->name;
 
