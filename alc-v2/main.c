@@ -53,7 +53,7 @@ FILE *object_file;
 
 bool do_airity_check = true;
 bool import_all = true;
-bool dead_fn_elim = true;
+bool dead_fn_elim = false;
 
 type_t *type_i32;
 type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("comptime int")};
@@ -2642,7 +2642,7 @@ void function(src_t *src) {
         compile_err(&context->cur_token, "function definition has no body: "), str_printerr(context->symbol->name);
         return;
     }
-    context->indent = context->cur_token.indent;
+    context->indent = indent;
     printd(CSI_GREEN"\n--- start of label: ");
     str_printd(context->name);
     printd(CSI_RESET);
