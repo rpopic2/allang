@@ -474,11 +474,10 @@ void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
 }
 
 void emit_cmp(reg_t lhs, i64 rhs) {
-    buf_snprintf(fn_buf, INSTR("cmp %s%d, #%"PRId64),
-            get_wx(lhs.rsize), get_regoff(lhs), rhs);
+    emit_ri(STR("cmp"), lhs, rhs);
 }
 
-void emit_cmp_reg(reg_t lhs, reg_t rhs) {
+void emit_cmp_reg(reg_t lhs, reg_t rhs, cond_t cond) {
     if (lhs.rsize == rhs.rsize) {
         emit_rr(STR("cmp"), lhs, rhs);
         return;
@@ -490,8 +489,13 @@ void emit_cmp_reg(reg_t lhs, reg_t rhs) {
         buf_putc(fn_buf, '\n');
         return;
     }
-    const reg_t tmp = {.reg_type = SCRATCH, .offset = 8, .rsize = rhs.rsize, .dtype = lhs.dtype};
-    emit_mov_reg(tmp, lhs);
+    reg_t tmp = {.reg_type = SCRATCH, .offset = 8, .rsize = rhs.rsize, .dtype = lhs.dtype};
+    if (cond == COND_EQ || cond == COND_NE) {
+        tmp.reg_type = lhs.reg_type;
+        tmp.offset = lhs.offset;
+    } else {
+        emit_mov_reg(tmp, lhs);
+    }
     emit_rr(STR("cmp"), tmp, rhs);
 }
 

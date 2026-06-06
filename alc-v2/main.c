@@ -1013,8 +1013,9 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
 
     reg_t dst = context->reg;
     if (begin->tag != NONE && end->tag != NONE) {
-        emit_cmp_reg(begin->reg, end->reg);
-        emit_branch_cond(COND_HI, context->symbol->name, STR("ret"), 0);
+        const cond_t cond = COND_HI;
+        emit_cmp_reg(begin->reg, end->reg, cond);
+        emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
         check_bounds(context, end->reg, len, EXCL);
     } else if (begin->tag != NONE) {
         check_bounds(context, begin->reg, len, INCL);
@@ -1166,7 +1167,7 @@ bool binary_op(parser_context *restrict context, regable *restrict lhs) {
             if (rhs.tag == VALUE)
                 emit_cmp(lhs->reg, rhs.value);
             else if (rhs.tag == REG)
-                emit_cmp_reg(lhs->reg, rhs.reg);
+                emit_cmp_reg(lhs->reg, rhs.reg, cond);
             else unreachable;
         }
 
@@ -1240,7 +1241,7 @@ bool binary_op(parser_context *restrict context, regable *restrict lhs) {
             if (rhs.tag == VALUE)
                 emit_cmp(lhs->reg, rhs.value);
             else if (rhs.tag == REG)
-                emit_cmp_reg(lhs->reg, rhs.reg);
+                emit_cmp_reg(lhs->reg, rhs.reg, cond);
             else unreachable;
         }
 

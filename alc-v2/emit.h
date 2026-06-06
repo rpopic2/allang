@@ -51,7 +51,7 @@ void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs);
 void emit_sub(reg_t dst, reg_t lhs, i64 rhs);
 void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs);
 void emit_cmp(reg_t lhs, i64 rhs);
-void emit_cmp_reg(reg_t lhs, reg_t rhs);
+void emit_cmp_reg(reg_t lhs, reg_t rhs, cond_t cond);
 void emit_string_lit(reg_t dst, const str *s);
 void emit_lsl(reg_t dst, reg_t lhs, i64 rhs);
 void emit_zero_out(reg_t dst);

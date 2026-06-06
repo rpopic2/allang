@@ -201,7 +201,7 @@ void emit_cmp(reg_t lhs, i64 rhs) {
     emit_ri(STR("cmp"), lhs, rhs);
 }
 
-void emit_cmp_reg(reg_t lhs, reg_t rhs) {
+void emit_cmp_reg(reg_t lhs, reg_t rhs, cond_t cond) {
     if (lhs.rsize == rhs.rsize) {
         emit_rr(STR("cmp"), lhs, rhs);
         return;
@@ -215,8 +215,14 @@ void emit_cmp_reg(reg_t lhs, reg_t rhs) {
         emit_rr(STR("cmp"), wlhs, tmp);
         return;
     }
+    reg_t wlhs = lhs;
     reg_t wrhs = rhs;
+    wlhs.rsize = tmp.rsize;
     wrhs.rsize = tmp.rsize;
+    if (cond == COND_EQ || cond == COND_NE) {
+        emit_rr(STR("cmp"), wlhs, wrhs);
+        return;
+    }
     emit_mov_reg(tmp, lhs);
     emit_rr(STR("cmp"), tmp, wrhs);
 }
