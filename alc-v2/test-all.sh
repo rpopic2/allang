@@ -39,11 +39,10 @@ for AL_FILE in tests/*.al; do
 
     CLANG_OUT=$(clang "${NAME}.s" $EXTRA_CLANG_FLAGS -o "${NAME}_bin" 2>&1)
     CLANG_EXIT=$?
-    rm -f "${NAME}.s"
     if [ $CLANG_EXIT -ne 0 ]; then
         printf "FAIL (clang)\n"
         ((FAIL++))
-        FAIL_NAMES+=("$AL_FILE (clang: $(echo "$CLANG_OUT" | tail -1))")
+        FAIL_NAMES+=("$AL_FILE (clang: $(echo "$CLANG_OUT" | tail -3))")
         continue
     fi
 

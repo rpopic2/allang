@@ -151,6 +151,7 @@ typedef struct reg {
     i32 offset;
     reg_size rsize;
     register_dst reg_type : 3; // enum register_dst
+    i32 displacement: 21; // active when it's nreg + offset
     dtype_t dtype;
 } reg_t;
 
@@ -164,9 +165,7 @@ enum tag {
 
 typedef struct {
     union {
-        struct {
-            i64 value;
-        };
+        i64 value;
         reg_t reg;
     };
     u8 tag;

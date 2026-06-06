@@ -16,6 +16,7 @@ I.Foo isnt 1 ->
 
 [Arr.4] is 4 ->
     ret 0
+printf "test failed\n" =>
 ret 1
 
 expect: Expect i32 =>

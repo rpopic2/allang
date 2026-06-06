@@ -543,9 +543,20 @@ regable read_regable(str s, const token_t *token) {
                 }
             }
             assert(member);
+            bool is_base_addr = dtype_tryget_addr(&reg->dtype) > 0;
+            bool is_member_addr = dtype_tryget_addr(&member->dtype) > 0;
             result.reg.dtype = member->dtype;
-            result.reg.offset -= member->offset;
             type = member->dtype.base;
+            if (is_base_addr) {
+                if (!is_member_addr) {
+                    dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+                    result.reg.displacement += member->offset;
+                } else {
+                    compile_err(token, "expected to dereferene it twice\n");
+                }
+            } else {
+                result.reg.offset -= member->offset;
+            }
         }
         if (member) {
             size_t mem_size = dtype_size(&member->dtype);
@@ -729,6 +740,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             };
             dtype_push(&reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
         }
+        offset_regable.value += reg.displacement;
     } else if (offset_regable.tag == REG) {
         if (streq(cur_token->end + 1, "unchecked")) {
             tok(context);
@@ -2271,11 +2283,8 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
         }
     }
 
-    if (arr_reg_t_len(&symbol.params) != symbol.airity) {
-        str_fprintnl(symbol.name, stdout);
-        printf(": expected %zd, but %d\n", arr_reg_t_len(&symbol.params), symbol.airity);
-        unreachable;
-    }
+    symbol.airity = (u8) arr_reg_t_len(&symbol.params);
+    symbol.ret_airity = (u8) arr_reg_t_len(&symbol.rets);
 
     hashentry_symbol_t *entry = hashmap_symbol_t_find(fn_ids, label);
     symbol_t *symbol_existing = &entry->value;

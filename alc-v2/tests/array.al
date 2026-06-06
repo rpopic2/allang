@@ -1,9 +1,13 @@
-#declare printf: Format addr u8 => Num_Printed i32!5
+#declare printf: Format addr u8 => Num_Printed i32
 #compile_all expect.al
 
 [Arr] :: 5*i32{.0 0 .1 1 .2 2 .3 3 .4 4} =[]
 
 Index :: 1
+
+Index_U32 :: u16{2}
+
+Arr * Index_U32 ! ret 3
 
 Arr
 
