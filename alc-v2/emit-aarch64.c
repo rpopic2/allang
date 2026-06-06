@@ -310,14 +310,14 @@ void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
 }
 
 
-static void emit_mov_wide(reg_t dst, u64 value) {
+static void emit_mov_wide(reg_t dst, i64 value) {
     if (value > UINT32_MAX) {
         dst.rsize = 8;
     }
     const int lanes = dst.rsize > 4 ? 4 : 2;
     bool initialized = false;
     for (int lane = 0; lane < lanes; lane++) {
-        const i64 chunk = (i64)((value >> (lane * 16)) & 0xFFFF);
+        const i64 chunk = (value >> (lane * 16)) & 0xFFFF;
         if (chunk == 0) {
             continue;
         }
@@ -334,7 +334,7 @@ void emit_mov(reg_t dst, i64 value) {
         if (value <= UINT16_MAX) {
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId32), get_wx(dst.rsize), regidx, (i32)value);
         } else {
-            emit_mov_wide(dst, (u64)value);
+            emit_mov_wide(dst, value);
         }
     } else {
         emit_ri(STR("mov"), dst, value);
