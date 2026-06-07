@@ -311,6 +311,25 @@ void puterr(const char *s) {
     fputs(s, stderr);
 }
 
+static inline str dtype_to_str(const dtype_t *self, allocator *alloc) {
+    char *begin = allocator_alloc_undefined(alloc, 0);
+    char *head = begin;
+    for (usize _i = self->decl_len; _i > 0; --_i) {
+        usize i = _i - 1;
+        dtype_kind_t tag = self->decl[i].tag;
+        const char *s = dtype_kind_string[tag];
+        head = allocator_alloc_undefined(alloc, strlen(s));
+        memcpy(head, s, strlen(s));
+        head = allocator_alloc_undefined(alloc, 1);
+        *head = ' ';
+    }
+    str name = self->base->name;
+    head = allocator_alloc_undefined(alloc, str_len(name));
+    memcpy(head, name.data, str_len(name));
+    head = allocator_alloc_undefined(alloc, 1);
+    *head = '\0';
+    return (str){.data = begin, .end = head};
+}
 
 void literal_string(parser_context *restrict context, const token_t *restrict token) {
     bool escape = emit_need_escaping();
@@ -486,16 +505,17 @@ regable read_regable(str s, const token_t *diagnostic) {
 
     member_t *member = NULL;
     type_t *type = reg->dtype.base;
-    if (type == error_type) {
-        return result;
+    if (type == NULL) {
+        type = error_type;
     }
+    if (type == error_type)
+        return result;
 
-    int array = dtype_tryget_arr(&reg->dtype);
-    int slice = dtype_tryget(&reg->dtype, DK_SLICE);
+    int array = dtype_tryget(&reg->dtype, DK_ARRAY);
     i32 begin_index = 0;
     while (true) {
-        bool is_slice = array && streq(s.data, "..");
-        if (is_slice) {
+        bool is_make_slice = array && streq(s.data, "..");
+        if (is_make_slice) {
             s.data += 2;
             char *end_ptr = NULL;
             long long end_index = strtoll(s.data, &end_ptr, 0);
@@ -503,8 +523,8 @@ regable read_regable(str s, const token_t *diagnostic) {
                 end_index = array;
             }
             diagnositc_slice(diagnostic, begin_index, end_index, array);
-            dtype_push(&result.reg.dtype,
-                       (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
+            dtype_pop(&result.reg.dtype);
+            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
             result.reg.rsize = sizeof(void *);
             break;
         }
@@ -513,6 +533,7 @@ regable read_regable(str s, const token_t *diagnostic) {
         if (str_empty(&mem_name))
             break;
 
+        int slice = dtype_tryget(&reg->dtype, DK_SLICE);
         if (slice && str_eq_lit(mem_name, "Length")) {
             member = &(member_t){
                 .name = mem_name,
@@ -547,6 +568,9 @@ regable read_regable(str s, const token_t *diagnostic) {
             }
             begin_index = (i32)index;
         } else {
+            char buf[1024];
+            allocator alloc;
+            allocator_init(&alloc, buf, sizeof buf);
             member = find_member(&type->struct_t.members, mem_name);
             if (member == NULL) {
                 compile_err(diagnostic, "member not found: "), str_printerr(mem_name);
@@ -807,33 +831,11 @@ bool typecheck_regable(const token_t *token, const type_t *ltype, const regable 
     return true;
 }
 
-static inline str dtype_to_str(const dtype_t *self, allocator *alloc) {
-    char *begin = allocator_alloc_undefined(alloc, 0);
-    char *head = begin;
-    for (usize _i = self->decl_len; _i > 0; --_i) {
-        usize i = _i - 1;
-        dtype_kind_t tag = self->decl[i].tag;
-        const char *s = dtype_kind_string[tag];
-        head = allocator_alloc_undefined(alloc, strlen(s));
-        memcpy(head, s, strlen(s));
-        head = allocator_alloc_undefined(alloc, 1);
-        *head = ' ';
-    }
-    str name = self->base->name;
-    head = allocator_alloc_undefined(alloc, str_len(name));
-    memcpy(head, name.data, str_len(name));
-    head = allocator_alloc_undefined(alloc, 1);
-    *head = '\0';
-    return (str){.data = begin, .end = head};
-}
-
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (dtype_eq(&lhs.dtype, &rhs.dtype))
         return;
 
-    char buf[1024];
-    allocator alloc;
-    allocator_init(&alloc, buf, sizeof buf);
+    ALLOCATOR_MAKE(alloc, 1024);
     str lname = dtype_to_str(&lhs.dtype, &alloc);
     str rname = dtype_to_str(&rhs.dtype, &alloc);
     compile_err(token, "expected type '");
@@ -841,7 +843,6 @@ void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     fprintf(stderr, "', but found type '");
     str_printerrnl(rname);
     fprintf(stderr, "'\n");
-    pd(rhs.dtype.decl_len)
 }
 
 bool arithmetic_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
@@ -1759,10 +1760,11 @@ bool nullary_op(parser_context *context, regable lhs) {
                 compile_err(token, "taking address of stack object with unknown type\n");
             }
             context->reg.dtype = nreg->dtype;
-            dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            const declarator_t top = dtype_top(&nreg->dtype);
+            if (top.tag != DK_SLICE) {
+                dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            }
             emit_sub(context->reg, FP, nreg->offset);
-            // TODO handle for cases where slice is not from STACK array
-            declarator_t top = dtype_top(&nreg->dtype);
             if (top.tag == DK_SLICE) {
                 reg_t dst = context->reg;
                 dst.offset += 1;
@@ -1941,6 +1943,9 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
         bool slice = str_eq_lit(cur_token->id, "slice");
         if (!addr && !slice)
             break;
+        if (streq(cur_token->id.end, "{")) {
+            break;
+        }
         dtype_kind_t dk = addr ? DK_ADDR : DK_SLICE;
         dtype_push(out, (declarator_t){dk, .amount = 1});
         tok(context);

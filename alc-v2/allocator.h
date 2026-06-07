@@ -1,12 +1,18 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+
+void abort(void);
 
 typedef struct allocator {
     char *data;
     char *end;
     size_t size;
 } allocator;
+
+#define ALLOCATOR_MAKE(name, size) \
+    char name##buf[(size)]; \
+    allocator name; \
+    allocator_init(&name, name##buf, size);
 
 static inline void allocator_init(allocator *self, void *data, size_t size) {
     *self = (allocator){

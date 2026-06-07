@@ -45,8 +45,13 @@ static inline bool dtype_eq(const dtype_t *lhs, const dtype_t *rhs) {
     if (lhs->decl_len != rhs->decl_len)
         return false;
 
-    if (memcmp(&lhs->decl, &rhs->decl, sizeof lhs->decl) != 0)
-        return false;
+    for (usize i = 0; i < lhs->decl_len; ++i) {
+        if (lhs->decl[i].tag != rhs->decl[i].tag)
+            return false;
+        if (lhs->decl[i].tag != DK_SLICE
+                && lhs->decl[i].amount != rhs->decl[i].amount)
+            return false;
+    }
 
     bool base_eq = lhs->base == rhs->base;
     return base_eq;
