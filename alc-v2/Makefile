@@ -19,7 +19,7 @@ tests/%.s: tests/%.al alc
 tests/%_bin: tests/%.s
 	clang $< $(CLANGFLAGS) -o $@
 
-tests/%.ok: tests/%_bin
+tests/%.ok: tests/%_bin alc
 	@$< >/dev/null 2>&1 && touch $@ && echo "PASS $*" || (echo "FAIL $*"; exit 1)
 
 .SECONDARY:

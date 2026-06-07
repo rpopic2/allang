@@ -542,9 +542,15 @@ regable read_regable(str s, const token_t *diagnostic) {
                 },
                 .offset = 1,
             };
-        } else if (array || slice) {
+            break;
+        }
+
+        if (array || slice) {
             char *end_ptr = NULL;
             long long index = strtoll(mem_name.data, &end_ptr, 0);
+            if (index > INT_MAX) {
+                compile_err(diagnostic, "index was too big: %lld", index);
+            }
             if (end_ptr == mem_name.data) {
                 compile_err(diagnostic, "expected constant number for index\n");
             }
@@ -553,6 +559,7 @@ regable read_regable(str s, const token_t *diagnostic) {
                 result.tag = NONE;
                 break;
             }
+
             member = &(member_t){
                 .name = mem_name,
                 .dtype = (dtype_t){
@@ -563,14 +570,8 @@ regable read_regable(str s, const token_t *diagnostic) {
             if (slice) {
                 dtype_push(&member->dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)index});
             }
-            if (index > INT_MAX) {
-                compile_err(diagnostic, "index was too big: %lld", index);
-            }
             begin_index = (i32)index;
         } else {
-            char buf[1024];
-            allocator alloc;
-            allocator_init(&alloc, buf, sizeof buf);
             member = find_member(&type->struct_t.members, mem_name);
             if (member == NULL) {
                 compile_err(diagnostic, "member not found: "), str_printerr(mem_name);
@@ -578,23 +579,25 @@ regable read_regable(str s, const token_t *diagnostic) {
                 break;
             }
         }
+
         assert(member);
-        result.reg.dtype = member->dtype;
         type = member->dtype.base;
-        bool is_base_addr = dtype_tryget_addr(&reg->dtype) > 0;
-        if (is_base_addr) {
+        bool is_basetype_addr = dtype_tryget_addr(&reg->dtype) > 0;
+        if (is_basetype_addr) {
             dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
             result.reg.displacement += member->offset;
         } else {
             result.reg.offset -= member->offset;
         }
     }
+
     if (member) {
         size_t mem_size = dtype_size(&member->dtype);
         if (mem_size > MAX_REG_SIZE) {
             compile_err(diagnostic, "this member does not fit in register\n");
         }
         result.reg.rsize = (reg_size)mem_size;
+        result.reg.dtype = member->dtype;
     }
     return result;
 }
