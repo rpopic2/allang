@@ -47,6 +47,7 @@ static int get_regoff(reg_t e) {
     return e.offset;
 }
 
+const char *error_too_big = CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET;
 static const char *get_wx(reg_size reg_size) {
     const char *format;
     if (reg_size <= 4) {
@@ -54,7 +55,7 @@ static const char *get_wx(reg_size reg_size) {
     } else if (reg_size <= 8) {
         format = "x";
     } else {
-        report_error(CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg_size);
+        report_error(error_too_big, reg_size);
         format = "x";
     }
     return format;
@@ -661,7 +662,10 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
 
 void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
     reg_t base = {.reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *)};
-    emit_sub(base, FP, object.offset);
+    if (object.reg_type == STACK)
+        emit_sub(base, FP, object.offset);
+    else
+        base = object;
 
     const size_t elem_size = object.dtype.base->size;
     const i64 shift = __builtin_ctz((unsigned)elem_size);
@@ -685,6 +689,25 @@ void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
 }
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
+    if (src.rsize > MAX_REG_SIZE) {
+        report_error("%s", error_too_big);
+        return;
+    }
+    if (src.rsize > 8) {
+        reg_t dst2 = dst;
+        dst2.offset += 1;
+        dtype_t popped = dtype_pop_dup(&src.dtype);
+        size_t stride = dtype_size(&popped);
+        pd(stride)
+
+        reg_t scratch = {.reg_type = SCRATCH, .rsize = sizeof (void *)};
+        src.rsize = sizeof (void *);
+        emit_elem_addr(scratch, src, offset);
+
+        buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [x%d]"), get_regoff(dst), get_regoff(dst2), get_regoff(scratch));
+        return;
+    }
+
     load_store_x("ldr", dst, src);
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
 }

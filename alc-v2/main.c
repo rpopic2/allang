@@ -583,10 +583,7 @@ regable read_regable(str s, const token_t *diagnostic) {
         assert(member);
         type = member->dtype.base;
         bool is_basetype_addr = dtype_tryget_addr(&reg->dtype) > 0;
-        if (is_basetype_addr) {
-            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
-            result.reg.displacement += member->offset;
-        } else {
+        if (!is_basetype_addr) {
             result.reg.offset -= member->offset;
         }
     }
@@ -598,6 +595,14 @@ regable read_regable(str s, const token_t *diagnostic) {
         }
         result.reg.rsize = (reg_size)mem_size;
         result.reg.dtype = member->dtype;
+        pdtype(&result.reg.dtype);
+        bool is_basetype_addr = dtype_tryget_addr(&reg->dtype) > 0;
+        pd(is_basetype_addr)
+        if (is_basetype_addr) {
+            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            result.reg.displacement += member->offset;
+            pdtype(&result.reg.dtype);
+        }
     }
     return result;
 }
@@ -754,6 +759,9 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             reg.rsize = (reg_size)dtype_size(dtype);
         } else {
             compile_err(cur_token, "a register containing addr is expected\n");
+            ps(s)
+            ALLOCATOR_MAKE(alloc, 1024);
+            ps(dtype_to_str(dtype, &alloc));
         }
     }
     if (offset_regable.tag == VALUE) {
@@ -789,7 +797,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             tok(context);
         } else if (offset_regable.tag == REG) {
             declarator_t decl = dtype_top(&reg.dtype);
-            if (decl.tag != DK_ARRAY) {
+            if (decl.tag != DK_ARRAY && decl.tag != DK_SLICE) {
                 compile_err(cur_token, "register was not an array\n");
             } else {
                 check_bounds(context, offset_regable.reg, decl.amount, EXCL);
@@ -1709,6 +1717,7 @@ bool expr_load(parser_context *context) {
     reg_t *dst = &context->reg;
     reg_t src;
     regable offset;
+    ps(token->id)
     if (!read_load_store_offset(context, token->id, &src, &offset))
         return true;
     if (!src.dtype.base) {
@@ -1727,7 +1736,12 @@ bool expr_load(parser_context *context) {
         printd("memb_cnt: %zd\n", members->cur - members->begin);
         str_printd(src.dtype.base->name);
     }
-    dst->rsize = (reg_size)src.dtype.base->size;
+    size_t load_size = src.dtype.base->size;
+    if (load_size > MAX_REG_SIZE) {
+        compile_err(token, "the object you are trying to load does not fit in a register (size was %zd). consider using memcpy\n", load_size);
+        return true;
+    }
+    dst->rsize = (reg_size)load_size;
     dst->dtype.base = src.dtype.base;
     if (offset.tag == VALUE) {
         emit_ldr(*dst, src, (int)offset.value);
@@ -2435,7 +2449,7 @@ void stmt_label(parser_context *context) {
         };
         reg_t r = {
             .reg_type = NREG,
-            .offset = context->nreg_count,
+            .offset = context->nreg_count + 1,
             .rsize = rsize,
             .dtype = param->dtype,
         };
