@@ -456,124 +456,121 @@ void diagnositc_slice(const token_t *token, i64 begin_index, i64 end_index, i32 
     }
 }
 
-regable read_regable(str s, const token_t *token) {
+regable read_regable(str s, const token_t *diagnostic) {
     regable result = (regable){ .value = 0, .tag = NONE };
-    if (isupper(s.data[0]) || s.data[0] == '^') {
-        int scope_up = extrat_scope_up(&s);
-        reg_t *reg = NULL;
 
-        str name = dot_iter(&s, '.');
-        const_entry_t *entry = const_hashmap_tryfind(&const_ids, name);
-        if (entry != NULL) {
-            result.tag = VALUE;
-            result.value = entry->value;
-            return result;
+    if_opt(i64, value, = lit_numeric(diagnostic)) {
+        return (regable){.tag = VALUE, .value = value};
+    }
+
+    if (!isupper(s.data[0]) && s.data[0] != '^')
+        return (regable){.tag = NONE};
+        
+    const int scope_up = extrat_scope_up(&s);
+
+    const str name = dot_iter(&s, '.');
+
+    const const_entry_t *entry = const_hashmap_tryfind(&const_ids, name);
+    if (entry != NULL) {
+        return (regable){.tag = VALUE, .value = entry->value};
+    }
+
+    reg_t *reg = NULL;
+    if (!find_id(&local_ids, name, diagnostic, &reg, scope_up)
+        || reg->reg_type == RD_NONE) {
+        compile_err(diagnostic, "unknown id "), str_printerr(name);
+        return result;
+    }
+    result.reg = *reg;
+    result.tag = REG;
+
+    member_t *member = NULL;
+    type_t *type = reg->dtype.base;
+    if (type == error_type) {
+        return result;
+    }
+
+    int array = dtype_tryget_arr(&reg->dtype);
+    int slice = dtype_tryget(&reg->dtype, DK_SLICE);
+    i32 begin_index = 0;
+    while (true) {
+        bool is_slice = array && streq(s.data, "..");
+        if (is_slice) {
+            s.data += 2;
+            char *end_ptr = NULL;
+            long long end_index = strtoll(s.data, &end_ptr, 0);
+            if (end_index == 0) {
+                end_index = array;
+            }
+            diagnositc_slice(diagnostic, begin_index, end_index, array);
+            dtype_push(&result.reg.dtype,
+                       (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
+            result.reg.rsize = sizeof(void *);
+            break;
         }
 
-        if (!find_id(&local_ids, name, token, &reg, scope_up)
-            || reg->reg_type == RD_NONE) {
-            compile_err(token, "unknown id "), str_printerr(token->id);
-            return result;
-        }
-        result.reg = *reg;
-        result.tag = REG;
-        member_t *member = NULL;
-        type_t *type = reg->dtype.base;
-        if (type == error_type) {
-            return result;
-        }
+        str mem_name = dot_iter(&s, '.');
+        if (str_empty(&mem_name))
+            break;
 
-        int array = dtype_tryget_arr(&reg->dtype);
-        int slice = dtype_tryget(&reg->dtype, DK_SLICE);
-        i32 begin_index = 0;
-        while (true) {
-            bool is_slice = array && streq(s.data, "..");
-            if (is_slice) {
-                s.data += 2;
-                char *end_ptr = NULL;
-                long long end_index = strtoll(s.data, &end_ptr, 0);
-                if (end_index == 0) {
-                    end_index = array;
-                }
-                diagnositc_slice(token, begin_index, end_index, array);
-                dtype_push(&result.reg.dtype,
-                           (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
-                result.reg.rsize = sizeof(void *);
+        if (slice && str_eq_lit(mem_name, "Length")) {
+            member = &(member_t){
+                .name = mem_name,
+                .dtype = (dtype_t){
+                    .base = type_usize,
+                },
+                .offset = 1,
+            };
+        } else if (array || slice) {
+            char *end_ptr = NULL;
+            long long index = strtoll(mem_name.data, &end_ptr, 0);
+            if (end_ptr == mem_name.data) {
+                compile_err(diagnostic, "expected constant number for index\n");
+            }
+            if (index < 0) {
+                compile_err(diagnostic, "expected index greater or equal to zero\n");
+                result.tag = NONE;
                 break;
             }
-
-            str mem_name = dot_iter(&s, '.');
-            if (str_empty(&mem_name))
+            member = &(member_t){
+                .name = mem_name,
+                .dtype = (dtype_t){
+                    .base = type,
+                },
+                .offset = type->size * (size_t)index
+            };
+            if (slice) {
+                dtype_push(&member->dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)index});
+            }
+            if (index > INT_MAX) {
+                compile_err(diagnostic, "index was too big: %lld", index);
+            }
+            begin_index = (i32)index;
+        } else {
+            member = find_member(&type->struct_t.members, mem_name);
+            if (member == NULL) {
+                compile_err(diagnostic, "member not found: "), str_printerr(mem_name);
+                result.tag = NONE;
                 break;
-            if (slice && str_eq_lit(mem_name, "Length")) {
-                member = &(member_t){
-                    .name = mem_name,
-                    .dtype = (dtype_t){
-                        .base = type_usize,
-                    },
-                    .offset = 1,
-                };
-            } else if (array || slice) {
-                char *end_ptr = NULL;
-                long long index = strtoll(mem_name.data, &end_ptr, 0);
-                if (end_ptr == mem_name.data) {
-                    compile_err(token, "expected constant number for index\n");
-                }
-                if (index < 0) {
-                    compile_err(token, "expected index greater or equal to zero\n");
-                    result.tag = NONE;
-                    break;
-                }
-                member = &(member_t){
-                    .name = mem_name,
-                    .dtype = (dtype_t){
-                        .base = type,
-                    },
-                    .offset = type->size * (size_t)index
-                };
-                if (slice) {
-                    dtype_push(&member->dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)index});
-                }
-                if (index > INT_MAX) {
-                    compile_err(token, "index was too big: %lld", index);
-                }
-                begin_index = (i32)index;
-            } else {
-                member = find_member(&type->struct_t.members, mem_name);
-                if (member == NULL) {
-                    compile_err(token, "member not found: "), str_printerr(mem_name);
-                    result.tag = NONE;
-                    break;
-                }
-            }
-            assert(member);
-            bool is_base_addr = dtype_tryget_addr(&reg->dtype) > 0;
-            bool is_member_addr = dtype_tryget_addr(&member->dtype) > 0;
-            result.reg.dtype = member->dtype;
-            type = member->dtype.base;
-            if (is_base_addr) {
-                if (!is_member_addr) {
-                    dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
-                    result.reg.displacement += member->offset;
-                } else {
-                    compile_err(token, "expected to dereferene it twice\n");
-                }
-            } else {
-                result.reg.offset -= member->offset;
             }
         }
-        if (member) {
-            size_t mem_size = dtype_size(&member->dtype);
-            if (mem_size > MAX_REG_SIZE) {
-                compile_err(token, "this member does not fit in register\n");
-            }
-            result.reg.rsize = (reg_size)mem_size;
+        assert(member);
+        result.reg.dtype = member->dtype;
+        type = member->dtype.base;
+        bool is_base_addr = dtype_tryget_addr(&reg->dtype) > 0;
+        if (is_base_addr) {
+            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            result.reg.displacement += member->offset;
+        } else {
+            result.reg.offset -= member->offset;
         }
-    } else {
-        if_opt(i64, value, = lit_numeric(token)) {
-            result.tag = VALUE;
-            result.value = value;
+    }
+    if (member) {
+        size_t mem_size = dtype_size(&member->dtype);
+        if (mem_size > MAX_REG_SIZE) {
+            compile_err(diagnostic, "this member does not fit in register\n");
         }
+        result.reg.rsize = (reg_size)mem_size;
     }
     return result;
 }
