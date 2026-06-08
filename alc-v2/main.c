@@ -31,6 +31,7 @@ target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
 void stack_report(parser_context *context);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
+bool stmt_ret_cond_reg(parser_context *context, cond_t cond, reg_t cmp_reg, reg_t against);
 bool stmt_ret(parser_context *context);
 void stmt_label(parser_context *context);
 int expr_line(parser_context *context);
@@ -596,9 +597,7 @@ regable read_regable(str s, const token_t *diagnostic) {
         }
         result.reg.rsize = (reg_size)mem_size;
         result.reg.dtype = member->dtype;
-        pdtype(&result.reg.dtype);
         bool is_basetype_addr = dtype_tryget_addr(&reg->dtype) > 0;
-        pd(is_basetype_addr)
         if (is_basetype_addr) {
             dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
             result.reg.displacement += member->offset;
@@ -676,8 +675,6 @@ void check_bounds(parser_context *context, reg_t index, i32 len, enum inclusive 
     }
     context->reg = stash;
 }
-
-bool stmt_ret_cond_reg(parser_context *, cond_t, reg_t, reg_t);
 
 void check_bounds_reg(parser_context *context, reg_t index, reg_t count, enum inclusive inclusive) {
     const token_t cur_token = context->cur_token;
@@ -781,9 +778,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             reg.rsize = (reg_size)dtype_size(dtype);
         } else {
             compile_err(cur_token, "a register containing addr is expected\n");
-            ps(s)
-            ALLOCATOR_MAKE(alloc, 1024);
-            ps(dtype_to_str(dtype, &alloc));
         }
     }
     if (offset_regable.tag == VALUE) {
@@ -1744,7 +1738,6 @@ bool expr_load(parser_context *context) {
     reg_t *dst = &context->reg;
     reg_t src;
     regable offset;
-    ps(token->id)
     if (!read_load_store_offset(context, token->id, &src, &offset))
         return true;
     if (!src.dtype.base) {
@@ -2495,9 +2488,9 @@ void stmt_label(parser_context *context) {
         emit_mov_reg(r, arg_reg);
         if (is_fat) {
             arg_reg.offset += 1;
-            r.offset += 1;
-            emit_mov_reg(r, arg_reg);
-            r.offset -= 1;
+            reg_t r_len = r;
+            r_len.offset += 1;
+            emit_mov_reg(r_len, arg_reg);
         }
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {

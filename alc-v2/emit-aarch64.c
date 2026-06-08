@@ -18,6 +18,8 @@ extern const char *fn_annotation_fmt;
 extern const char *local_string_prefix;
 extern type_t *type_comptime_int;
 
+const char *error_too_big = CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET;
+
 const char *imm_prefix = "#";
 
 // see enum cond
@@ -47,7 +49,6 @@ static int get_regoff(reg_t e) {
     return e.offset;
 }
 
-const char *error_too_big = CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET;
 static const char *get_wx(reg_size reg_size) {
     const char *format;
     if (reg_size <= 4) {
