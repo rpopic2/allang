@@ -105,6 +105,14 @@ static inline declarator_t dtype_pop(dtype_t *self) {
     return self->decl[--self->decl_len];
 }
 
+static inline dtype_t dtype_pop_dup(const dtype_t *self) {
+    if (self->decl_len == 0) {
+        return *self;
+    }
+    dtype_t copy = *self;
+    dtype_pop(&copy);
+    return copy;
+}
 static inline void dtype_pushone(dtype_t *self, dtype_kind_t kind) {
     dtype_push(self, (declarator_t){.tag = kind, .amount = 1});
 }
@@ -175,7 +183,7 @@ typedef struct reg {
     reg_size rsize;
     register_dst reg_type : 3; // enum register_dst
     i32 displacement: 21; // active when it's nreg + offset
-    dtype_t dtype;
+    struct dtype dtype;
 } reg_t;
 
 static inline bool reg_eq(struct reg lhs, struct reg rhs) {
@@ -191,7 +199,7 @@ typedef struct {
         i64 value;
         reg_t reg;
     };
-    u8 tag;
+    enum tag tag : 8; // enum tag
 } regable;
 DYN_GENERIC(regable)
 

@@ -31,6 +31,7 @@ target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
 void stack_report(parser_context *context);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
+bool stmt_ret_cond_reg(parser_context *context, cond_t cond, reg_t cmp_reg, reg_t against);
 bool stmt_ret(parser_context *context);
 void stmt_label(parser_context *context);
 int expr_line(parser_context *context);
@@ -583,10 +584,8 @@ regable read_regable(str s, const token_t *diagnostic) {
         assert(member);
         type = member->dtype.base;
         bool is_basetype_addr = dtype_tryget_addr(&reg->dtype) > 0;
-        if (is_basetype_addr) {
-            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
-            result.reg.displacement += member->offset;
-        } else {
+        bool is_nreg_slice_elem = slice && result.reg.reg_type != STACK;
+        if (!is_basetype_addr && !is_nreg_slice_elem) {
             result.reg.offset -= member->offset;
         }
     }
@@ -598,6 +597,12 @@ regable read_regable(str s, const token_t *diagnostic) {
         }
         result.reg.rsize = (reg_size)mem_size;
         result.reg.dtype = member->dtype;
+        bool is_basetype_addr = dtype_tryget_addr(&reg->dtype) > 0;
+        if (is_basetype_addr) {
+            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            result.reg.displacement += member->offset;
+            pdtype(&result.reg.dtype);
+        }
     }
     return result;
 }
@@ -664,6 +669,26 @@ void check_bounds(parser_context *context, reg_t index, i32 len, enum inclusive 
     cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
     tok(context);
     if (stmt_ret_cond(context, cond, index, len)) {
+
+    } else {
+        compile_err(&cur_token, "expected to handle check operator\n");
+    }
+    context->reg = stash;
+}
+
+void check_bounds_reg(parser_context *context, reg_t index, reg_t count, enum inclusive inclusive) {
+    const token_t cur_token = context->cur_token;
+
+    reg_t stash = context->reg;
+    tok(context);
+    if (!str_eq(context->cur_token.id, STR("!"))) {
+        compile_err(&cur_token, "expected to check bounds with operator !\n");
+        return;
+    }
+
+    cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
+    tok(context);
+    if (stmt_ret_cond_reg(context, cond, index, count)) {
 
     } else {
         compile_err(&cur_token, "expected to handle check operator\n");
@@ -750,7 +775,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             reg.rsize = (reg_size)dtype_size(&first->dtype);
         } else if (dtype_tryget(dtype, DK_SLICE)) {
             reg.dtype = reg.dtype;
-            reg.offset = 0;
             reg.rsize = (reg_size)dtype_size(dtype);
         } else {
             compile_err(cur_token, "a register containing addr is expected\n");
@@ -789,8 +813,13 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             tok(context);
         } else if (offset_regable.tag == REG) {
             declarator_t decl = dtype_top(&reg.dtype);
-            if (decl.tag != DK_ARRAY) {
+            if (decl.tag != DK_ARRAY && decl.tag != DK_SLICE) {
                 compile_err(cur_token, "register was not an array\n");
+            } else if (decl.tag == DK_SLICE) {
+                reg_t count_reg = reg;
+                count_reg.offset += 1;
+                count_reg.rsize = sizeof(void *);
+                check_bounds_reg(context, offset_regable.reg, count_reg, EXCL);
             } else {
                 check_bounds(context, offset_regable.reg, decl.amount, EXCL);
             }
@@ -1727,7 +1756,12 @@ bool expr_load(parser_context *context) {
         printd("memb_cnt: %zd\n", members->cur - members->begin);
         str_printd(src.dtype.base->name);
     }
-    dst->rsize = (reg_size)src.dtype.base->size;
+    size_t load_size = src.dtype.base->size;
+    if (load_size > MAX_REG_SIZE) {
+        compile_err(token, "the object you are trying to load does not fit in a register (size was %zd). consider using memcpy\n", load_size);
+        return true;
+    }
+    dst->rsize = (reg_size)load_size;
     dst->dtype.base = src.dtype.base;
     if (offset.tag == VALUE) {
         emit_ldr(*dst, src, (int)offset.value);
@@ -2284,6 +2318,17 @@ bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_
     return true;
 }
 
+bool stmt_ret_cond_reg(parser_context *context, cond_t cond, reg_t cmp_reg, reg_t against) {
+    if (!str_eq_lit(context->cur_token.id, "ret"))
+        return false;
+    emit_cmp_reg(cmp_reg, against, cond);
+    if (!stmt_ret_pre(context))
+        return false;
+    context->has_branched_ret = true;
+    emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
+    return true;
+}
+
 bool stmt(parser_context *context) {
     const token_t *token = &context->cur_token;
 
@@ -2443,8 +2488,9 @@ void stmt_label(parser_context *context) {
         emit_mov_reg(r, arg_reg);
         if (is_fat) {
             arg_reg.offset += 1;
-            r.offset += 1;
-            emit_mov_reg(r, arg_reg);
+            reg_t r_len = r;
+            r_len.offset += 1;
+            emit_mov_reg(r_len, arg_reg);
         }
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {
