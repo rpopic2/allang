@@ -316,6 +316,7 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
 
     int index = rsize_log2(dst.rsize);
     buf_snprintf(fn_buf, ", %s ptr [", ptr_names[index]);
+    src.rsize = sizeof(void *);
     buf_putreg(fn_buf, src);
     buf_snprintf(fn_buf, " + %d]\n", offset);
 }
