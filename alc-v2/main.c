@@ -755,7 +755,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             reg.rsize = (reg_size)dtype_size(&first->dtype);
         } else if (dtype_tryget(dtype, DK_SLICE)) {
             reg.dtype = reg.dtype;
-            reg.offset = 0;
             reg.rsize = (reg_size)dtype_size(dtype);
         } else {
             compile_err(cur_token, "a register containing addr is expected\n");
@@ -2449,7 +2448,7 @@ void stmt_label(parser_context *context) {
         };
         reg_t r = {
             .reg_type = NREG,
-            .offset = context->nreg_count + 1,
+            .offset = context->nreg_count,
             .rsize = rsize,
             .dtype = param->dtype,
         };
