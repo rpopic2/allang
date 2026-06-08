@@ -2,5 +2,4 @@
 !*.*
 *.s
 a.out
-!tests
 compile_commands.json

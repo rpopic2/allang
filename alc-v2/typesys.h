@@ -10,6 +10,7 @@
 
 typedef struct dtype dtype_t;
 typedef struct emit_context emit_context_t;
+typedef struct allocator allocator;
 
 enum type_kind {
     TK_NONE, TK_FUND, TK_STRUCT, TK_UNION,
@@ -21,8 +22,11 @@ enum sign_t {
 };
 typedef u8 sign_t;
 
-enum dtype_kind {
+typedef enum dtype_kind {
     DK_ADDR, DK_ARRAY, DK_CHECK, DK_SLICE
+} dtype_kind_t;
+static const char *dtype_kind_string[] = {
+   "addr", "array", "!", "slice", 
 };
 
 typedef struct delarator {
@@ -41,8 +45,13 @@ static inline bool dtype_eq(const dtype_t *lhs, const dtype_t *rhs) {
     if (lhs->decl_len != rhs->decl_len)
         return false;
 
-    if (memcmp(&lhs->decl, &rhs->decl, sizeof lhs->decl) != 0)
-        return false;
+    for (usize i = 0; i < lhs->decl_len; ++i) {
+        if (lhs->decl[i].tag != rhs->decl[i].tag)
+            return false;
+        if (lhs->decl[i].tag != DK_SLICE
+                && lhs->decl[i].amount != rhs->decl[i].amount)
+            return false;
+    }
 
     bool base_eq = lhs->base == rhs->base;
     return base_eq;
@@ -96,6 +105,18 @@ static inline declarator_t dtype_pop(dtype_t *self) {
     return self->decl[--self->decl_len];
 }
 
+static inline dtype_t dtype_pop_dup(const dtype_t *self) {
+    if (self->decl_len == 0) {
+        return *self;
+    }
+    dtype_t copy = *self;
+    dtype_pop(&copy);
+    return copy;
+}
+static inline void dtype_pushone(dtype_t *self, dtype_kind_t kind) {
+    dtype_push(self, (declarator_t){.tag = kind, .amount = 1});
+}
+
 static inline dtype_t dtype_dup_strip(dtype_t *self) {
     dtype_t ret = *self;
     dtype_pop(&ret);
@@ -113,6 +134,13 @@ static inline i32 dtype_tryget_arr(const dtype_t *self) {
     else return top.amount;
 }
 
+static inline i32 dtype_tryget(const dtype_t *self, dtype_kind_t kind) {
+    declarator_t top = dtype_top(self);
+    if (top.tag != kind)
+        return 0;
+    else return top.amount;
+}
+
 static inline i32 dtype_tryget_addr(const dtype_t *self) {
     declarator_t top = dtype_top(self);
     if (top.tag != DK_ADDR)
@@ -125,9 +153,9 @@ static inline size_t dtype_size(const dtype_t *self) {
         return self->base->size;
     }
     declarator_t top = dtype_top(self);
-    if (top.tag == DK_ADDR)
+    if (top.tag == DK_ADDR) {
         return sizeof (void *);
-    else if (top.tag == DK_ARRAY) {
+    } else if (top.tag == DK_ARRAY) {
         if (top.amount <= 0)
             fprintf(stderr, "array length was <= 0 (%d)", top.amount);
         return self->base->size * (usize)top.amount;
@@ -135,6 +163,8 @@ static inline size_t dtype_size(const dtype_t *self) {
         dtype_t stripped = *self;
         dtype_pop(&stripped);
         return dtype_size(&stripped);
+    } else if (top.tag == DK_SLICE) {
+        return sizeof (void *) * 2;
     } else {
         unreachable;
     }
@@ -152,7 +182,8 @@ typedef struct reg {
     i32 offset;
     reg_size rsize;
     register_dst reg_type : 3; // enum register_dst
-    dtype_t dtype;
+    i32 displacement: 21; // active when it's nreg + offset
+    struct dtype dtype;
 } reg_t;
 
 static inline bool reg_eq(struct reg lhs, struct reg rhs) {
@@ -165,12 +196,10 @@ enum tag {
 
 typedef struct {
     union {
-        struct {
-            i64 value;
-        };
+        i64 value;
         reg_t reg;
     };
-    u8 tag;
+    enum tag tag : 8; // enum tag
 } regable;
 DYN_GENERIC(regable)
 

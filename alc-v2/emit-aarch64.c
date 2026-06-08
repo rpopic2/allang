@@ -18,11 +18,13 @@ extern const char *fn_annotation_fmt;
 extern const char *local_string_prefix;
 extern type_t *type_comptime_int;
 
+const char *error_too_big = CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET;
+
 const char *imm_prefix = "#";
 
 // see enum cond
 const char *const cond_str[] = {
-    "eq", "ne", "ge", "lt", "gt", "le", "hs", "hi",
+    "eq", "ne", "ge", "lt", "gt", "le", "hs", "lo", "hi", "ls",
 };
 
 const size_t default_register_size = 8;
@@ -54,7 +56,7 @@ static const char *get_wx(reg_size reg_size) {
     } else if (reg_size <= 8) {
         format = "x";
     } else {
-        report_error(CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg_size);
+        report_error(error_too_big, reg_size);
         format = "x";
     }
     return format;
@@ -106,6 +108,15 @@ static size_t pack_small_values(const dyn_member_t *members, const dyn_agg_membe
     return packed;
 }
 
+static void emit_mov_lane(reg_t dst, i64 chunk, i64 offset_bits, bool *initialized) {
+    if (*initialized) {
+        emit_risi(STR("movk"), dst, chunk, STR("lsl"), offset_bits);
+    } else {
+        emit_risi(STR("movz"), dst, chunk, STR("lsl"), offset_bits);
+        *initialized = true;
+    }
+}
+
 static size_t emit_member_value(reg_t dst, const dyn_member_t *members, const dyn_agg_member *args,
                                 ptrdiff_t *i, ptrdiff_t member_count,
                                 size_t memb_size, size_t offset_bits,
@@ -128,12 +139,7 @@ static size_t emit_member_value(reg_t dst, const dyn_member_t *members, const dy
         emit_rri(STR("orr"), dst, dst, value << offset_bits);
         return packed;
     }
-    if (!*dst_initialized) {
-        emit_risi(STR("movz"), dst, value, STR("lsl"), (i64)offset_bits);
-    } else {
-        emit_risi(STR("movk"), dst, value, STR("lsl"), (i64)offset_bits);
-    }
-    *dst_initialized = true;
+    emit_mov_lane(dst, value, (i64)offset_bits, dst_initialized);
     return packed;
 }
 
@@ -249,7 +255,7 @@ void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
         offset += 16;
     }
     while (size >= 8) {
-        emit_str(dst, xzr, (int)offset);
+        emit_str_reg(dst, xzr, (int)offset);
         size -= 8;
         offset += 8;
     }
@@ -259,7 +265,7 @@ void emit_zerofill(reg_t dst, i64 offset, const dtype_t *type) {
     while (size) {
         if (size >= rsize) {
             zr.rsize = rsize;
-            emit_str(dst, zr, (int)offset);
+            emit_str_reg(dst, zr, (int)offset);
             size -= rsize;
             offset += rsize;
         }
@@ -285,7 +291,7 @@ void emit_store_eightbytes(reg_t base, i64 offset, reg_t lo, bool lo_written,
     if (!lo_written) {
         lo.reg_type = RD_NONE;
     }
-    emit_str(base, lo, (int)offset);
+    emit_str_reg(base, lo, (int)offset);
 }
 
 void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
@@ -294,7 +300,7 @@ void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
         reg_size chunk = nbytes >= 8 ? 8 : nbytes >= 4 ? 4 : nbytes >= 2 ? 2 : 1;
         reg_t piece = src;
         piece.rsize = chunk;
-        emit_str(base, piece, (int)(offset + (i64)pos));
+        emit_str_reg(base, piece, (int)(offset + (i64)pos));
         nbytes -= chunk;
         pos += chunk;
         if (nbytes > 0) {
@@ -306,20 +312,31 @@ void emit_store_packed(reg_t base, i64 offset, reg_t src, size_t nbytes) {
 }
 
 
+static void emit_mov_wide(reg_t dst, i64 value) {
+    if (value > UINT32_MAX) {
+        dst.rsize = 8;
+    }
+    const int lanes = dst.rsize > 4 ? 4 : 2;
+    bool initialized = false;
+    for (int lane = 0; lane < lanes; lane++) {
+        const i64 chunk = (value >> (lane * 16)) & 0xFFFF;
+        if (chunk == 0) {
+            continue;
+        }
+        emit_mov_lane(dst, chunk, (i64)(lane * 16), &initialized);
+    }
+    if (!initialized) {
+        emit_mov_lane(dst, 0, 0, &initialized);
+    }
+}
+
 void emit_mov(reg_t dst, i64 value) {
     int regidx = get_regoff(dst);
     if (dst.dtype.base == type_comptime_int) {
-        if (value <= INT32_MAX) {
+        if (value <= UINT16_MAX) {
             buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRId32), get_wx(dst.rsize), regidx, (i32)value);
-        } else if (value <= INT64_MAX) {
-            dst.rsize = 8;
-            //emit_ri(STR("mov"), dst, value);
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
-        } else if ((u64)value <= UINT64_MAX) {
-            dst.rsize = 8;
-            buf_snprintf(fn_buf, INSTR("mov %s%d, #%"PRIu64), get_wx(dst.rsize), regidx, value);
         } else {
-            report_error("literal was too big");
+            emit_mov_wide(dst, value);
         }
     } else {
         emit_ri(STR("mov"), dst, value);
@@ -413,14 +430,25 @@ void emit_add(reg_t dst, reg_t lhs, i64 rhs) {
     buf_snprintf(fn_buf, "#%"PRId64"\n", rhs);
 }
 
+static void buf_put_ext(buf *buffer, reg_t narrow) {
+    const type_t *const t = narrow.dtype.base;
+    buf_putc(buffer, (t && t->sign) ? 's' : 'u');
+    buf_puts(buffer, STR("xt"));
+    const size_t size = t ? t->size : narrow.rsize;
+    buf_putc(buffer, size == 1 ? 'b' : size == 2 ? 'h' : 'w');
+}
+
 void emit_add_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    buf_puts(fn_buf, STR("\tadd "));
-    buf_putreg(fn_buf, dst);
-    buf_puts(fn_buf, STR(", "));
-    buf_putreg(fn_buf, lhs);
-    buf_puts(fn_buf, STR(", "));
-    buf_putreg(fn_buf, rhs);
-    buf_putc(fn_buf, '\n');
+    if (lhs.rsize != rhs.rsize) {
+        const reg_t wide   = lhs.rsize > rhs.rsize ? lhs : rhs;
+        const reg_t narrow = lhs.rsize > rhs.rsize ? rhs : lhs;
+        emit_rrrx(STR("add"), dst, wide, narrow);
+        buf_comma(fn_buf);
+        buf_put_ext(fn_buf, narrow);
+        buf_putc(fn_buf, '\n');
+        return;
+    }
+    emit_rrr(STR("add"), dst, lhs, rhs);
 }
 
 void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
@@ -431,17 +459,46 @@ void emit_sub(reg_t dst, reg_t lhs, i64 rhs) {
     emit_rri(STR("sub"), dst, lhs, rhs);
 }
 void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
-    emit_rrr(STR("sub"), dst, lhs, rhs);
+    if (lhs.rsize == rhs.rsize) {
+        emit_rrr(STR("sub"), dst, lhs, rhs);
+        return;
+    }
+    if (rhs.rsize < lhs.rsize) {
+        emit_rrrx(STR("sub"), dst, lhs, rhs);
+        buf_comma(fn_buf);
+        buf_put_ext(fn_buf, rhs);
+        buf_putc(fn_buf, '\n');
+        return;
+    }
+    const reg_t tmp = {.reg_type = SCRATCH, .offset = 8, .rsize = dst.rsize, .dtype = lhs.dtype};
+    emit_mov_reg(tmp, lhs);
+    emit_rrr(STR("sub"), dst, tmp, rhs);
 }
 
 void emit_cmp(reg_t lhs, i64 rhs) {
-    buf_snprintf(fn_buf, INSTR("cmp w%d, #%"PRId64),
-            get_regoff(lhs), rhs);
+    emit_ri(STR("cmp"), lhs, rhs);
 }
 
-void emit_cmp_reg(reg_t lhs, reg_t rhs) {
-    buf_snprintf(fn_buf, INSTR("cmp w%d, w%d"),
-            get_regoff(lhs), get_regoff(rhs));
+void emit_cmp_reg(reg_t lhs, reg_t rhs, cond_t cond) {
+    if (lhs.rsize == rhs.rsize) {
+        emit_rr(STR("cmp"), lhs, rhs);
+        return;
+    }
+    if (rhs.rsize < lhs.rsize) {
+        emit_rrx(STR("cmp"), lhs, rhs);
+        buf_comma(fn_buf);
+        buf_put_ext(fn_buf, rhs);
+        buf_putc(fn_buf, '\n');
+        return;
+    }
+    reg_t tmp = {.reg_type = SCRATCH, .offset = 8, .rsize = rhs.rsize, .dtype = lhs.dtype};
+    if (cond == COND_EQ || cond == COND_NE) {
+        tmp.reg_type = lhs.reg_type;
+        tmp.offset = lhs.offset;
+    } else {
+        emit_mov_reg(tmp, lhs);
+    }
+    emit_rr(STR("cmp"), tmp, rhs);
 }
 
 void emit_string_lit(reg_t dst, const str *s) {
@@ -494,11 +551,12 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
     buf_snprintf(fn_buf, ("\t%s%s "), op, suffix);
     buf_putreg(fn_buf, r0);
     buf_snprintf(fn_buf, ", [");
+    r1.rsize = 8;
     buf_putreg(fn_buf, r1);
     buf_snprintf(fn_buf, ", ");
 }
 
-void emit_str(reg_t dst, reg_t src, int offset) {
+void emit_str_reg(reg_t dst, reg_t src, int offset) {
     load_store_x("str", src, dst);
     buf_puti(fn_buf, offset);
     buf_snprintf(fn_buf, "]\n");
@@ -510,9 +568,27 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
     buf_snprintf(fn_buf, "]\n");
 }
 
-void emit_str_reg(reg_t dst, reg_t src, reg_t offset) {
+void emit_str_regoff(reg_t dst, reg_t src, reg_t offset) {
     load_store_x("str", src, dst);
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
+}
+
+static reg_t imm_to_reg(reg_t dst, i64 value) {
+    reg_t tmp = {
+        .reg_type = SCRATCH, .offset = 8,
+        .rsize = (reg_size)dst.dtype.base->size,
+        .dtype = {.base = dst.dtype.base},
+    };
+    emit_mov(tmp, value);
+    return tmp;
+}
+
+void emit_str_imm(reg_t dst, i64 value, int offset) {
+    emit_str_reg(dst, imm_to_reg(dst, value), offset);
+}
+
+void emit_str_imm_regoff(reg_t dst, i64 value, reg_t offset) {
+    emit_str_regoff(dst, imm_to_reg(dst, value), offset);
 }
 
 void str_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
@@ -548,7 +624,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
     if (elem_size == 1) {
         if (is_store)
-            emit_str_reg(dst, src, offset);
+            emit_str_regoff(dst, src, offset);
         else
             emit_ldr_reg(dst, src, offset);
         return;
@@ -580,14 +656,17 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     buf_snprintf(fn_buf, "\n");
 
     if (is_store)
-        emit_str_reg(dst, src, offset);
+        emit_str_regoff(dst, src, offset);
     else
         emit_ldr_reg(dst, src, offset);
 }
 
 void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
     reg_t base = {.reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *)};
-    emit_sub(base, FP, object.offset);
+    if (object.reg_type == STACK)
+        emit_sub(base, FP, object.offset);
+    else
+        base = object;
 
     const size_t elem_size = object.dtype.base->size;
     const i64 shift = __builtin_ctz((unsigned)elem_size);
@@ -611,6 +690,25 @@ void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
 }
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
+    if (src.rsize > MAX_REG_SIZE) {
+        report_error("%s", error_too_big);
+        return;
+    }
+    if (src.rsize > 8) {
+        reg_t dst2 = dst;
+        dst2.offset += 1;
+        dtype_t popped = dtype_pop_dup(&src.dtype);
+        size_t stride = dtype_size(&popped);
+        pd(stride)
+
+        reg_t scratch = {.reg_type = SCRATCH, .rsize = sizeof (void *)};
+        src.rsize = sizeof (void *);
+        emit_elem_addr(scratch, src, offset);
+
+        buf_snprintf(fn_buf, INSTR("ldp x%d, x%d, [x%d]"), get_regoff(dst), get_regoff(dst2), get_regoff(scratch));
+        return;
+    }
+
     load_store_x("ldr", dst, src);
     buf_snprintf(fn_buf, ("x%d]\n"), get_regoff(offset));
 }

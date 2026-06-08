@@ -1,4 +1,5 @@
 #compile_all expect.al
+#declare _Exit: Status i32
 
 [Arr] :: 5*i32{.. 0} =[]
 
@@ -21,6 +22,8 @@ J :: 2
 
 dynamic =>
 
+get_len Slice =>
+
 ret 0
 
 dynamic: =>
@@ -34,3 +37,10 @@ dynamic: =>
 
     Arr * I..J ! ret
 
+get_at_three: S slice i32 => i32
+    I :: [S.3] ! ret 1
+    ret 0
+
+get_len: S slice i32 => usize
+    Size :: S.Length
+    ret Size

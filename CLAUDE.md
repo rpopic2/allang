@@ -14,6 +14,13 @@ The emit backend files for your architecture and OS must be passed explicitly:
 ./run.sh emit-aarch64.c emit-macos.c hello.al
 ```
 
+## Done When
+
+- `test-all.sh` passes.
+- aarch64 emits assembly without error (no need to run it when you are in cloud conatiner).
+- `emit-ll.c` backend needs no testing.
+- `examples/` contains ill-formed code; only `tests/` are valid programs.
+
 ## Coding Conventions
 
 - Do NOT add comments. Only add a comment when it is strictly necessary to explain something the code itself cannot convey, and keep it minimal.- Make pointers const whenever possible.

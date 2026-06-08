@@ -18,6 +18,7 @@ store_u8 =>
 store_u16 =>
 store_u32 =>
 store_u64 =>
+store_imm64 =>
 
 dyn_i8 =>
 dyn_i16 =>
@@ -48,6 +49,22 @@ slice_u16 =>
 slice_u32 =>
 slice_u64 =>
 slice_usize =>
+
+cmp_lt_i32_true =>
+cmp_lt_i32_false =>
+cmp_lt_i32_neg =>
+cmp_gt_i32_true =>
+cmp_gt_i32_false =>
+cmp_le_i32_true =>
+cmp_le_i32_equal =>
+cmp_le_i32_false =>
+cmp_ge_i32_true =>
+cmp_ge_i32_equal =>
+cmp_ge_i32_false =>
+cmp_lt_u32_true =>
+cmp_lt_u32_false =>
+cmp_le_u32_equal =>
+cmp_ge_u32_true =>
 
 printf "all index tests passed\n" =>
 ret 0
@@ -244,6 +261,23 @@ store_u64: =>
     Z :: [Arr.1]
     Z isnt 0 -> _Exit 57 =>
 
+// --- storing bare immediates that exceed a 32-bit immediate, exercising the
+//     wide emit_str_imm path (on x86_64 a 64-bit immediate has no direct
+//     mem form, so it is stored as two 32-bit halves). ---
+
+store_imm64: =>
+    [Arr] :: 3*i64{.. 0} =[]
+    4294967296 =[Arr.0]
+    4294967297 =[Arr.2]
+    A :: [Arr.0]
+    Expected_A :: i64{4294967296}
+    A isnt Expected_A -> _Exit 58 =>
+    B :: [Arr.2]
+    Expected_B :: i64{4294967297}
+    B isnt Expected_B -> _Exit 58 =>
+    Z :: [Arr.1]
+    Z isnt 0 -> _Exit 58 =>
+
 // --- dynamic indexing of an i32 array with an index of every integer type ---
 
 dyn_i8: =>
@@ -411,3 +445,101 @@ slice_usize: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Begin :: usize{1}
     Arr * Begin.. ! ret
+
+// --- comparison operator tests ---
+
+cmp_lt_i32_true: =>
+    A :: i32{3}
+    B :: i32{5}
+    A < B ->
+        ret
+    _Exit 80 =>
+
+cmp_lt_i32_false: =>
+    A :: i32{5}
+    B :: i32{3}
+    A < B -> _Exit 81 =>
+    ret
+
+cmp_lt_i32_neg: =>
+    A :: i32{-1}
+    A < 0 ->
+        ret
+    _Exit 82 =>
+
+cmp_gt_i32_true: =>
+    A :: i32{5}
+    B :: i32{3}
+    A > B ->
+        ret
+    _Exit 83 =>
+
+cmp_gt_i32_false: =>
+    A :: i32{3}
+    B :: i32{5}
+    A > B -> _Exit 84 =>
+    ret
+
+cmp_le_i32_true: =>
+    A :: i32{3}
+    B :: i32{5}
+    A <= B ->
+        ret
+    _Exit 85 =>
+
+cmp_le_i32_equal: =>
+    A :: i32{5}
+    A <= 5 ->
+        ret
+    _Exit 86 =>
+
+cmp_le_i32_false: =>
+    A :: i32{5}
+    B :: i32{3}
+    A <= B -> _Exit 87 =>
+    ret
+
+cmp_ge_i32_true: =>
+    A :: i32{5}
+    B :: i32{3}
+    A >= B ->
+        ret
+    _Exit 88 =>
+
+cmp_ge_i32_equal: =>
+    A :: i32{5}
+    A >= 5 ->
+        ret
+    _Exit 89 =>
+
+cmp_ge_i32_false: =>
+    A :: i32{3}
+    B :: i32{5}
+    A >= B -> _Exit 90 =>
+    ret
+
+cmp_lt_u32_true: =>
+    A :: u32{100}
+    B :: u32{200}
+    A < B ->
+        ret
+    _Exit 91 =>
+
+cmp_lt_u32_false: =>
+    A :: u32{200}
+    B :: u32{100}
+    A < B -> _Exit 92 =>
+    ret
+
+cmp_le_u32_equal: =>
+    A :: u32{100}
+    A <= 100 ->
+        ret
+    _Exit 93 =>
+
+cmp_ge_u32_true: =>
+    A :: u32{200}
+    B :: u32{100}
+    A >= B ->
+        ret
+    _Exit 94 =>
