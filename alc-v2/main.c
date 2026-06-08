@@ -78,6 +78,9 @@ hashmap_symbol_t fn_ids;
 hashmap_type_t types;
 const_hashmap_t const_ids;
 
+static char symbol_arena_buf[256 * 1024];
+static allocator symbol_arena;
+
 inline static bool is_id(char c) {
     return isalnum(c) || c == '_';
 }
@@ -2151,7 +2154,7 @@ bool decl_vars(parser_context *context) {
                     if (fn->ret_airity != 1) {
                         compile_err(&context->cur_token, "this function does not return exactly one value\n");
                     }
-                    reg_t ret_reg = fn->rets.data[0];
+                    reg_t ret_reg = fn->rets.begin[0];
 
                     nreg.rsize = ret_reg.rsize;
                     nreg.dtype = ret_reg.dtype;
@@ -2233,9 +2236,9 @@ bool decl_vars(parser_context *context) {
     return false;
 }
 
-void read_and_check_types(parser_context *context, arr_reg_t *rets) {
+void read_and_check_types(parser_context *context, list_reg_t *rets) {
     const token_t *token = &context->cur_token;
-        reg_t *rets_it = rets->data;
+        reg_t *rets_it = rets->begin;
 
         do {
             tok(context);
@@ -2374,8 +2377,10 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
     symbol_t symbol = (symbol_t) {
         .name = label,
     };
-    arr_reg_t_init(&symbol.params);
-    arr_reg_t_init(&symbol.rets);
+    reg_t param_scratch[MAX_PARAMS];
+    reg_t ret_scratch[MAX_PARAMS];
+    u8 param_count = 0;
+    u8 ret_count = 0;
     if (out_param_names) {
         arr_str_init(out_param_names);
     }
@@ -2406,9 +2411,15 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 parse_dtype(context, &reg.dtype);
                 reg.rsize = get_rsize(reg);
                 if (parsing_arg) {
-                    arr_reg_t_push(&symbol.params, reg);
+                    if (param_count >= MAX_PARAMS)
+                        compile_err(token, "too many parameters\n");
+                    else
+                        param_scratch[param_count++] = reg;
                 } else {
-                    arr_reg_t_push(&symbol.rets, reg);
+                    if (ret_count >= MAX_PARAMS)
+                        compile_err(token, "too many return values\n");
+                    else
+                        ret_scratch[ret_count++] = reg;
                 }
             } else if (streq(token->data, "=>")) {
                 parsing_arg = false;
@@ -2421,8 +2432,8 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
         }
     }
 
-    symbol.airity = (u8) arr_reg_t_len(&symbol.params);
-    symbol.ret_airity = (u8) arr_reg_t_len(&symbol.rets);
+    symbol.airity = param_count;
+    symbol.ret_airity = ret_count;
 
     hashentry_symbol_t *entry = hashmap_symbol_t_find(fn_ids, label);
     symbol_t *symbol_existing = &entry->value;
@@ -2437,8 +2448,12 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
     } else {
         entry->key = label;
         entry->value = symbol;
-        arr_reg_t_dup(&entry->value.params, &symbol.params);
-        arr_reg_t_dup(&entry->value.rets, &symbol.rets);
+        list_reg_t_init(&entry->value.params, &symbol_arena, param_count);
+        for (u8 i = 0; i < param_count; ++i)
+            list_reg_t_push(&entry->value.params, &param_scratch[i]);
+        list_reg_t_init(&entry->value.rets, &symbol_arena, ret_count);
+        for (u8 i = 0; i < ret_count; ++i)
+            list_reg_t_push(&entry->value.rets, &ret_scratch[i]);
     }
 
     return symbol_existing;
@@ -2459,13 +2474,13 @@ void stmt_label(parser_context *context) {
     if (dead_fn_elim && !symbol->is_called)
         return;
 
-    if (arr_reg_t_len(&symbol->params) != symbol->airity) {
-        printf("expected %zd, but %d\n", arr_reg_t_len(&symbol->params), symbol->airity);
+    if (list_reg_t_len(&symbol->params) != symbol->airity) {
+        printf("expected %td, but %d\n", list_reg_t_len(&symbol->params), symbol->airity);
         unreachable;
     }
     int regoff = 0;
     for (int i = 0; i < symbol->airity; ++i, ++regoff) {
-        reg_t *param = &symbol->params.data[i];
+        reg_t *param = &symbol->params.begin[i];
         reg_size rsize = (reg_size)dtype_size(&param->dtype);
         bool is_fat = false;
         if (rsize > sizeof (void *)) {
@@ -2618,7 +2633,7 @@ symbol_t *fn_call(parser_context *context) {
         return NULL;
     }
 
-    arr_reg_t *params = &symbol->params;
+    list_reg_t *params = &symbol->params;
     context->reg.reg_type = PARAM;
     context->reg.offset = 0;
     read_and_check_types(context, params);
@@ -2641,7 +2656,7 @@ symbol_t *fn_call(parser_context *context) {
     context->reg.reg_type = RET;
 
     if (symbol->ret_airity == 1) {
-        reg_t *return_reg = &symbol->rets.data[0];
+        reg_t *return_reg = &symbol->rets.begin[0];
         context->reg.dtype = return_reg->dtype;
 
         size_t return_size = dtype_size(&return_reg->dtype);
@@ -3043,6 +3058,7 @@ int main(int argc, const char *argv[]) {
     TIMER_END(clock_zero);
     emit_init();
     register_fund_types();
+    allocator_init(&symbol_arena, symbol_arena_buf, sizeof symbol_arena_buf);
     TIMER_START(clock_parse_all);
 
     src_t src = read_source(source_name);
