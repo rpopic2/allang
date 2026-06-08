@@ -1,10 +1,9 @@
-if [[ "$(uname -s)" = Linux ]]; then
+if [ "$(uname -o)" = Android ]; then
+    EXTRA_FLAGS+=" -lexecinfo -rdynamic -fno-omit-frame-pointer -fsanitize=undefined"
+elif [[ "$(uname -s)" = Linux ]]; then
     EXTRA_FLAGS+=" -fsanitize=undefined -fno-sanitize-link-runtime -lubsan"
 elif [[ "$(uname -s)" != MINGW* ]]; then
     EXTRA_FLAGS+=" -fsanitize=undefined"
-fi
-if [ "$(uname -o)" = Android ]; then
-    EXTRA_FLAGS+=" -lexecinfo -rdynamic -fno-omit-frame-pointer"
 fi
 
 # Auto-detect emit files if first argument looks like a .al file or is missing
