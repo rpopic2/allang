@@ -41,6 +41,10 @@ get_at_three: S slice i32 => i32
     I :: [S.3] ! ret 1
     ret 0
 
+elem_after_slice: S slice i32, X i32 => i32
+    Third :: [S.2] ! ret 0
+    ret Third + X
+
 get_len: S slice i32 => usize
     Size :: S.Length
     ret Size

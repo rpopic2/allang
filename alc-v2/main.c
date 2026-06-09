@@ -659,7 +659,7 @@ void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
 }
 
 enum inclusive {INCL, EXCL};
-void check_bounds(parser_context *context, reg_t index, i32 len, enum inclusive inclusive) {
+void check_bounds(parser_context *context, reg_t cmp_reg, i32 cmp_imm, cond_t cond) {
     const token_t cur_token = context->cur_token;
 
     reg_t stash = context->reg;
@@ -669,9 +669,8 @@ void check_bounds(parser_context *context, reg_t index, i32 len, enum inclusive 
         return;
     }
 
-    cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
     tok(context);
-    if (stmt_ret_cond(context, cond, index, len)) {
+    if (stmt_ret_cond(context, cond, cmp_reg, cmp_imm)) {
 
     } else {
         compile_err(&cur_token, "expected to handle check operator\n");
@@ -777,7 +776,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             reg.offset -= (i32)first->offset;
             reg.rsize = (reg_size)dtype_size(&first->dtype);
         } else if (dtype_tryget(dtype, DK_SLICE)) {
-            reg.dtype = reg.dtype;
             reg.rsize = (reg_size)dtype_size(dtype);
         } else {
             compile_err(cur_token, "a register containing addr is expected\n");
@@ -790,7 +788,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             count_reg.offset += 1;
             count_reg.rsize = sizeof (void *);
             offset_regable.value = slice;
-            check_bounds(context, count_reg, slice, INCL);
+            check_bounds(context, count_reg, slice, COND_LS);
         }
         size_t stride;
         if (reg.dtype.base == NULL) {
@@ -824,7 +822,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
                 count_reg.rsize = sizeof(void *);
                 check_bounds_reg(context, offset_regable.reg, count_reg, EXCL);
             } else {
-                check_bounds(context, offset_regable.reg, decl.amount, EXCL);
+                check_bounds(context, offset_regable.reg, decl.amount, COND_HI);
             }
         }
     } else unreachable;
@@ -1084,11 +1082,11 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
         const cond_t cond = COND_HI;
         emit_cmp_reg(begin->reg, end->reg, cond);
         emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
-        check_bounds(context, end->reg, len, EXCL);
+        check_bounds(context, end->reg, len, COND_HI);
     } else if (begin->tag != NONE) {
-        check_bounds(context, begin->reg, len, INCL);
+        check_bounds(context, begin->reg, len, COND_HS);
     } else if (end->tag != NONE) {
-        check_bounds(context, end->reg, len, EXCL);
+        check_bounds(context, end->reg, len, COND_HI);
     } else {
         unreachable;
     }
@@ -1987,7 +1985,7 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
             break;
         }
         dtype_kind_t dk = addr ? DK_ADDR : DK_SLICE;
-        dtype_push(out, (declarator_t){dk, .amount = 1});
+        dtype_pushone(out, dk);
         tok(context);
         if (cur_token->end[0] == ')') {
             break_out = true;
@@ -2276,7 +2274,6 @@ bool stmt_ret_pre(parser_context *context) {
     context->reg.reg_type = RET;
     context->reg.offset = 0;
 
-
     int arg_count = 0;
     if (context->cur_token.end[0] != '\n') {
         read_and_check_types(context, &context->symbol->rets);
@@ -2506,6 +2503,7 @@ void stmt_label(parser_context *context) {
             reg_t r_len = r;
             r_len.offset += 1;
             emit_mov_reg(r_len, arg_reg);
+            ++regoff;
         }
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {
