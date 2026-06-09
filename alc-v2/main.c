@@ -412,7 +412,7 @@ opt_i64 lit_numeric(const token_t *token) {
     return opt_i64_some(value);
 }
 
-int extrat_scope_up(str *s) {
+int extract_scope_up(str *s) {
     int scope_up = 0;
     while (s->data[0] == '^') {
         scope_up += 1;
@@ -467,7 +467,7 @@ int find_member_index(const dyn_member_t *members, str name) {
     return -1;
 }
 
-void diagnositc_slice(const token_t *token, i64 begin_index, i64 end_index, i32 array) {
+void diagnostic_slice(const token_t *token, i64 begin_index, i64 end_index, i32 array) {
     if (end_index > INT_MAX) {
         compile_err(token, "index was too big: %"PRId64, end_index);
     }
@@ -489,7 +489,7 @@ regable read_regable(str s, const token_t *diagnostic) {
     if (!isupper(s.data[0]) && s.data[0] != '^')
         return (regable){.tag = NONE};
         
-    const int scope_up = extrat_scope_up(&s);
+    const int scope_up = extract_scope_up(&s);
 
     const str name = dot_iter(&s, '.');
 
@@ -508,11 +508,9 @@ regable read_regable(str s, const token_t *diagnostic) {
     result.tag = REG;
 
     member_t *member = NULL;
+    member_t member_storage;
     type_t *type = reg->dtype.base;
-    if (type == NULL) {
-        type = error_type;
-    }
-    if (type == error_type)
+    if (type == NULL || type == error_type)
         return result;
 
     int array = dtype_tryget(&reg->dtype, DK_ARRAY);
@@ -526,7 +524,7 @@ regable read_regable(str s, const token_t *diagnostic) {
             if (end_index == 0) {
                 end_index = array;
             }
-            diagnositc_slice(diagnostic, begin_index, end_index, array);
+            diagnostic_slice(diagnostic, begin_index, end_index, array);
             dtype_pop(&result.reg.dtype);
             dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
             result.reg.rsize = sizeof(void *);
@@ -539,13 +537,14 @@ regable read_regable(str s, const token_t *diagnostic) {
 
         int slice = dtype_tryget(&reg->dtype, DK_SLICE);
         if (slice && str_eq_lit(mem_name, "Length")) {
-            member = &(member_t){
+            member_storage = (member_t){
                 .name = mem_name,
                 .dtype = (dtype_t){
                     .base = type_usize,
                 },
                 .offset = 1,
             };
+            member = &member_storage;
             break;
         }
 
@@ -564,13 +563,14 @@ regable read_regable(str s, const token_t *diagnostic) {
                 break;
             }
 
-            member = &(member_t){
+            member_storage = (member_t){
                 .name = mem_name,
                 .dtype = (dtype_t){
                     .base = type,
                 },
                 .offset = type->size * (size_t)index
             };
+            member = &member_storage;
             if (slice) {
                 dtype_push(&member->dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)index});
             }
@@ -729,7 +729,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             offset_str.end -= 1;
         offset_regable = read_regable(offset_str, cur_token);
         diagnostic_dyn_elem_access(context, &offset_regable);
-    } else if (s.end[-1] != ']') {
+    } else {
         compile_err(cur_token, "closing ']' expected\n");
     }
 
@@ -777,7 +777,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             reg.offset -= (i32)first->offset;
             reg.rsize = (reg_size)dtype_size(&first->dtype);
         } else if (dtype_tryget(dtype, DK_SLICE)) {
-            reg.dtype = reg.dtype;
             reg.rsize = (reg_size)dtype_size(dtype);
         } else {
             compile_err(cur_token, "a register containing addr is expected\n");
@@ -814,7 +813,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     } else if (offset_regable.tag == REG) {
         if (streq(cur_token->end + 1, "unchecked")) {
             tok(context);
-        } else if (offset_regable.tag == REG) {
+        } else {
             declarator_t decl = dtype_top(&reg.dtype);
             if (decl.tag != DK_ARRAY && decl.tag != DK_SLICE) {
                 compile_err(cur_token, "register was not an array\n");
@@ -2586,7 +2585,7 @@ bool stmt_reg_assign(parser_context *context) {
         str name = *token_str;
         name.data += 1;
         reg_t *t;
-        int scope_up = extrat_scope_up(&name);
+        int scope_up = extract_scope_up(&name);
         if (!find_id(&local_ids, name, token, &t, scope_up)) {
             compile_err(token, "could not find identifier "), str_printerr(name);
             return true;
