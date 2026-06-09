@@ -98,6 +98,32 @@ enum cond cond_flip(enum cond cond) {
     }
 }
 
+bool cond_eval(cond_t cond, i64 lhs, i64 rhs) {
+    switch (cond) {
+    case COND_EQ:
+        return lhs == rhs;
+    case COND_NE:
+        return lhs != rhs;
+    case COND_GE:
+        return lhs >= rhs;
+    case COND_LT:
+        return lhs < rhs;
+    case COND_GT:
+        return lhs > rhs;
+    case COND_LE:
+        return lhs <= rhs;
+    case COND_HS:
+        return (u64)lhs >= (u64)rhs;
+    case COND_LO:
+        return (u64)lhs < (u64)rhs;
+    case COND_HI:
+        return (u64)lhs > (u64)rhs;
+    case COND_LS:
+        return (u64)lhs <= (u64)rhs;
+    }
+    unreachable;
+}
+
 bool tok(parser_context *context) {
 retry:;
     src_t *src = context->src;
@@ -1211,20 +1237,34 @@ bool binary_op(parser_context *restrict context, regable *restrict lhs) {
         } else if (rhs.tag == REG) {
             compile_err(&lhs_token, "lslv not implemented\n");
         }
-    } else if (streq(op_token.data, "is")) {
-        cond_t cond = COND_EQ;
-        if (streq(op_token.data + 2, "nt")) {
-            cond = COND_NE;
+    } else if (streq(op_token.data, "is") || op_token.data[0] == '<' || op_token.data[0] == '>') {
+        cond_t cond;
+        if (streq(op_token.data, "is")) {
+            cond = streq(op_token.data + 2, "nt") ? COND_NE : COND_EQ;
+        } else {
+            bool is_gt = op_token.data[0] == '>';
+            bool has_eq = op_token.data[1] == '=';
+            bool is_unsigned = lhs->tag == REG
+                && lhs->reg.dtype.base != NULL
+                && lhs->reg.dtype.base->sign == S_UNSIGNED;
+            if (is_unsigned) {
+                if      ( is_gt && !has_eq) cond = COND_HI;
+                else if ( is_gt &&  has_eq) cond = COND_HS;
+                else if (!is_gt && !has_eq) cond = COND_LO;
+                else                        cond = COND_LS;
+            } else {
+                if      ( is_gt && !has_eq) cond = COND_GT;
+                else if ( is_gt &&  has_eq) cond = COND_GE;
+                else if (!is_gt && !has_eq) cond = COND_LT;
+                else                        cond = COND_LE;
+            }
         }
 
         enum { FOLD_NONE, FOLD_SKIP, FOLD_TAKEN, } fold = FOLD_NONE;
         bool fold_taken = false;
         if (lhs->tag == VALUE) {
             if (rhs.tag == VALUE) {
-                fold_taken = lhs->value == rhs.value;
-                if (cond == COND_NE) {
-                    fold_taken = !fold_taken;
-                }
+                fold_taken = cond_eval(cond, lhs->value, rhs.value);
                 fold = FOLD_SKIP + fold_taken;
             } else {
                 compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
@@ -1274,53 +1314,6 @@ bool binary_op(parser_context *restrict context, regable *restrict lhs) {
                 emit_mov(context->reg, fold_taken);
                 break;
             }
-        }
-
-    } else if (op_token.data[0] == '<' || op_token.data[0] == '>') {
-        bool is_gt = op_token.data[0] == '>';
-        bool has_eq = op_token.data[1] == '=';
-
-        bool is_unsigned = lhs->tag == REG
-            && lhs->reg.dtype.base != NULL
-            && lhs->reg.dtype.base->sign == S_UNSIGNED;
-
-        cond_t cond;
-        if (is_unsigned) {
-            if      ( is_gt && !has_eq) cond = COND_HI;
-            else if ( is_gt &&  has_eq) cond = COND_HS;
-            else if (!is_gt && !has_eq) cond = COND_LO;
-            else                        cond = COND_LS;
-        } else {
-            if      ( is_gt && !has_eq) cond = COND_GT;
-            else if ( is_gt &&  has_eq) cond = COND_GE;
-            else if (!is_gt && !has_eq) cond = COND_LT;
-            else                        cond = COND_LE;
-        }
-
-        if (lhs->tag == VALUE) {
-            if (rhs.tag == VALUE) {
-                compile_err(&op_token, "constant folding for comparison operators not yet implemented\n");
-            } else {
-                compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
-            }
-        }
-
-        if (lhs->tag == REG) {
-            if (rhs.tag == VALUE)
-                emit_cmp(lhs->reg, rhs.value);
-            else if (rhs.tag == REG)
-                emit_cmp_reg(lhs->reg, rhs.reg, cond);
-            else unreachable;
-        }
-
-        if (is_id(rhs_token.end[1])) {
-            cond = cond_flip(cond);
-            named_bcond(context, cond);
-        } else if (streq(rhs_token.end + 1, "->")) {
-            cond = cond_flip(cond);
-            anonymous_bcond(context, cond);
-        } else if (context->reg.reg_type == PARAM) {
-            emit_cond_set(context->reg, cond);
         }
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
