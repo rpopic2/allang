@@ -475,10 +475,40 @@ void diagnostic_slice(const token_t *token, i64 begin_index, i64 end_index, i32 
     }
 }
 
-void resolve_member_path(str s, const reg_t *reg, type_t *type,
-        regable *result, const token_t *diagnostic) {
+regable read_regable(str s, const token_t *diagnostic) {
+    regable result = (regable){ .value = 0, .tag = NONE };
+
+    if_opt(i64, value, = lit_numeric(diagnostic)) {
+        return (regable){.tag = VALUE, .value = value};
+    }
+
+    if (!isupper(s.data[0]) && s.data[0] != '^')
+        return (regable){.tag = NONE};
+        
+    const int scope_up = extract_scope_up(&s);
+
+    const str name = dot_iter(&s, '.');
+
+    const const_entry_t *entry = const_hashmap_tryfind(&const_ids, name);
+    if (entry != NULL) {
+        return (regable){.tag = VALUE, .value = entry->value};
+    }
+
+    reg_t *reg = NULL;
+    if (!find_id(&local_ids, name, diagnostic, &reg, scope_up)
+        || reg->reg_type == RD_NONE) {
+        compile_err(diagnostic, "unknown id "), str_printerr(name);
+        return result;
+    }
+    result.reg = *reg;
+    result.tag = REG;
+
     member_t *member = NULL;
     member_t member_storage;
+    type_t *type = reg->dtype.base;
+    if (type == NULL || type == error_type)
+        return result;
+
     int array = dtype_tryget(&reg->dtype, DK_ARRAY);
     i32 begin_index = 0;
     while (true) {
@@ -491,9 +521,9 @@ void resolve_member_path(str s, const reg_t *reg, type_t *type,
                 end_index = array;
             }
             diagnostic_slice(diagnostic, begin_index, end_index, array);
-            dtype_pop(&result->reg.dtype);
-            dtype_push(&result->reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
-            result->reg.rsize = sizeof(void *);
+            dtype_pop(&result.reg.dtype);
+            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
+            result.reg.rsize = sizeof(void *);
             break;
         }
 
@@ -525,7 +555,7 @@ void resolve_member_path(str s, const reg_t *reg, type_t *type,
             }
             if (index < 0) {
                 compile_err(diagnostic, "expected index greater or equal to zero\n");
-                result->tag = NONE;
+                result.tag = NONE;
                 break;
             }
 
@@ -545,7 +575,7 @@ void resolve_member_path(str s, const reg_t *reg, type_t *type,
             member = find_member(&type->struct_t.members, mem_name);
             if (member == NULL) {
                 compile_err(diagnostic, "member not found: "), str_printerr(mem_name);
-                result->tag = NONE;
+                result.tag = NONE;
                 break;
             }
         }
@@ -554,10 +584,10 @@ void resolve_member_path(str s, const reg_t *reg, type_t *type,
         type = member->dtype.base;
         bool is_basetype_addr = dtype_tryget_addr(&reg->dtype) > 0;
         if (is_basetype_addr) {
-            dtype_push(&result->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
-            result->reg.displacement += member->offset;
+            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            result.reg.displacement += member->offset;
         } else {
-            result->reg.offset -= member->offset;
+            result.reg.offset -= member->offset;
         }
     }
 
@@ -566,44 +596,9 @@ void resolve_member_path(str s, const reg_t *reg, type_t *type,
         if (mem_size > MAX_REG_SIZE) {
             compile_err(diagnostic, "this member does not fit in register\n");
         }
-        result->reg.rsize = (reg_size)mem_size;
-        result->reg.dtype = member->dtype;
+        result.reg.rsize = (reg_size)mem_size;
+        result.reg.dtype = member->dtype;
     }
-}
-
-regable read_regable(str s, const token_t *diagnostic) {
-    regable result = (regable){ .value = 0, .tag = NONE };
-
-    if_opt(i64, value, = lit_numeric(diagnostic)) {
-        return (regable){.tag = VALUE, .value = value};
-    }
-
-    if (!isupper(s.data[0]) && s.data[0] != '^')
-        return (regable){.tag = NONE};
-        
-    const int scope_up = extract_scope_up(&s);
-
-    const str name = dot_iter(&s, '.');
-
-    const const_entry_t *entry = const_hashmap_tryfind(&const_ids, name);
-    if (entry != NULL) {
-        return (regable){.tag = VALUE, .value = entry->value};
-    }
-
-    reg_t *reg = NULL;
-    if (!find_id(&local_ids, name, diagnostic, &reg, scope_up)
-        || reg->reg_type == RD_NONE) {
-        compile_err(diagnostic, "unknown id "), str_printerr(name);
-        return result;
-    }
-    result.reg = *reg;
-    result.tag = REG;
-
-    type_t *type = reg->dtype.base;
-    if (type == NULL || type == error_type)
-        return result;
-
-    resolve_member_path(s, reg, type, &result, diagnostic);
     return result;
 }
 
@@ -691,121 +686,41 @@ bool diagnostic_dyn_elem_access(const parser_context *context, const regable *of
     return true;
 }
 
-void parse_offset_syntax(parser_context *context, str *s, regable *offset_regable) {
+bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, regable *out_offset) {
     const token_t *cur_token = &context->cur_token;
-    s->data += 1;
-    if (s->end[-1] == ']') {
-        s->end -= 1;
-    } else if (streq(s->end, " *")) {
+    regable offset_regable = {.tag = VALUE, .value = 0};
+    s.data += 1;
+
+    if (s.end[-1] == ']') {
+        s.end -= 1;
+    } else if (streq(s.end, " *")) {
         tok(context);
         tok(context);
         str offset_str = cur_token->id;
         if (offset_str.end[-1] == ']')
             offset_str.end -= 1;
-        *offset_regable = read_regable(offset_str, cur_token);
-        diagnostic_dyn_elem_access(context, offset_regable);
+        offset_regable = read_regable(offset_str, cur_token);
+        diagnostic_dyn_elem_access(context, &offset_regable);
     } else {
         compile_err(cur_token, "closing ']' expected\n");
     }
-}
 
-regable resolve_store_target(parser_context *context, str s) {
-    const token_t *cur_token = &context->cur_token;
+    regable regable_target;
     if (str_eq_lit(s, "This")) {
         target *t = arr_target_top(&context->targets);
         if (!t) {
             compile_err(cur_token, "nothing to assign\n");
-            return (regable){.tag = NONE};
+            return false;
         }
-        return (regable){.tag = REG, .reg = *t->reg};
-    }
-    if (str_empty(&s)) {
+        regable_target = (regable){.tag = REG, .reg = *t->reg};
+    } else if (str_empty(&s)) {
         target *targ = get_current_target_stack(context);
         if (!targ)
-            return (regable){.tag = NONE};
-        return (regable){.reg = *targ->reg, .tag = REG};
-    }
-    return read_regable(s, cur_token);
-}
-
-void coerce_to_addr_reg(parser_context *context, reg_t *reg) {
-    i32 addr = dtype_tryget_addr(&reg->dtype);
-    if (reg->reg_type == STACK || addr > 0)
-        return;
-    member_t *first = NULL;
-    const dtype_t *dtype = &reg->dtype;
-    const type_t *type = dtype->base;
-    if (dtype_empty(dtype) && type
-            && type->tag == TK_STRUCT) {
-        const dyn_member_t *m = &type->struct_t.members;
-        const dtype_t *cur_dtype = &m->begin->dtype;
-        if (m->begin != m->cur && dtype_tryget_addr(cur_dtype)) {
-            first = m->begin;
-        }
-    }
-    if (first) {
-        reg->dtype = first->dtype;
-        reg->offset -= (i32)first->offset;
-        reg->rsize = (reg_size)dtype_size(&first->dtype);
-    } else if (dtype_tryget(dtype, DK_SLICE)) {
-        reg->offset = 0;
-        reg->rsize = (reg_size)dtype_size(dtype);
+            return false;
+        regable_target = (regable){.reg = *targ->reg, .tag = REG};
     } else {
-        compile_err(&context->cur_token, "a register containing addr is expected\n");
+        regable_target = read_regable(s, cur_token);
     }
-}
-
-void apply_static_offset(parser_context *context, reg_t *reg, regable *offset_regable) {
-    const token_t *cur_token = &context->cur_token;
-    i32 slice = dtype_tryget(&reg->dtype, DK_SLICE);
-    if (slice) {
-        reg_t count_reg = *reg;
-        count_reg.offset += 1;
-        count_reg.rsize = sizeof (void *);
-        offset_regable->value = slice;
-        check_bounds(context, count_reg, slice, INCL);
-    }
-    size_t stride;
-    if (reg->dtype.base == NULL) {
-        compile_err(cur_token, "compiler bug: reg type was NULL\n");
-        stride = sizeof (i32);
-    } else {
-        stride = reg->dtype.base->size;
-    }
-    offset_regable->value *= stride;
-
-    if (reg->reg_type == STACK) {
-        offset_regable->value += reg->offset;
-        offset_regable->value = -offset_regable->value;
-        *reg = (reg_t){
-            .reg_type = FP.reg_type, .rsize = FP.rsize,
-            .dtype = {.base = reg->dtype.base},
-        };
-        dtype_push(&reg->dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
-    }
-    offset_regable->value += reg->displacement;
-}
-
-void apply_dynamic_offset(parser_context *context, reg_t reg, regable offset_regable) {
-    const token_t *cur_token = &context->cur_token;
-    if (streq(cur_token->end + 1, "unchecked")) {
-        tok(context);
-    } else {
-        declarator_t decl = dtype_top(&reg.dtype);
-        if (decl.tag != DK_ARRAY) {
-            compile_err(cur_token, "register was not an array\n");
-        } else {
-            check_bounds(context, offset_regable.reg, decl.amount, EXCL);
-        }
-    }
-}
-
-bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, regable *out_offset) {
-    const token_t *cur_token = &context->cur_token;
-    regable offset_regable = {.tag = VALUE, .value = 0};
-    parse_offset_syntax(context, &s, &offset_regable);
-
-    regable regable_target = resolve_store_target(context, s);
     if (regable_target.tag == NONE) {
         return false;
     }
@@ -816,12 +731,69 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         return false;
     }
     reg_t reg = regable_target.reg;
-    coerce_to_addr_reg(context, &reg);
-
+    i32 addr = dtype_tryget_addr(&reg.dtype);
+    if (reg.reg_type != STACK && addr <= 0) {
+        member_t *first = NULL;
+        const dtype_t *dtype = &reg.dtype;
+        const type_t *type = dtype->base;
+        if (dtype_empty(dtype) && type
+                && type->tag == TK_STRUCT) {
+            const dyn_member_t *m = &type->struct_t.members;
+            const dtype_t *cur_dtype = &m->begin->dtype;
+            if (m->begin != m->cur && dtype_tryget_addr(cur_dtype)) {
+                first = m->begin;
+            }
+        }
+        if (first) {
+            reg.dtype = first->dtype;
+            reg.offset -= (i32)first->offset;
+            reg.rsize = (reg_size)dtype_size(&first->dtype);
+        } else if (dtype_tryget(dtype, DK_SLICE)) {
+            reg.offset = 0;
+            reg.rsize = (reg_size)dtype_size(dtype);
+        } else {
+            compile_err(cur_token, "a register containing addr is expected\n");
+        }
+    }
     if (offset_regable.tag == VALUE) {
-        apply_static_offset(context, &reg, &offset_regable);
+        i32 slice = dtype_tryget(&reg.dtype, DK_SLICE);
+        if (slice) {
+            reg_t count_reg = reg;
+            count_reg.offset += 1;
+            count_reg.rsize = sizeof (void *);
+            offset_regable.value = slice;
+            check_bounds(context, count_reg, slice, INCL);
+        }
+        size_t stride;
+        if (reg.dtype.base == NULL) {
+            compile_err(cur_token, "compiler bug: reg type was NULL\n");
+            stride = sizeof (i32);
+        } else {
+            stride = reg.dtype.base->size;
+        }
+        offset_regable.value *= stride;
+
+        if (reg.reg_type == STACK) {
+            offset_regable.value += reg.offset;
+            offset_regable.value = -offset_regable.value;
+            reg = (reg_t){
+                .reg_type = FP.reg_type, .rsize = FP.rsize,
+                .dtype = {.base = reg.dtype.base},
+            };
+            dtype_push(&reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+        }
+        offset_regable.value += reg.displacement;
     } else if (offset_regable.tag == REG) {
-        apply_dynamic_offset(context, reg, offset_regable);
+        if (streq(cur_token->end + 1, "unchecked")) {
+            tok(context);
+        } else {
+            declarator_t decl = dtype_top(&reg.dtype);
+            if (decl.tag != DK_ARRAY) {
+                compile_err(cur_token, "register was not an array\n");
+            } else {
+                check_bounds(context, offset_regable.reg, decl.amount, EXCL);
+            }
+        }
     } else unreachable;
 
     *out_offset = offset_regable;
