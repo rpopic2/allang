@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdio.h>
 #include <string.h>
 
@@ -39,8 +41,6 @@ static inline void *allocator_alloc(allocator *self, size_t size) {
 }
 
 // fixed dynamic arrays
-#pragma once
-
 #define list_GENERIC(T) \
 typedef struct list_##T { \
     T *begin; \
@@ -50,7 +50,7 @@ typedef struct list_##T { \
 } list_##T; \
  \
 inline static void list_##T##_init(list_##T *self, allocator *alloc, size_t len) { \
-    self->allocator = alloc; \
+    self->alloc = alloc; \
     size_t size = sizeof (T) * len; \
     self->begin = allocator_alloc_undefined(alloc, size); \
     self->cur = self->begin; \
@@ -58,13 +58,13 @@ inline static void list_##T##_init(list_##T *self, allocator *alloc, size_t len)
 } \
  \
 inline static void list_##T##_push(list_##T *self, const T *elem) { \
-    if (self->begin == self->cur) { \
+    if (self->cur == self->end) { \
         fprintf(stderr, "array was full\n"); \
-        abort() \
+        abort(); \
     } \
     *(self->cur++) = *elem; \
 } \
  \
-inline static ptrdiff_t list_##T##_len(list_##T *self) { \
+inline static ptrdiff_t list_##T##_len(const list_##T *self) { \
     return self->cur - self->begin; \
 } \
