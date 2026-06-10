@@ -98,6 +98,32 @@ enum cond cond_flip(enum cond cond) {
     }
 }
 
+bool cond_eval(cond_t cond, i64 lhs, i64 rhs) {
+    switch (cond) {
+    case COND_EQ:
+        return lhs == rhs;
+    case COND_NE:
+        return lhs != rhs;
+    case COND_GE:
+        return lhs >= rhs;
+    case COND_LT:
+        return lhs < rhs;
+    case COND_GT:
+        return lhs > rhs;
+    case COND_LE:
+        return lhs <= rhs;
+    case COND_HS:
+        return (u64)lhs >= (u64)rhs;
+    case COND_LO:
+        return (u64)lhs < (u64)rhs;
+    case COND_HI:
+        return (u64)lhs > (u64)rhs;
+    case COND_LS:
+        return (u64)lhs <= (u64)rhs;
+    }
+    unreachable;
+}
+
 bool tok(parser_context *context) {
 retry:;
     src_t *src = context->src;
@@ -1042,6 +1068,65 @@ void anonymous_bcond(parser_context *context, cond_t cond) {
     emit_label(context->name, name, index);
 }
 
+void compare_branch(parser_context *context, cond_t cond, const regable *restrict lhs,
+                    const regable *restrict rhs, const token_t *lhs_token, const token_t *rhs_token) {
+    enum { FOLD_NONE, FOLD_SKIP, FOLD_TAKEN, } fold = FOLD_NONE;
+    bool fold_taken = false;
+    if (lhs->tag == VALUE) {
+        if (rhs->tag == VALUE) {
+            fold_taken = cond_eval(cond, lhs->value, rhs->value);
+            fold = FOLD_SKIP + fold_taken;
+        } else {
+            compile_err(lhs_token, "a register is expected for the left hand side of the operator\n");
+        }
+    }
+
+    if (fold == FOLD_NONE) {
+        if (rhs->tag == VALUE)
+            emit_cmp(lhs->reg, rhs->value);
+        else if (rhs->tag == REG)
+            emit_cmp_reg(lhs->reg, rhs->reg, cond);
+        else unreachable;
+    }
+
+    if (is_id(rhs_token->end[1])) {
+        switch (fold) {
+        case FOLD_NONE:
+            cond = cond_flip(cond);
+            named_bcond(context, cond);
+            break;
+        case FOLD_TAKEN:
+        case FOLD_SKIP:
+            compile_err(rhs_token, "not implemented when folded\n");
+            break;
+        }
+    } else if (streq(rhs_token->end + 1, "->")) {
+        cond = cond_flip(cond);
+        switch (fold) {
+        case FOLD_NONE:
+            anonymous_bcond(context, cond);
+            break;
+        case FOLD_TAKEN:
+            anonymous_bcond_block(context);
+            break;
+        case FOLD_SKIP:
+            tok(context);
+            consume_line_or_block(context);
+            break;
+        }
+    } else if (context->reg.reg_type == PARAM) {
+        switch (fold) {
+        case FOLD_NONE:
+            emit_cond_set(context->reg, cond);
+            break;
+        case FOLD_TAKEN:
+        case FOLD_SKIP:
+            emit_mov(context->reg, fold_taken);
+            break;
+        }
+    }
+}
+
 
 void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     printd("slice access\n");
@@ -1211,116 +1296,37 @@ bool binary_op(parser_context *restrict context, regable *restrict lhs) {
             compile_err(&lhs_token, "lslv not implemented\n");
         }
     } else if (streq(op_token.data, "is")) {
-        cond_t cond = COND_EQ;
-        if (streq(op_token.data + 2, "nt")) {
-            cond = COND_NE;
-        }
-
-        enum { FOLD_NONE, FOLD_SKIP, FOLD_TAKEN, } fold = FOLD_NONE;
-        bool fold_taken = false;
-        if (lhs->tag == VALUE) {
-            if (rhs.tag == VALUE) {
-                fold_taken = lhs->value == rhs.value;
-                if (cond == COND_NE) {
-                    fold_taken = !fold_taken;
-                }
-                fold = FOLD_SKIP + fold_taken;
-            } else {
-                compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
-            }
-        }
-
-        if (fold == FOLD_NONE) {
-            if (rhs.tag == VALUE)
-                emit_cmp(lhs->reg, rhs.value);
-            else if (rhs.tag == REG)
-                emit_cmp_reg(lhs->reg, rhs.reg, cond);
-            else unreachable;
-        }
-
-        if (is_id(rhs_token.end[1])) {
-            switch (fold) {
-            case FOLD_NONE:
-                cond = cond_flip(cond);
-                named_bcond(context, cond);
-                break;
-            case FOLD_TAKEN:
-            case FOLD_SKIP:
-                compile_err(&rhs_token, "not implemented when folded\n");
-                break;
-            }
-        } else if (streq(rhs_token.end + 1, "->")) {
-            cond = cond_flip(cond);
-            switch (fold) {
-            case FOLD_NONE:
-                anonymous_bcond(context, cond);
-                break;
-            case FOLD_TAKEN:
-                anonymous_bcond_block(context);
-                break;
-            case FOLD_SKIP:
-                tok(context);
-                consume_line_or_block(context);
-                break;
-            }
-        } else if (context->reg.reg_type == PARAM) {
-            switch (fold) {
-            case FOLD_NONE:
-                emit_cond_set(context->reg, cond);
-                break;
-            case FOLD_TAKEN:
-            case FOLD_SKIP:
-                emit_mov(context->reg, fold_taken);
-                break;
-            }
-        }
-
+        cond_t cond = streq(op_token.data + 2, "nt") ? COND_NE : COND_EQ;
+        compare_branch(context, cond, lhs, &rhs, &lhs_token, &rhs_token);
     } else if (op_token.data[0] == '<' || op_token.data[0] == '>') {
         bool is_gt = op_token.data[0] == '>';
         bool has_eq = op_token.data[1] == '=';
-
         bool is_unsigned = lhs->tag == REG
             && lhs->reg.dtype.base != NULL
             && lhs->reg.dtype.base->sign == S_UNSIGNED;
 
         cond_t cond;
         if (is_unsigned) {
-            if      ( is_gt && !has_eq) cond = COND_HI;
-            else if ( is_gt &&  has_eq) cond = COND_HS;
-            else if (!is_gt && !has_eq) cond = COND_LO;
-            else                        cond = COND_LS;
+            if (is_gt && !has_eq)
+                cond = COND_HI;
+            else if (is_gt && has_eq)
+                cond = COND_HS;
+            else if (!is_gt && !has_eq)
+                cond = COND_LO;
+            else
+                cond = COND_LS;
         } else {
-            if      ( is_gt && !has_eq) cond = COND_GT;
-            else if ( is_gt &&  has_eq) cond = COND_GE;
-            else if (!is_gt && !has_eq) cond = COND_LT;
-            else                        cond = COND_LE;
+            if (is_gt && !has_eq)
+                cond = COND_GT;
+            else if (is_gt && has_eq)
+                cond = COND_GE;
+            else if (!is_gt && !has_eq)
+                cond = COND_LT;
+            else
+                cond = COND_LE;
         }
 
-        if (lhs->tag == VALUE) {
-            if (rhs.tag == VALUE) {
-                compile_err(&op_token, "constant folding for comparison operators not yet implemented\n");
-            } else {
-                compile_err(&lhs_token, "a register is expected for the left hand side of the operator\n");
-            }
-        }
-
-        if (lhs->tag == REG) {
-            if (rhs.tag == VALUE)
-                emit_cmp(lhs->reg, rhs.value);
-            else if (rhs.tag == REG)
-                emit_cmp_reg(lhs->reg, rhs.reg, cond);
-            else unreachable;
-        }
-
-        if (is_id(rhs_token.end[1])) {
-            cond = cond_flip(cond);
-            named_bcond(context, cond);
-        } else if (streq(rhs_token.end + 1, "->")) {
-            cond = cond_flip(cond);
-            anonymous_bcond(context, cond);
-        } else if (context->reg.reg_type == PARAM) {
-            emit_cond_set(context->reg, cond);
-        }
+        compare_branch(context, cond, lhs, &rhs, &lhs_token, &rhs_token);
     } else {
         compile_err(&op_token, "unknown binray operator "), str_printerr(op_token.id);
     }
