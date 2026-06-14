@@ -12,6 +12,9 @@ case "$(uname -s)" in
     Darwin)
         EMIT_OS="emit-macho-exe.c"
         ;;
+    Linux)
+        EMIT_OS="emit-elf-exe.c"
+        ;;
     *)
         echo "FATAL: binary backend not supported on $(uname -s)" >&2
         exit 1
@@ -21,6 +24,9 @@ esac
 case "$(uname -m)" in
     aarch64|arm64)
         EMIT_ARCH="emit-aarch64-bin.c"
+        ;;
+    x86_64)
+        EMIT_ARCH="emit-x86_64-bin.c"
         ;;
     *)
         echo "FATAL: binary backend not supported on $(uname -m)" >&2
