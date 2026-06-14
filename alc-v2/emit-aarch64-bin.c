@@ -97,16 +97,10 @@ static label_t fn_syms[LABEL_CAP];
 static uint32_t nfnsyms;
 
 // A nested compile() (from #compile_all) can run between an outer function's
-// emit_fn and its finalize, so per-function emit state is kept on a stack
-// pushed by emit_reset_fn and popped by emit_finalize_fnbuf.
-typedef struct {
-    char name[KEY_CAP];
-    bool is_main;
-    bool named;
-} fnframe_t;
-
-static fnframe_t fnframes[32];
-static int fn_depth;
+// emit_fn and its finalize, so per-function emit state lives in the caller's
+// emit_context_t (one per compile() loop iteration, i.e. on the C stack).
+// active_ctx just tracks which one emit_fn should write to.
+static emit_context_t *active_ctx;
 
 static uint8_t cstrs[0x1000];
 static uint32_t cstrs_len;
@@ -169,19 +163,11 @@ static void make_key(char dst[KEY_CAP], str fn_name, str label, int index) {
              (int)str_len(label), label.data, index);
 }
 
-static int fnframe_cap(void) {
-    return (int)(sizeof fnframes / sizeof fnframes[0]);
-}
-
 void emit_reset_fn(emit_context_t *context) {
     body_len = 0;
     prol_len = 0;
-    if (fn_depth >= 0 && fn_depth < fnframe_cap()) {
-        fnframes[fn_depth].named = false;
-        fnframes[fn_depth].is_main = false;
-        fnframes[fn_depth].name[0] = '\0';
-    }
-    fn_depth++;
+    context->fn_named = false;
+    active_ctx = context;
 }
 
 void emit_finalize_fnbuf(emit_context_t *context, FILE *out) {
@@ -209,19 +195,15 @@ void emit_finalize_fnbuf(emit_context_t *context, FILE *out) {
         }
     }
 
-    if (fn_depth > 0)
-        fn_depth--;
-    if (fn_depth >= 0 && fn_depth < fnframe_cap()) {
-        const fnframe_t *f = &fnframes[fn_depth];
-        if (f->named) {
-            if (nfnsyms < LABEL_CAP) {
-                memcpy(fn_syms[nfnsyms].key, f->name, KEY_CAP);
-                fn_syms[nfnsyms].word = base;
-                nfnsyms++;
-            }
-            if (f->is_main)
-                entry_off = base * (uint32_t)sizeof code[0];
+    if (context->fn_named) {
+        if (nfnsyms < LABEL_CAP) {
+            snprintf(fn_syms[nfnsyms].key, KEY_CAP, "%.*s",
+                     (int)str_len(context->fn_name), context->fn_name.data);
+            fn_syms[nfnsyms].word = base;
+            nfnsyms++;
         }
+        if (str_eq(context->fn_name, STR("main")))
+            entry_off = base * (uint32_t)sizeof code[0];
     }
 
     body_len = 0;
@@ -690,11 +672,9 @@ void emit_label(str fn_name, str label, int index) {
 }
 
 void emit_fn(str fn_name) {
-    if (fn_depth > 0 && fn_depth <= fnframe_cap()) {
-        fnframe_t *f = &fnframes[fn_depth - 1];
-        snprintf(f->name, KEY_CAP, "%.*s", (int)str_len(fn_name), fn_name.data);
-        f->is_main = str_eq(fn_name, STR("main"));
-        f->named = true;
+    if (active_ctx) {
+        active_ctx->fn_name = fn_name;
+        active_ctx->fn_named = true;
     }
 }
 

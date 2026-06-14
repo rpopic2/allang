@@ -18,6 +18,8 @@ typedef struct emit_context {
     buf fn_header_buf;
     buf prologue_buf;
     buf fn_buf;
+    str fn_name;
+    bool fn_named;
 } emit_context_t;
 
 void emit_init(void);
