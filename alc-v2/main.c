@@ -336,10 +336,10 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
     if (token->end[-1] != '"') {
         compile_err(token, "expected closing \"\n");
     }
+    context->reg.rsize = sizeof (char *);
+    context->reg.dtype = (dtype_t){.base = hashmap_type_t_tryfind(types, STR("u8"))};
+    dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
     if (!escape) {
-        context->reg.rsize = sizeof (char *);
-        context->reg.dtype = (dtype_t){.base = hashmap_type_t_tryfind(types, STR("u8"))};
-        dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
         emit_string_lit(context->reg, (str *)token);
         return;
     }

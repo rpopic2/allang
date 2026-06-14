@@ -84,7 +84,7 @@ inline static void str_print(const str s) {
 }
 
 inline static str str_from_iter(const iter *it) {
-    return (str){.data = it->start, it->end};
+    return (str){.data = it->start, it->cur};
 }
 
 inline static iter iter_init(char *start, size_t end) {
