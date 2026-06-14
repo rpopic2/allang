@@ -163,14 +163,14 @@ static void make_key(char dst[KEY_CAP], str fn_name, str label, int index) {
              (int)str_len(label), label.data, index);
 }
 
-void emit_reset_fn(emit_context_t *context) {
+void emit_fn_begin(emit_context_t *context) {
     body_len = 0;
     prol_len = 0;
     context->fn_named = false;
     active_ctx = context;
 }
 
-void emit_finalize_fnbuf(emit_context_t *context, FILE *out) {
+void emit_fn_end(emit_context_t *context) {
     uint32_t base = code_len;
     uint32_t delta = base + prol_len;
     if (code_len + prol_len + body_len > CODE_CAP) {

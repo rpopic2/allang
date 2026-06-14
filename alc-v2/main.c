@@ -39,7 +39,7 @@ bool stmt_ret_cond_reg(parser_context *context, cond_t cond, reg_t cmp_reg, reg_
 bool stmt_ret(parser_context *context);
 void stmt_label(parser_context *context);
 int expr_line(parser_context *context);
-void compile(src_t src, FILE *object_file);
+void compile(src_t src);
 src_t read_source(const char *source_name);
 void import_all_from(src_t src);
 void skip_function(src_t *src);
@@ -2572,7 +2572,7 @@ bool directives(parser_context *context) {
         u16 tmp_lineno = lineno;
         lineno = 1;
         skip_function(&src);
-        compile(src, object_file);
+        compile(src);
         lineno = tmp_lineno;
     } else {
         compile_err(token, "unknown directive "), str_printerr(token_str);
@@ -3026,12 +3026,12 @@ src_t read_source(const char *source_name) {
     return src;
 }
 
-void compile(src_t src, FILE *object_file) {
+void compile(src_t src) {
     while (src.cur < src.end) {
         emit_context_t emit_ctx = {0};
-        emit_reset_fn(&emit_ctx);
+        emit_fn_begin(&emit_ctx);
         function(&src);
-        emit_finalize_fnbuf(&emit_ctx, object_file);
+        emit_fn_end(&emit_ctx);
     }
 }
 
@@ -3096,10 +3096,9 @@ int main(int argc, const char *argv[]) {
 
     src_t src = read_source(source_name);
     import_all_from(src);
-    emit_text(object_file);
-    compile(src, object_file);
+    compile(src);
 
-    emit_cstr(object_file);
+    emit_output(object_file);
     TIMER_END(clock_parse_all);
 
     if (has_compile_err)

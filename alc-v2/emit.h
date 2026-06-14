@@ -23,10 +23,9 @@ typedef struct emit_context {
 } emit_context_t;
 
 void emit_init(void);
-void emit_reset_fn(emit_context_t *context);
-void emit_finalize_fnbuf(emit_context_t *context, FILE *out);
-void emit_text(FILE *out);
-void emit_cstr(FILE *out);
+void emit_fn_begin(emit_context_t *context);
+void emit_fn_end(emit_context_t *context);
+void emit_output(FILE *out);
 
 bool emit_need_escaping(void);
 

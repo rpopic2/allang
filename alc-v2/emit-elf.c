@@ -71,16 +71,15 @@ static const u8 code_stub[] = {
 void emit_init(void) {
 }
 
-void emit_reset_fn(emit_context_t *context) {
+void emit_fn_begin(emit_context_t *context) {
     (void)context;
 }
 
-void emit_finalize_fnbuf(emit_context_t *context, FILE *out) {
+void emit_fn_end(emit_context_t *context) {
     (void)context;
-    (void)out;
 }
 
-void emit_text(FILE *out) {
+void emit_output(FILE *out) {
     const u64 headers_size = sizeof(elf64_ehdr) + sizeof(elf64_phdr);
     const u64 entry = ELF_LOAD_BASE + headers_size;
     const u64 image_size = headers_size + sizeof code_stub;
@@ -116,10 +115,6 @@ void emit_text(FILE *out) {
     fwrite(&ehdr, sizeof ehdr, 1, out);
     fwrite(&phdr, sizeof phdr, 1, out);
     fwrite(code_stub, sizeof code_stub, 1, out);
-}
-
-void emit_cstr(FILE *out) {
-    (void)out;
 }
 
 void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {
@@ -317,16 +312,4 @@ void emit_fn(str fn_name) {
 }
 
 void emit_ret(void) {
-}
-
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((format(printf, 1, 2)))
-#endif
-void report_error(const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, CSI_RED "error: " CSI_RESET);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    compile_err(NULL, "");
 }

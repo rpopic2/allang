@@ -393,8 +393,7 @@ static void write_macho(FILE *out) {
 }
 
 void emit_init(void) {}
-void emit_text(FILE *out) {}
-void emit_cstr(FILE *out) {
+void emit_output(FILE *out) {
     write_macho(out);
 }
 

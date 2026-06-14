@@ -60,6 +60,14 @@ inline static void buf_putc(buf *buffer, char c) {
     *buffer->cur++ = c;
 }
 
+inline static void buf_putbuf(buf *dst, const buf *src) {
+    size_t len = buf_len(src);
+    buf_grow(dst, len);
+
+    memcpy(dst->cur, src->start, len);
+    dst->cur += len;
+}
+
 #define SPRINTF_BUFSIZ 0x400
 _Thread_local static char sprintf_buf[SPRINTF_BUFSIZ];
 
