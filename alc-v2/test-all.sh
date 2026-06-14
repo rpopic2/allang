@@ -1,14 +1,35 @@
 #!/usr/bin/env bash
 
+# test-all.sh equivalent for the binary backend.
+#
+# Unlike test-all.sh, the binary backend makes alc emit a complete, directly
+# runnable executable (output_ext is ""), so there is no separate clang step:
+# alc produces tests/<name>, which is run directly.
+
 cd "$(dirname "$0")"
 
-EXTRA_CLANG_FLAGS=""
-if [[ "$(uname -m)" == x86* ]]; then
-    EXTRA_CLANG_FLAGS="-masm=intel"
-fi
+case "$(uname -s)" in
+    Darwin)
+        EMIT_OS="emit-macho-exe.c"
+        ;;
+    *)
+        echo "FATAL: binary backend not supported on $(uname -s)" >&2
+        exit 1
+        ;;
+esac
 
-echo "==> Building alc..."
-if ! ./build.sh; then
+case "$(uname -m)" in
+    aarch64|arm64)
+        EMIT_ARCH="emit-aarch64-bin.c"
+        ;;
+    *)
+        echo "FATAL: binary backend not supported on $(uname -m)" >&2
+        exit 1
+        ;;
+esac
+
+echo "==> Building alc ($EMIT_ARCH $EMIT_OS)..."
+if ! ./build.sh "$EMIT_ARCH" "$EMIT_OS"; then
     echo "FATAL: build failed"
     exit 1
 fi
@@ -31,24 +52,16 @@ for AL_FILE in tests/*.al; do
         continue
     fi
 
-    if [ ! -f "${NAME}.s" ]; then
-        printf "PASS (syntax only)\n"
-        ((PASS++))
-        continue
-    fi
-
-    CLANG_OUT=$(clang "${NAME}.s" $EXTRA_CLANG_FLAGS -o "${NAME}_bin" 2>&1)
-    CLANG_EXIT=$?
-    if [ $CLANG_EXIT -ne 0 ]; then
-        printf "FAIL (clang)\n"
+    if [ ! -x "$NAME" ]; then
+        printf "FAIL (no executable)\n"
         ((FAIL++))
-        FAIL_NAMES+=("$AL_FILE (clang: $(echo "$CLANG_OUT" | tail -3))")
+        FAIL_NAMES+=("$AL_FILE (no executable emitted)")
         continue
     fi
 
-    "./${NAME}_bin"
+    "./$NAME" >/dev/null 2>&1
     RUN_EXIT=$?
-    rm -f "${NAME}_bin"
+    rm -f "$NAME"
     if [ $RUN_EXIT -ne 0 ]; then
         printf "FAIL (exit %d)\n" $RUN_EXIT
         ((FAIL++))
