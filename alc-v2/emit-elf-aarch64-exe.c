@@ -33,22 +33,18 @@ static uint32_t enc_add64(uint32_t rd, uint32_t rn, uint64_t target) {
     return 0x91000000u | (((uint32_t)(target & 0xFFFu)) << 10) | (rn << 5) | rd;
 }
 
-/* static _start: bl main; mov w8, #93; svc #0 */
 static void elf_build_start_stub(uint8_t *p, uint64_t stub_vaddr, uint64_t main_vaddr) {
     put_le32(p + 0, enc_bl(stub_vaddr, main_vaddr));
     put_le32(p + 4, 0x52800BA8u);
     put_le32(p + 8, 0xD4000001u);
 }
 
-/* dynamic _start: bl main; bl exit@plt */
 static void elf_build_dyn_start_stub(uint8_t *p, uint64_t stub_vaddr,
                                      uint64_t main_vaddr, uint64_t exit_plt_vaddr) {
     put_le32(p + 0, enc_bl(stub_vaddr,     main_vaddr));
     put_le32(p + 4, enc_bl(stub_vaddr + 4, exit_plt_vaddr));
 }
 
-/* PLT[0]: stp x16,x30,[sp,#-16]!; adrp x16,GOT[1]; ldr x17,[x16,GOT[1]&0xfff];
-           add x16,x16,GOT[1]&0xfff; br x17; nop*3 */
 static void elf_build_plt0(uint8_t *p, uint64_t plt0_vaddr, uint64_t got_vaddr) {
     uint64_t g1 = got_vaddr + 8;
     uint64_t g2 = got_vaddr + 16;
@@ -63,8 +59,6 @@ static void elf_build_plt0(uint8_t *p, uint64_t plt0_vaddr, uint64_t got_vaddr) 
     put_le32(p + 28, 0xD503201Fu);
 }
 
-/* PLT[n]: adrp x16, GOT[n]; ldr x17, [x16, GOT[n]&0xfff]; add x16, x16, ...; br x17.
-   Returns GOT initial value: PLT[0] vaddr (aarch64 lazy binding routes back to PLT[0]). */
 static uint64_t elf_build_plt_entry(uint8_t *p, uint32_t index, uint64_t plt_vaddr,
                                     uint64_t plt0_vaddr, uint64_t got_entry_vaddr) {
     (void)index;
@@ -75,7 +69,6 @@ static uint64_t elf_build_plt_entry(uint8_t *p, uint32_t index, uint64_t plt_vad
     return plt0_vaddr;
 }
 
-/* Patch a BL instruction in place. */
 static void elf_patch_call(uint8_t *site, uint64_t site_vaddr, uint64_t target_vaddr) {
     uint32_t w;
     memcpy(&w, site, 4);

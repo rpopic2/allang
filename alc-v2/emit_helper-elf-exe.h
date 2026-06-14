@@ -1,25 +1,5 @@
 #pragma once
 
-/* Shared ELF64 executable writer. Included by emit-elf-<arch>-exe.c files,
-   which must define the following before this include:
-
-     static const uint16_t elf_machine;
-     static const uint32_t elf_reloc_jump_slot;
-     static const char     elf_interp[];
-     static const uint32_t elf_start_stub_size;
-     static const uint32_t elf_dyn_start_stub_size;
-     static const uint32_t elf_plt0_size;
-     static const uint32_t elf_plt_entry_size;
-
-     static void     elf_build_start_stub(uint8_t *, uint64_t stub_vaddr, uint64_t main_vaddr);
-     static void     elf_build_dyn_start_stub(uint8_t *, uint64_t stub_vaddr,
-                                              uint64_t main_vaddr, uint64_t exit_plt_vaddr);
-     static void     elf_build_plt0(uint8_t *, uint64_t plt0_vaddr, uint64_t got_vaddr);
-     static uint64_t elf_build_plt_entry(uint8_t *, uint32_t index, uint64_t plt_vaddr,
-                                         uint64_t plt0_vaddr, uint64_t got_entry_vaddr);
-     static void     elf_patch_call(uint8_t *site, uint64_t site_vaddr, uint64_t target_vaddr);
-*/
-
 #include <stdio.h>
 #include <string.h>
 #include <elf.h>
