@@ -634,7 +634,6 @@ regable read_regable(str s, const token_t *diagnostic) {
         if (is_basetype_addr) {
             dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
             result.reg.displacement += member->offset;
-            pdtype(&result.reg.dtype);
         }
     }
     return result;

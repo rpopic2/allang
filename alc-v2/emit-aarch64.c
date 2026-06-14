@@ -697,9 +697,6 @@ void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
     if (src.rsize > 8) {
         reg_t dst2 = dst;
         dst2.offset += 1;
-        dtype_t popped = dtype_pop_dup(&src.dtype);
-        size_t stride = dtype_size(&popped);
-        pd(stride)
 
         reg_t scratch = {.reg_type = SCRATCH, .rsize = sizeof (void *)};
         src.rsize = sizeof (void *);
