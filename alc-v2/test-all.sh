@@ -8,34 +8,27 @@
 
 cd "$(dirname "$0")"
 
-case "$(uname -s)" in
-    Darwin)
-        EMIT_OS="emit-macho-exe.c"
-        ;;
-    Linux)
-        EMIT_OS="emit-elf-exe.c"
-        ;;
-    *)
-        echo "FATAL: binary backend not supported on $(uname -s)" >&2
-        exit 1
-        ;;
-esac
-
-case "$(uname -m)" in
-    aarch64|arm64)
-        EMIT_ARCH="emit-aarch64-bin.c"
-        ;;
-    x86_64)
+case "$(uname -s):$(uname -m)" in
+    Linux:x86_64)
         EMIT_ARCH="emit-x86_64-bin.c"
+        EMIT_EXE="emit-elf-x86_64-exe.c"
+        ;;
+    Linux:aarch64|Linux:arm64)
+        EMIT_ARCH="emit-aarch64-bin.c"
+        EMIT_EXE="emit-elf-aarch64-exe.c"
+        ;;
+    Darwin:arm64|Darwin:aarch64)
+        EMIT_ARCH="emit-aarch64-bin.c"
+        EMIT_EXE="emit-macho-aarch64-exe.c"
         ;;
     *)
-        echo "FATAL: binary backend not supported on $(uname -m)" >&2
+        echo "FATAL: binary backend not supported on $(uname -s)/$(uname -m)" >&2
         exit 1
         ;;
 esac
 
-echo "==> Building alc ($EMIT_ARCH $EMIT_OS)..."
-if ! ./build.sh "$EMIT_ARCH" "$EMIT_OS"; then
+echo "==> Building alc ($EMIT_ARCH $EMIT_EXE)..."
+if ! ./build.sh "$EMIT_ARCH" "$EMIT_EXE"; then
     echo "FATAL: build failed"
     exit 1
 fi
