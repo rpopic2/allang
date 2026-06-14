@@ -55,6 +55,11 @@ static uint32_t nfnsyms;
 static uint8_t cstrs[0x1000];
 static uint32_t cstrs_len;
 
+static bin_import imports[64];
+static uint32_t n_imports;
+static bin_extcall extcalls[FIXUP_CAP];
+static uint32_t n_extcalls;
+
 static const uint8_t cond_aarch64[] = {
     0x0, 0x1, 0xa, 0xb, 0xc, 0xd, 0x2, 0x3, 0x8, 0x9,
 };
@@ -153,7 +158,18 @@ void bin_emit(bin_image *image) {
         }
         if (fx->kind == FX_CALL) {
             if (!find_word(fn_syms, nfnsyms, fx->key, &target)) {
-                code[fx->site] = 0xd503201fu;
+                uint32_t imp = n_imports;
+                for (uint32_t k = 0; k < n_imports; k++) {
+                    if (strcmp(imports[k].name, fx->key) == 0) {
+                        imp = k;
+                        break;
+                    }
+                }
+                if (imp == n_imports)
+                    imports[n_imports++].name = fx->key;
+                extcalls[n_extcalls].site = fx->site * (uint32_t)sizeof code[0];
+                extcalls[n_extcalls].import = imp;
+                n_extcalls++;
                 continue;
             }
         } else if (!find_word(labels, nlabels, fx->key, &target)) {
@@ -173,6 +189,10 @@ void bin_emit(bin_image *image) {
     image->text = image_buf;
     image->text_size = code_bytes + cstrs_len;
     image->entry = entry_off;
+    image->imports = imports;
+    image->imports_count = n_imports;
+    image->extcalls = extcalls;
+    image->extcalls_count = n_extcalls;
 }
 
 bool emit_need_escaping(void) {
