@@ -272,3 +272,4 @@ void emit_cstr(FILE *out) {
 
 const char *text_section_header = "";
 const char *string_section_header = "";
+const char *output_ext = "";

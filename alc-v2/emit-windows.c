@@ -5,6 +5,7 @@ const char *string_section_header = ("");
 const char *fn_prefix = "";
 const char *fn_annotation_fmt = "\t.def %.*s;\n\t.scl 2;\n\t.type 32;\n\t.endef\n";
 const char *local_string_prefix = ".Lstr.%d";
+const char *output_ext = "s";
 
 // x64 abi
 

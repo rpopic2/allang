@@ -72,8 +72,7 @@ void emit_fn_call(const str *s);
 void emit_fn(str fn_name);
 void emit_ret(void);
 
-void report_error(const char *format, ...);
-
 extern const char *text_section_header;
 extern const char *string_section_header;
 extern const size_t default_register_size;
+extern const char *output_ext;

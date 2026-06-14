@@ -7,6 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#ifndef _WIN32
+#include <execinfo.h>
+#include <unistd.h>
+#endif
 
 #include "allocator.h"
 #include "diagnostics.h"
@@ -2963,6 +2967,20 @@ void compile(src_t src, FILE *object_file) {
     }
 }
 
+void report_error(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    fprintf(stderr, CSI_RED"error: "CSI_RESET);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    compile_err(NULL, "");
+#ifndef _WIN32
+    void *array[0x1000];
+    int size = backtrace(array, 0x1000);
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
+#endif
+}
+
 int main(int argc, const char *argv[]) {
     TIMER_START(clock_full);
     if (argc == 1) {
@@ -2977,12 +2995,20 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, "usage: alc [filename]\n");
         exit(EXIT_FAILURE);
     }
-    char *out_name = malloc(source_name_len + 1);
+    const char *dot = strrchr(source_name, '.');
+    size_t base_len = dot ? (size_t)(dot - source_name) : source_name_len;
+    size_t ext_len = strlen(output_ext);
+    char *out_name = malloc(base_len + ext_len + 2);
     if (!out_name)
         malloc_failed();
-    memset(out_name, 0, source_name_len + 1);
-    strncpy(out_name, source_name, source_name_len - 1);
-    out_name[source_name_len - 2] = 's';
+    memcpy(out_name, source_name, base_len);
+    size_t out_pos = base_len;
+    if (ext_len > 0) {
+        out_name[out_pos++] = '.';
+        memcpy(out_name + out_pos, output_ext, ext_len);
+        out_pos += ext_len;
+    }
+    out_name[out_pos] = '\0';
 
     TIMER_END(clock_make_output_name);
     TIMER_START(clock_make_output_fopen);

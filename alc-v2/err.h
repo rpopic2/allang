@@ -3,6 +3,10 @@
 typedef struct token token_t;
 void compile_err(const token_t *token, const char *format, ...);
 void compile_warning(const token_t *token, const char *format, ...);
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 1, 2)))
+#endif
+void report_error(const char *format, ...);
 
 #if NDEBUG
 #define printd(...) ((void)0)

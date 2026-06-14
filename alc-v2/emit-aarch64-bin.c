@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdarg.h>
-#include <unistd.h>
-#include <execinfo.h>
 
 #include "types.h"
 #include "emit.h"
@@ -527,22 +524,6 @@ void emit_fn_call(const str *s) {
     fx->site = body_len;
     fx->kind = FX_CALL;
     put_word(0x94000000u);
-}
-
-__attribute__((format(printf, 1, 2)))
-void report_error(const char *format, ...) {
-    int size = 0x1000;
-    void *array[size];
-    size = backtrace(array, size);
-
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, CSI_RED"error: "CSI_RESET);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    compile_err(NULL, "");
-
-    backtrace_symbols_fd(array, size, STDERR_FILENO);
 }
 
 #pragma clang diagnostic pop

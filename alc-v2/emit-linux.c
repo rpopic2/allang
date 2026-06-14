@@ -10,6 +10,7 @@ const char *addrgen_add = INSTR("add x%d, x%d, :lo12:%s");
 const char *fn_prefix = "";
 const char *fn_annotation_fmt = INSTR(".type %.*s, @function");
 const char *local_string_prefix = ".L.str.%d";
+const char *output_ext = "s";
 
 // system-v abi
 

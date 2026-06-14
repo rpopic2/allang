@@ -185,32 +185,3 @@ static void put_label(str fn_name, str label, int index) {
         buf_snprintf(fn_buf, "%d", index);
     }
 }
-
-#ifndef _WIN32
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((format(printf, 1, 2)))
-#endif
-void report_error(const char *format, ...) {
-    int size = 0x1000;
-    void *array[size];
-    size = backtrace(array, size);
-
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, CSI_RED"error: "CSI_RESET);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    compile_err(NULL, "");
-
-    backtrace_symbols_fd(array, size, STDERR_FILENO);
-}
-#else
-void report_error(const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    fprintf(stderr, CSI_RED"error: "CSI_RESET);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    compile_err(NULL, "");
-}
-#endif

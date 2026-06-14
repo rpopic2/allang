@@ -9,3 +9,4 @@ const char *addrgen_add = INSTR("add x%d, x%d, %s@PAGEOFF");
 const char *fn_prefix = "_";
 const char *fn_annotation_fmt = "";
 const char *local_string_prefix = "l_.str.%d";
+const char *output_ext = "s";
