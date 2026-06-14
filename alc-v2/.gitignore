@@ -3,3 +3,4 @@
 *.s
 a.out
 compile_commands.json
+.claude
