@@ -21,7 +21,10 @@
 #define START_CALL_DISP_OFF 1u
 /* dynamic _start: call main; mov edi, eax; call exit@plt */
 #define DYN_START_STUB_SIZE 12u
-#define PLT_STUB_SIZE       6u
+/* standard lazy PLT: PLT[0] is the resolver stub, PLT[n] are 16-byte entries */
+#define PLT_ENTRY_SIZE      16u
+/* GOT[0]=.dynamic, GOT[1]=link-map(ld.so), GOT[2]=resolver(ld.so) */
+#define GOT_RESERVED        3u
 
 static u8 img[0x80000];
 
@@ -55,7 +58,8 @@ static u64 align_up(u64 x, u64 a) {
 static void patch_extcalls(const bin_image *image, u64 text_off, u64 plt_off) {
     for (u32 i = 0; i < image->extcalls_count; i++) {
         const bin_extcall *e = &image->extcalls[i];
-        u64 stub_vaddr = LOAD_BASE + plt_off + (u64)e->import * PLT_STUB_SIZE;
+        /* PLT[0] is the resolver stub; user imports start at PLT[1] */
+        u64 stub_vaddr = LOAD_BASE + plt_off + (u64)(e->import + 1) * PLT_ENTRY_SIZE;
         u64 call_next = LOAD_BASE + text_off + e->site + 4;
         int32_t rel = (int32_t)((i64)stub_vaddr - (i64)call_next);
         memcpy(img + text_off + e->site, &rel, 4);
@@ -142,7 +146,9 @@ static void write_dynamic_elf(FILE *out, const bin_image *image) {
     const u32 nimp = image->imports_count + 1;
     const u32 nsym = nimp + 1;
     const u32 nbucket = nimp;
-    const u32 ndyn = 12;
+    /* PLT[0]=resolver + PLT[1..nimp] per import; GOT has 3 reserved + nimp entries */
+    const u32 nplt = nimp + 1;
+    const u32 ndyn = 11;
     const int nphdr = 5;
 
     /* dynstr: '\0' + LIBNAME + import names */
@@ -189,7 +195,7 @@ static void write_dynamic_elf(FILE *out, const bin_image *image) {
     cur += DYN_START_STUB_SIZE;
 
     const u64 plt_off = cur;
-    cur += (u64)nimp * PLT_STUB_SIZE;
+    cur += (u64)nplt * PLT_ENTRY_SIZE;
 
     cur = align_up(cur, 16);
     const u64 text_off = cur;
@@ -200,10 +206,12 @@ static void write_dynamic_elf(FILE *out, const bin_image *image) {
     const u64 dynamic_off = rw_off;
     const u64 got_off = dynamic_off + (u64)ndyn * sizeof(Elf64_Dyn);
     const u64 got_vaddr = LOAD_BASE + got_off;
-    const u64 rw_filesz = (got_off + (u64)nimp * 8) - rw_off;
-    const u64 image_size = got_off + (u64)nimp * 8;
+    /* GOT_RESERVED slots + one per import */
+    const u64 got_size = ((u64)GOT_RESERVED + (u64)nimp) * 8;
+    const u64 rw_filesz = (got_off + got_size) - rw_off;
+    const u64 image_size = got_off + got_size;
 
-    if (image_size > sizeof img || dynstr_len > sizeof dynstr || nimp > 64) {
+    if (image_size > sizeof img || dynstr_len > sizeof dynstr || nimp > 62) {
         report_error("elf-exe: dynamic image too large\n");
         return;
     }
@@ -296,7 +304,7 @@ static void write_dynamic_elf(FILE *out, const bin_image *image) {
 
     Elf64_Rela *rela = (Elf64_Rela *)(img + rela_off);
     for (u32 i = 0; i < nimp; i++) {
-        rela[i].r_offset = got_vaddr + (u64)i * 8;
+        rela[i].r_offset = got_vaddr + ((u64)GOT_RESERVED + i) * 8;
         rela[i].r_info = ELF64_R_INFO(i + 1, R_X86_64_JUMP_SLOT);
         rela[i].r_addend = 0;
     }
@@ -313,26 +321,55 @@ static void write_dynamic_elf(FILE *out, const bin_image *image) {
     dyn[d].d_tag = DT_PLTRELSZ;    dyn[d++].d_un.d_val = rela_size;
     dyn[d].d_tag = DT_PLTREL;      dyn[d++].d_un.d_val = DT_RELA;
     dyn[d].d_tag = DT_JMPREL;      dyn[d++].d_un.d_ptr = LOAD_BASE + rela_off;
-    dyn[d].d_tag = DT_FLAGS;       dyn[d++].d_un.d_val = DF_BIND_NOW;
     dyn[d].d_tag = DT_NULL;        dyn[d++].d_un.d_val = 0;
 
     const u64 text_vaddr = LOAD_BASE + text_off;
     u64 main_vaddr = text_vaddr + image->entry;
     u64 call_main_next = LOAD_BASE + stub_off + 5;
     int32_t call_main_rel = (int32_t)((i64)main_vaddr - (i64)call_main_next);
-    u64 exit_stub_vaddr = LOAD_BASE + plt_off + (u64)exit_idx * PLT_STUB_SIZE;
+    /* exit is PLT[exit_idx+1] because PLT[0] is the resolver */
+    u64 exit_plt_vaddr = LOAD_BASE + plt_off + (u64)(exit_idx + 1) * PLT_ENTRY_SIZE;
     u64 call_exit_next = LOAD_BASE + stub_off + DYN_START_STUB_SIZE;
-    int32_t call_exit_rel = (int32_t)((i64)exit_stub_vaddr - (i64)call_exit_next);
+    int32_t call_exit_rel = (int32_t)((i64)exit_plt_vaddr - (i64)call_exit_next);
     build_dyn_start_stub(img + stub_off, call_main_rel, call_exit_rel);
 
+    /* GOT[0] = .dynamic vaddr (ld.so also writes it, but we set it for clarity) */
+    u64 *got = (u64 *)(img + got_off);
+    got[0] = LOAD_BASE + dynamic_off;
+    /* GOT[1], GOT[2] = 0; ld.so fills them with link-map and resolver */
+
+    /* PLT[0]: resolver stub
+       push QWORD PTR [rip+GOT[1]]; jmp QWORD PTR [rip+GOT[2]]; nop*4 */
+    {
+        u8 *p = img + plt_off;
+        u64 got1_vaddr = got_vaddr + 8;
+        u64 got2_vaddr = got_vaddr + 16;
+        u64 push_next = LOAD_BASE + plt_off + 6;
+        u64 jmp_next  = LOAD_BASE + plt_off + 12;
+        int32_t r1 = (int32_t)((i64)got1_vaddr - (i64)push_next);
+        int32_t r2 = (int32_t)((i64)got2_vaddr - (i64)jmp_next);
+        p[0] = 0xff; p[1] = 0x35; memcpy(p + 2, &r1, 4);
+        p[6] = 0xff; p[7] = 0x25; memcpy(p + 8, &r2, 4);
+        p[12] = 0x0f; p[13] = 0x1f; p[14] = 0x40; p[15] = 0x00;
+    }
+
+    /* PLT[n] for each import (n = i+1):
+       jmp [rip+GOT[GOT_RESERVED+i]]; push i; jmp PLT[0] */
     for (u32 i = 0; i < nimp; i++) {
-        u8 *stub = img + plt_off + (u64)i * PLT_STUB_SIZE;
-        u64 got_entry = got_vaddr + (u64)i * 8;
-        u64 next = LOAD_BASE + plt_off + (u64)i * PLT_STUB_SIZE + PLT_STUB_SIZE;
-        int32_t rel = (int32_t)((i64)got_entry - (i64)next);
-        stub[0] = 0xff;
-        stub[1] = 0x25;
-        memcpy(stub + 2, &rel, 4);
+        u8 *p = img + plt_off + (u64)(i + 1) * PLT_ENTRY_SIZE;
+        u64 got_entry_vaddr = got_vaddr + ((u64)GOT_RESERVED + i) * 8;
+        u64 jmp_next  = LOAD_BASE + plt_off + (u64)(i + 1) * PLT_ENTRY_SIZE + 6;
+        u64 push_next = jmp_next + 5;
+        u64 plt0_vaddr = LOAD_BASE + plt_off;
+        int32_t jmp_got_rel  = (int32_t)((i64)got_entry_vaddr - (i64)jmp_next);
+        int32_t jmp_plt0_rel = (int32_t)((i64)plt0_vaddr - (i64)(push_next + 5));
+        p[0] = 0xff; p[1] = 0x25; memcpy(p + 2, &jmp_got_rel, 4);
+        p[6] = 0x68; memcpy(p + 7, &i, 4);
+        p[11] = 0xe9; memcpy(p + 12, &jmp_plt0_rel, 4);
+
+        /* GOT[GOT_RESERVED+i] initially points to the push instruction (PLT[n]+6)
+           so the first call falls through to the lazy resolver */
+        got[GOT_RESERVED + i] = jmp_next;
     }
 
     memcpy(img + text_off, image->text, image->text_size);
