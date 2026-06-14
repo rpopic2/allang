@@ -11,9 +11,6 @@
 #include "emit.h"
 #include "emit-bin.h"
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-parameter"
-
 #define TEXT_VM   0x100000000ULL
 #define FILE_PAGE 0x4000u
 #define CS_PAGE   4096u
@@ -396,8 +393,6 @@ void emit_init(void) {}
 void emit_output(FILE *out) {
     write_macho(out);
 }
-
-#pragma clang diagnostic pop
 
 const char *text_section_header = "";
 const char *string_section_header = "";
