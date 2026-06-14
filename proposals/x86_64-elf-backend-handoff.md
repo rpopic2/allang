@@ -127,7 +127,7 @@ leave them empty.
 
 ## 4. "Done when" / how to verify
 
-- `test-all.sh` must pass. **Important:** it builds the *default text* backend
+- `test-all-asm.sh` must pass. **Important:** it builds the *default text* backend
   and only checks **exit code 0** — it does **not** diff stdout, and the
   `tests/*.ok` files are **empty/vestigial**. So "pass" == "compiles + exits 0".
 - Your binary backend is validated *separately*: build it explicitly, then for
@@ -297,5 +297,5 @@ The container is where ELF and Mach-O diverge most — `emit-macho-exe.c` shows 
 *shape* (header → segments/sections → entry/symbol patching → write), but the ELF
 contents are entirely different and simpler (no signing).
 
-Start at milestone 1, keep `test-all.sh` green throughout, and verify each
+Start at milestone 1, keep `test-all-asm.sh` green throughout, and verify each
 opcode's bytes against `objdump` before you build on it.
