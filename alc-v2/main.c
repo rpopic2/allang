@@ -2795,6 +2795,8 @@ void function(src_t *src) {
             .is_called = true,
         };
         context->symbol = hashmap_symbol_t_overwrite(fn_ids, tmp.name, &tmp);
+        list_reg_t_init(&context->symbol->params, &symbol_arena, 0);
+        list_reg_t_init(&context->symbol->rets, &symbol_arena, 0);
         context->name = context->symbol->name;
         emit_fn(context->name);
     }
