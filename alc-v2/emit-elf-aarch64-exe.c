@@ -46,13 +46,11 @@ static void elf_build_dyn_start_stub(uint8_t *p, uint64_t stub_vaddr,
 }
 
 static void elf_build_plt0(uint8_t *p, uint64_t plt0_vaddr, uint64_t got_vaddr) {
-    uint64_t g1 = got_vaddr + 8;
     uint64_t g2 = got_vaddr + 16;
-    (void)g2;
     put_le32(p + 0,  0xA9BF7BF0u);
-    put_le32(p + 4,  enc_adrp(16, plt0_vaddr + 4, g1));
-    put_le32(p + 8,  enc_ldr64(17, 16, g1));
-    put_le32(p + 12, enc_add64(16, 16, g1));
+    put_le32(p + 4,  enc_adrp(16, plt0_vaddr + 4, g2));
+    put_le32(p + 8,  enc_ldr64(17, 16, g2));
+    put_le32(p + 12, enc_add64(16, 16, g2));
     put_le32(p + 16, 0xD61F0220u);
     put_le32(p + 20, 0xD503201Fu);
     put_le32(p + 24, 0xD503201Fu);
