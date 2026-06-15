@@ -43,11 +43,16 @@ static void write_static_elf(FILE *out, const bin_image *image) {
     const u64 text_vaddr = LOAD_BASE + text_off;
     const u64 image_size = text_off + image->text_size;
 
-    if (image_size > sizeof img) {
+    static const char shstrtab[] = "\0.text\0.shstrtab";
+    const u64 shstrtab_off = image_size;
+    const u64 shdr_off = align_up(shstrtab_off + sizeof shstrtab, 8);
+    const u64 total_size = shdr_off + 3 * sizeof(Elf64_Shdr);
+
+    if (total_size > sizeof img) {
         report_error("elf-exe: image too large\n");
         return;
     }
-    memset(img, 0, image_size);
+    memset(img, 0, total_size);
 
     Elf64_Ehdr *eh = (Elf64_Ehdr *)img;
     eh->e_ident[EI_MAG0] = ELFMAG0;
@@ -62,9 +67,13 @@ static void write_static_elf(FILE *out, const bin_image *image) {
     eh->e_version = EV_CURRENT;
     eh->e_entry = LOAD_BASE + stub_off;
     eh->e_phoff = sizeof(Elf64_Ehdr);
+    eh->e_shoff = shdr_off;
     eh->e_ehsize = sizeof(Elf64_Ehdr);
     eh->e_phentsize = sizeof(Elf64_Phdr);
     eh->e_phnum = 1;
+    eh->e_shentsize = sizeof(Elf64_Shdr);
+    eh->e_shnum = 3;
+    eh->e_shstrndx = 2;
 
     Elf64_Phdr *ph = (Elf64_Phdr *)(img + sizeof(Elf64_Ehdr));
     ph->p_type = PT_LOAD;
@@ -80,7 +89,24 @@ static void write_static_elf(FILE *out, const bin_image *image) {
     elf_build_start_stub(img + stub_off, LOAD_BASE + stub_off, main_vaddr);
 
     memcpy(img + text_off, image->text, image->text_size);
-    finish(out, image_size);
+
+    memcpy(img + shstrtab_off, shstrtab, sizeof shstrtab);
+
+    Elf64_Shdr *sh = (Elf64_Shdr *)(img + shdr_off);
+    sh[1].sh_name = 1;
+    sh[1].sh_type = SHT_PROGBITS;
+    sh[1].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+    sh[1].sh_addr = LOAD_BASE + stub_off;
+    sh[1].sh_offset = stub_off;
+    sh[1].sh_size = image_size - stub_off;
+    sh[1].sh_addralign = 4;
+    sh[2].sh_name = 7;
+    sh[2].sh_type = SHT_STRTAB;
+    sh[2].sh_offset = shstrtab_off;
+    sh[2].sh_size = sizeof shstrtab;
+    sh[2].sh_addralign = 1;
+
+    finish(out, total_size);
 }
 
 static u32 elf_hash(const char *name) {
@@ -168,11 +194,16 @@ static void write_dynamic_elf(FILE *out, const bin_image *image) {
     const u64 rw_filesz = (got_off + got_size) - rw_off;
     const u64 image_size = got_off + got_size;
 
-    if (image_size > sizeof img || dynstr_len > sizeof dynstr || nimp > 62) {
+    static const char shstrtab_dyn[] = "\0.plt\0.text\0.shstrtab";
+    const u64 shstrtab_dyn_off = image_size;
+    const u64 shdr_dyn_off = align_up(shstrtab_dyn_off + sizeof shstrtab_dyn, 8);
+    const u64 total_size = shdr_dyn_off + 4 * sizeof(Elf64_Shdr);
+
+    if (total_size > sizeof img || dynstr_len > sizeof dynstr || nimp > 62) {
         report_error("elf-exe: dynamic image too large\n");
         return;
     }
-    memset(img, 0, image_size);
+    memset(img, 0, total_size);
 
     Elf64_Ehdr *eh = (Elf64_Ehdr *)(img + ehdr_off);
     eh->e_ident[EI_MAG0] = ELFMAG0;
@@ -301,7 +332,36 @@ static void write_dynamic_elf(FILE *out, const bin_image *image) {
     memcpy(img + text_off, image->text, image->text_size);
     patch_extcalls(image, text_off, plt_off);
 
-    finish(out, image_size);
+    memcpy(img + shstrtab_dyn_off, shstrtab_dyn, sizeof shstrtab_dyn);
+
+    const u64 plt_size = elf_plt0_size + (u64)nimp * elf_plt_entry_size;
+    Elf64_Shdr *sh = (Elf64_Shdr *)(img + shdr_dyn_off);
+    sh[1].sh_name = 1;
+    sh[1].sh_type = SHT_PROGBITS;
+    sh[1].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+    sh[1].sh_addr = LOAD_BASE + stub_off;
+    sh[1].sh_offset = stub_off;
+    sh[1].sh_size = plt_off + plt_size - stub_off;
+    sh[1].sh_addralign = 16;
+    sh[2].sh_name = 6;
+    sh[2].sh_type = SHT_PROGBITS;
+    sh[2].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+    sh[2].sh_addr = LOAD_BASE + text_off;
+    sh[2].sh_offset = text_off;
+    sh[2].sh_size = image->text_size;
+    sh[2].sh_addralign = 4;
+    sh[3].sh_name = 12;
+    sh[3].sh_type = SHT_STRTAB;
+    sh[3].sh_offset = shstrtab_dyn_off;
+    sh[3].sh_size = sizeof shstrtab_dyn;
+    sh[3].sh_addralign = 1;
+
+    eh->e_shoff = shdr_dyn_off;
+    eh->e_shentsize = sizeof(Elf64_Shdr);
+    eh->e_shnum = 4;
+    eh->e_shstrndx = 3;
+
+    finish(out, total_size);
 }
 
 void emit_init(void) {}
