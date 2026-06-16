@@ -3,6 +3,11 @@
 #include <string.h>
 #include <elf.h>
 
+const uint8_t scratch_regs[] = { 0, 1, 2, 6, 7, 8, 9 };
+const uint8_t callee_regs[]  = { 3, 12, 13, 14, 15, 10, 11 };
+const uint8_t param_regs[]   = { 7, 6, 2, 1, 8, 9 };
+const uint8_t ret_regs[]     = { 0, 2 };
+
 static const uint16_t elf_machine         = EM_X86_64;
 static const uint32_t elf_reloc_jump_slot = R_X86_64_JUMP_SLOT;
 static const char     elf_interp[]        = "/lib64/ld-linux-x86-64.so.2";

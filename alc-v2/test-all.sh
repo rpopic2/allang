@@ -8,31 +8,27 @@
 
 cd "$(dirname "$0")"
 
-case "$(uname -s)" in
-    Linux)
-        EMIT_OS="emit-linux.c"
+EXT=""
+case "$(uname -s):$(uname -m)" in
+    Linux:x86_64)
+        EMIT_ARCH="emit-x86_64-bin.c"
+        EMIT_OS="emit-elf-x86_64-exe.c"
         ;;
-    Darwin)
-        EMIT_OS="emit-macos.c"
+    Linux:aarch64|Linux:arm64)
+        EMIT_ARCH="emit-aarch64-bin.c"
+        EMIT_OS="emit-elf-aarch64-exe.c"
         ;;
-    MINGW*|MSYS*|CYGWIN*)
-        EMIT_OS="emit-windows.c"
+    Darwin:arm64|Darwin:aarch64)
+        EMIT_ARCH="emit-aarch64-bin.c"
+        EMIT_OS="emit-macho-exe.c"
         ;;
-    *)
-        echo "Unknown OS: $(uname -s)" >&2
-        exit 1
-        ;;
-esac
-
-case "$(uname -m)" in
-    x86_64)
-        EMIT_ARCH="emit-x86_64.c"
-        ;;
-    aarch64|arm64)
-        EMIT_ARCH="emit-aarch64.c"
+    MINGW*:x86_64|MSYS*:x86_64|CYGWIN*:x86_64)
+        EMIT_ARCH="emit-x86_64-bin.c"
+        EMIT_OS="emit-pe-x86_64-exe.c"
+        EXT=".exe"
         ;;
     *)
-        echo "Unknown architecture: $(uname -m)" >&2
+        echo "FATAL: binary backend not supported on $(uname -s)/$(uname -m)" >&2
         exit 1
         ;;
 esac
@@ -62,14 +58,14 @@ for AL_FILE in tests/*.al; do
         continue
     fi
 
-    if [ ! -x "$NAME" ]; then
+    if [ ! -f "$NAME$EXT" ]; then
         printf "FAIL (no executable)\n"
         ((FAIL++))
         FAIL_NAMES+=("$AL_FILE (no executable emitted)")
         continue
     fi
 
-    "./$NAME" >/dev/null 2>&1
+    "./$NAME$EXT" >/dev/null 2>&1
     RUN_EXIT=$?
     if [ $RUN_EXIT -ne 0 ]; then
         printf "FAIL (exit %d)\n" $RUN_EXIT

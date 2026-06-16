@@ -117,10 +117,10 @@ static uint32_t n_imports;
 static bin_extcall extcalls[FIXUP_CAP];
 static uint32_t n_extcalls;
 
-static const uint8_t scratch_regs[] = { 0, 1, 2, 6, 7, 8, 9 };
-static const uint8_t callee_regs[]  = { 3, 12, 13, 14, 15, 10, 11 };
-static const uint8_t param_regs[]   = { 7, 6, 2, 1, 8, 9 };
-static const uint8_t ret_regs[]     = { 0, 2 };
+extern const uint8_t scratch_regs[];
+extern const uint8_t callee_regs[];
+extern const uint8_t param_regs[];
+extern const uint8_t ret_regs[];
 
 static const uint8_t cond_cc[] = {
     0x4, 0x5, 0xd, 0xc, 0xf, 0xe, 0x3, 0x2, 0x7, 0x6,
