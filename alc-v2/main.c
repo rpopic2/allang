@@ -2028,7 +2028,7 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
         break_out = true;
     }
 
-    str typename = cur_token->id;
+    str typename = iter;
     type_t *type = hashmap_type_t_tryfind(types, typename);
     if (!type) {
         compile_err(cur_token, "unknown type "), str_printerr(typename);
