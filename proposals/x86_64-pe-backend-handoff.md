@@ -147,42 +147,78 @@ Commit each milestone before the next.
 
 ---
 
-## 4. "Done when" / how to verify (you cannot run the .exe here)
+## 4. "Done when" / how to verify (real Windows host — run the actual .exe)
 
-The cloud container has **no `wine`**, so you cannot execute the produced `.exe`.
-This is exactly the situation CLAUDE.md already describes for aarch64: *"aarch64
-emits assembly without error (no need to run it when you are in cloud
-container)."* Treat PE the same way — **the bar in the container is "emit a
-structurally valid PE32+ for every test without error,"** and actual execution is
-verified on a real Windows host (or under `wine`/a Windows CI runner) by the
-maintainer.
+Unlike the ELF/Mach-O sessions, **this backend is developed directly on a real
+Windows machine**, not a sandboxed cloud container with no loader. There is no
+"structurally valid but unrunnable" fallback bar here — **the bar is the same
+one `test-all.sh` already enforces for Linux/macOS: build alc, compile every
+`tests/*.al`, run the produced executable, and check its exit code.**
 
-Tooling that **is** in the container, and how to use it:
+Extend `test-all.sh` (or add a sibling script, e.g. `test-all.ps1` /
+a `pwsh`/`cmd`-friendly variant — Bash is also fine if running under Git Bash
+or WSL-less MSYS) so its OS `case` recognizes Windows and:
 
-- **Instruction encoding reference — works unchanged.** x86-64 bytes are
-  OS-independent. The same workflow the ELF session used still applies:
+- selects `EMIT_OS="emit-pe-x86_64-exe.c"`,
+- builds with `./build.sh emit-x86_64-bin.c emit-pe-x86_64-exe.c`,
+- runs `./alc tests/<name>.al` and expects the **`.exe`** artifact (the
+  existing script's `[ -x "$NAME" ]` / direct-run logic needs the `.exe`
+  extension accounted for — `output_ext = "exe"`, see §2),
+- executes `tests/<name>.exe` directly and checks its exit code exactly like
+  the existing Linux loop does with `./$NAME`.
+
+This means every milestone should be validated by **actually running the
+produced exe** on the dev machine, not just by parsing it with a dissector.
+Treat a "parses fine" PE that crashes or hangs on launch as a failing
+milestone, not a partial pass.
+
+Tooling available on the dev machine, and how to use it:
+
+- **Instruction-encoding reference.** Use `clang` (confirmed on `$PATH`) to
+  assemble a tiny snippet and read back the exact bytes:
   ```bash
   printf 'main:\n\tcall qword ptr [rip+0x10]\n\tsub rsp, 0x28\n' > ref.s
   clang -c -masm=intel ref.s -o ref.o
-  objdump -d -M intel ref.o     # read the exact bytes
+  objdump -d -M intel ref.o     # read the exact bytes (or llvm-objdump)
   ```
   e.g. `ff 15 10 00 00 00` = `call QWORD PTR [rip+0x10]` (indirect call through
   the IAT — your printf/ExitProcess call form), and `48 83 ec 28` =
   `sub rsp, 0x28` (40 = 32 shadow + 8 realign — the canonical Win64 prologue).
-- **Produce a reference PE to learn the import-table layout.** There is no
-  `mingw`/MSVC, but **`lld-link` and `clang --target=x86_64-pc-windows-msvc`**
-  are present. You can assemble a tiny object and link a minimal PE to dissect.
+  **Recommendation: default to `clang`, not MSVC's `cl.exe`, for this
+  reference-encoding workflow.** `clang -c -masm=intel` plus `objdump`/
+  `llvm-objdump` is the exact same two-tool loop the ELF and Mach-O sessions
+  already used successfully — no new workflow to learn, and it requires no
+  `vcvarsall`/Developer Command Prompt environment setup to invoke (`cl.exe`
+  needs its environment batch script sourced first, or the full toolchain
+  paths wired up, before it will even find the linker and Windows libs).
+  `cl.exe` is available at
+  `C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.38.33130\bin\Hostx64\x64\cl.exe`
+  if you specifically need to confirm MSVC's own encoding choice for some
+  construct (e.g. to cross-check against what real MSVC-emitted code does),
+  but it should not be the default day-to-day tool. If a future session finds
+  `clang`'s chosen encoding diverges from MSVC's in some PE-relevant way,
+  switch that one spot — don't switch tools wholesale.
+- **Produce a reference PE to learn the import-table layout.** `lld-link` and
+  `clang --target=x86_64-pc-windows-msvc` (or just `clang` on Windows, which
+  defaults to the native target) can assemble and link a minimal PE to
+  dissect. `cl.exe` works too and is the ground truth for "what does MSVC
+  actually emit," useful when `lld-link`'s output layout choices (e.g. section
+  ordering, alignment padding) seem to diverge from what you'd expect a
+  Windows-native linker to produce.
 - **Dissect any PE** with `llvm-readobj --coff-header --file-headers
   --coff-imports file.exe` and `llvm-objdump -d --target=pei-x86-64` (or
-  `objdump`, which supports the `pei-x86-64` target). Use these to *learn* the
-  exact field values a real linker writes, then reproduce them.
-- **Validate your own output structurally** every milestone:
-  `llvm-readobj --file-headers --coff-imports yourout.exe` should parse cleanly
-  and show your imports. If `llvm-readobj` chokes, your headers are malformed.
-
-As with ELF/Mach-O: inspection tools are a *learning aid and a smoke test*, not
-the final oracle — the loader is. Where you can, have the maintainer run one
-binary on Windows early to catch a class of "parses fine, won't load" bugs.
+  `objdump`, which supports the `pei-x86-64` target, or `dumpbin.exe` if you
+  want the MSVC-native equivalent — it ships alongside `cl.exe` in the same
+  `bin` directory). Use these to *learn* the exact field values a real linker
+  writes, then reproduce them.
+- **Validate your own output structurally** every milestone, as a quick first
+  check before running it: `llvm-readobj --file-headers --coff-imports
+  yourout.exe` should parse cleanly and show your imports. If `llvm-readobj`
+  chokes, your headers are malformed — fix that before even trying to run it.
+- **Then actually run it.** Structural validation is a fast pre-check, not a
+  substitute for execution. Every milestone's real "done" signal is
+  `tests/<name>.exe` running and exiting with the expected code, exactly as
+  `test-all.sh` already verifies for the ELF/Mach-O backends.
 
 `examples/` is intentionally ill-formed — ignore it. Only `tests/` are valid.
 
@@ -357,21 +393,34 @@ appears. Mitigations, in order of cleanliness:
 Flag this early: the symptom ("program exits 0 but prints nothing") is identical
 to the ELF bug and wasted real time there.
 
-### 5.7 No `<windows.h>` on the Linux build host — declare the structs yourself
+### 5.7 `<windows.h>`/`<winnt.h>` are available — use the real SDK headers
 
 The ELF session was told to use `<elf.h>` (a system header on Linux) instead of
-hand-rolled structs. **There is no equivalent for PE** — the Linux build host has
-no `<windows.h>`/`<winnt.h>`. So hand-declaring the `IMAGE_*` structs is
-unavoidable and *expected* here. Mitigate the downside the same way `<elf.h>`
-does: **name every struct and constant exactly as the Win32 SDK does**
-(`IMAGE_DOS_HEADER`, `IMAGE_NT_HEADERS64`, `IMAGE_FILE_HEADER`,
-`IMAGE_OPTIONAL_HEADER64`, `IMAGE_SECTION_HEADER`, `IMAGE_IMPORT_DESCRIPTOR`,
-`IMAGE_IMPORT_BY_NAME`; constants `IMAGE_FILE_MACHINE_AMD64`,
-`IMAGE_SUBSYSTEM_WINDOWS_CUI`, `IMAGE_SCN_MEM_EXECUTE`, etc.). Keep the subset
-minimal — only the fields you set — but use `#pragma pack(push,1)` / explicit
-`uint8/16/32/64_t` so the on-disk layout is exact, and **name the magic numbers**
-(the maintainer rejected bare hex like `0x8664`/`0x20b` on the ELF backend; use
-named constants).
+hand-rolled structs. **The same applies here**: this backend is built on a real
+Windows machine with the Windows SDK installed (it ships alongside the MSVC
+toolchain at the `cl.exe` path noted in §4), so `<windows.h>` and `<winnt.h>`
+are genuinely available — there is no need to hand-declare `IMAGE_DOS_HEADER`,
+`IMAGE_NT_HEADERS64`, `IMAGE_FILE_HEADER`, `IMAGE_OPTIONAL_HEADER64`,
+`IMAGE_SECTION_HEADER`, `IMAGE_IMPORT_DESCRIPTOR`, `IMAGE_IMPORT_BY_NAME`, or
+constants like `IMAGE_FILE_MACHINE_AMD64`, `IMAGE_SUBSYSTEM_WINDOWS_CUI`,
+`IMAGE_SCN_MEM_EXECUTE`. **Just `#include <windows.h>`** (it pulls in
+`<winnt.h>` transitively) and use the real struct/constant names directly,
+mirroring the `<elf.h>` precedent exactly.
+
+Two practical notes for actually getting the include to resolve:
+- If you build with `clang` (recommended, see §4) rather than `cl.exe`,
+  `clang --target=x86_64-pc-windows-msvc` on a machine with Visual Studio
+  installed auto-detects the MSVC + Windows SDK include/lib paths the same way
+  `cl.exe` would; you generally don't need to hand-wire `-I` paths. If it
+  doesn't find them, the SDK headers live under
+  `C:\Program Files (x86)\Windows Kits\10\Include\<version>\um` (and `\shared`
+  for things like `BaseTsd.h`) — add both with `-I` as a fallback.
+- The header defines far more than you need (the whole Win32 API surface).
+  That's fine — you only *use* the handful of `IMAGE_*` types/constants listed
+  above; the compiler discards the unused declarations. Don't re-declare
+  anything `<windows.h>` already gives you, and don't `#define` your own
+  versions of its constants — that would silently diverge from the real SDK
+  values if a future SDK update changes them.
 
 ---
 
