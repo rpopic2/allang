@@ -46,7 +46,7 @@ jsmn_parser:
         Toksuper i32,
     }
 
-jsmtok:
+jsmntok:
     struct {
         Type i32,
         Start i32,
@@ -54,10 +54,10 @@ jsmtok:
         Size i32,
     }
 
-jsmn_alloc_token: Parser addr jsmn_parser, Tokens slice jsmtok, => i32
+jsmn_alloc_token: Parser addr jsmn_parser, Tokens slice jsmntok, => addr jsmntok
     Toknext :: [Parser.Toknext]
 
-    Tok :: [Tokens * Toknext] ! ret 1
-    ret 0
+    Tok :: [Tokens * Toknext] ! ret !
+    ret !
 
 

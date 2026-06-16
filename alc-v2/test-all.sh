@@ -60,7 +60,6 @@ for AL_FILE in tests/*.al; do
 
     "./$NAME" >/dev/null 2>&1
     RUN_EXIT=$?
-    rm -f "$NAME"
     if [ $RUN_EXIT -ne 0 ]; then
         printf "FAIL (exit %d)\n" $RUN_EXIT
         ((FAIL++))

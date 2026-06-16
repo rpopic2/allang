@@ -23,15 +23,15 @@ enum sign_t {
 typedef u8 sign_t;
 
 typedef enum dtype_kind {
-    DK_ADDR, DK_ARRAY, DK_CHECK, DK_SLICE
+    DK_ADDR, DK_ARRAY, DK_CHECK, DK_SLICE, DK_NONE
 } dtype_kind_t;
 static const char *dtype_kind_string[] = {
    "addr", "array", "!", "slice", 
 };
 
 typedef struct delarator {
-    enum dtype_kind tag : 2;
-    i32 amount : 30;
+    enum dtype_kind tag : 3;
+    i32 amount : 29;
 } declarator_t;
 
 #define DECLARATOR_MAX 8

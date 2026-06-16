@@ -164,7 +164,7 @@ retry:;
         if (src->cur[0] == '\n') {
             ++lineno;
         }
-        if (c == '}' || c == '{') {
+        if (c == '}' || c == '{' || c == '!') {
             if (src->cur == cur_token->data) {
                 src->cur++;
                 cur_token->end++;
@@ -348,8 +348,7 @@ void puterr(const char *s) {
 static inline str dtype_to_str(const dtype_t *self, allocator *alloc) {
     char *begin = allocator_alloc_undefined(alloc, 0);
     char *head = begin;
-    for (usize _i = self->decl_len; _i > 0; --_i) {
-        usize i = _i - 1;
+    for (usize i = 0; i < self->decl_len; ++i) {
         dtype_kind_t tag = self->decl[i].tag;
         const char *s = dtype_kind_string[tag];
         head = allocator_alloc_undefined(alloc, strlen(s));
@@ -1987,16 +1986,29 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
     *out = (dtype_t){0};
 
     while (true) {
-        bool addr = str_eq_lit(cur_token->id, "addr");
-        bool slice = str_eq_lit(cur_token->id, "slice");
-        if (!addr && !slice)
-            break;
+        dtype_kind_t dk = DK_NONE;
+        int amount = 1;
+        if (str_eq_lit(cur_token->id, "addr")) {
+            dk = DK_ADDR;
+        } else if (str_eq_lit(cur_token->id, "slice")) {
+            dk = DK_SLICE;
+        } else if (str_eq_lit(cur_token->id, "!")) {
+            dk = DK_CHECK;
+            amount = (int)strtoll(cur_token->data + 1, NULL, 0);
+            if (amount) {
+                tok(context);       
+            }
+        }
+
         if (streq(cur_token->id.end, "{")) {
             break;
         }
-        dtype_kind_t dk = addr ? DK_ADDR : DK_SLICE;
-        dtype_push(out, (declarator_t){dk, .amount = 1});
+        if (dk == DK_NONE)
+            break;
+        dtype_push(out, (declarator_t){dk, .amount = amount});
+        const char *s = dtype_kind_string[dk];
         tok(context);
+        pcs(s);
         if (cur_token->end[0] == ')') {
             break_out = true;
         }
@@ -2010,16 +2022,11 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
         iter.data = end_ptr + 1;
     }
 
-    str typename = dot_iter(&iter, '!');
-    if (!str_empty(&iter)) {
-        str value = dot_iter(&iter, '!');
-        long long amount = strtoll(value.data, NULL, 0);
-        dtype_push(out, (declarator_t){DK_CHECK, .amount = (int)amount});
-    }
     if (cur_token->end[0] == ')') {
         break_out = true;
     }
 
+    str typename = cur_token->id;
     type_t *type = hashmap_type_t_tryfind(types, typename);
     if (!type) {
         compile_err(cur_token, "unknown type "), str_printerr(typename);
@@ -2032,6 +2039,8 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
             compile_err(cur_token, "array length was too big");
         dtype_push(out, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
     }
+    p(parsed dtype)
+    pdtype(out);
 
     return break_out;
 }
