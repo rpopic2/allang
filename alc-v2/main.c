@@ -896,6 +896,8 @@ bool typecheck_regable(const token_t *token, const type_t *ltype, const regable 
 void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
     if (dtype_eq(&lhs.dtype, &rhs.dtype))
         return;
+    if (dtype_check(&rhs.dtype, &lhs.dtype))
+        return;
 
     ALLOCATOR_MAKE(alloc, 1024);
     str lname = dtype_to_str(&lhs.dtype, &alloc);

@@ -41,22 +41,6 @@ typedef struct dtype {
     usize decl_len;
 } dtype_t;
 
-static inline bool dtype_eq(const dtype_t *lhs, const dtype_t *rhs) {
-    if (lhs->decl_len != rhs->decl_len)
-        return false;
-
-    for (usize i = 0; i < lhs->decl_len; ++i) {
-        if (lhs->decl[i].tag != rhs->decl[i].tag)
-            return false;
-        if (lhs->decl[i].tag != DK_SLICE
-                && lhs->decl[i].amount != rhs->decl[i].amount)
-            return false;
-    }
-
-    bool base_eq = lhs->base == rhs->base;
-    return base_eq;
-}
-
 typedef struct member {
     dtype_t dtype;
     str name;
@@ -176,6 +160,48 @@ static inline int dtype_reg_count(const dtype_t *self) {
             return 2;
     }
     return 1;
+}
+
+static inline bool dtype_eq(const dtype_t *lhs, const dtype_t *rhs) {
+    if (lhs->decl_len != rhs->decl_len)
+        return false;
+
+    for (usize i = 0; i < lhs->decl_len; ++i) {
+        if (lhs->decl[i].tag != rhs->decl[i].tag)
+            return false;
+        if (lhs->decl[i].tag != DK_SLICE
+                && lhs->decl[i].amount != rhs->decl[i].amount)
+            return false;
+    }
+
+    bool base_eq = lhs->base == rhs->base;
+    return base_eq;
+}
+
+static inline bool dtype_check(const dtype_t *from, const dtype_t *to) {
+    usize i = 0;
+    usize j = 0;
+    while (i < from->decl_len && j < to->decl_len) {
+        const declarator_t *const from_decl = &from->decl[i];
+        const declarator_t *const to_decl = &to->decl[j];
+        if (to_decl->tag == DK_CHECK && from_decl->tag != DK_CHECK) {
+            ++j;
+            continue;
+        }
+        if (from_decl->tag != to_decl->tag)
+            return false;
+        if (from_decl->tag != DK_SLICE && from_decl->amount != to_decl->amount)
+            return false;
+        ++i;
+        ++j;
+    }
+    while (j < to->decl_len && to->decl[j].tag == DK_CHECK)
+        ++j;
+    if (i != from->decl_len || j != to->decl_len)
+        return false;
+
+    bool base_eq = from->base == to->base;
+    return base_eq;
 }
 
 typedef struct reg {
