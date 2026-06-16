@@ -30,7 +30,7 @@ static const char *dtype_kind_string[] = {
 };
 
 typedef struct delarator {
-    enum dtype_kind tag : 3;
+    unsigned tag : 3;
     i32 amount : 29;
 } declarator_t;
 
@@ -98,7 +98,7 @@ static inline dtype_t dtype_pop_dup(const dtype_t *self) {
     return copy;
 }
 static inline void dtype_pushone(dtype_t *self, dtype_kind_t kind) {
-    dtype_push(self, (declarator_t){.tag = kind, .amount = 1});
+    dtype_push(self, (declarator_t){.tag = (unsigned)kind, .amount = 1});
 }
 
 static inline dtype_t dtype_dup_strip(dtype_t *self) {
@@ -225,7 +225,7 @@ typedef struct {
         i64 value;
         reg_t reg;
     };
-    enum tag tag : 8; // enum tag
+    unsigned tag : 8; // enum tag
 } regable;
 DYN_GENERIC(regable)
 

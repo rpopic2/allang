@@ -7,28 +7,39 @@ fi
 
 SOURCE="$1"
 
-case "$(uname -s):$(uname -m)" in
-    Linux:x86_64)
-        EMIT_ARCH="emit-x86_64-bin.c"
-        EMIT_EXE="emit-elf-x86_64-exe.c"
+
+case "$(uname -s)" in
+    Linux)
+        EMIT_OS="emit-linux.c"
         ;;
-    Linux:aarch64|Linux:arm64)
-        EMIT_ARCH="emit-aarch64-bin.c"
-        EMIT_EXE="emit-elf-aarch64-exe.c"
+    Darwin)
+        EMIT_OS="emit-macos.c"
         ;;
-    Darwin:arm64|Darwin:aarch64)
-        EMIT_ARCH="emit-aarch64-bin.c"
-        EMIT_EXE="emit-macho-aarch64-exe.c"
+    MINGW*|MSYS*|CYGWIN*)
+        EMIT_OS="emit-windows.c"
         ;;
     *)
-        echo "error: binary backend not supported on $(uname -s)/$(uname -m)" >&2
+        echo "Unknown OS: $(uname -s)" >&2
+        exit 1
+        ;;
+esac
+
+case "$(uname -m)" in
+    x86_64)
+        EMIT_ARCH="emit-x86_64.c"
+        ;;
+    aarch64|arm64)
+        EMIT_ARCH="emit-aarch64.c"
+        ;;
+    *)
+        echo "Unknown architecture: $(uname -m)" >&2
         exit 1
         ;;
 esac
 
 UBSAN_OPTIONS=print_stacktrace=1
 
-./build.sh "$EMIT_ARCH" "$EMIT_EXE" || exit $?
+./build.sh "$EMIT_ARCH" "$EMIT_OS" || exit $?
 
 FILENAME="${SOURCE%.*}"
 ./alc "$SOURCE" && ./"$FILENAME"
