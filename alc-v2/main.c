@@ -2007,7 +2007,7 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
         }
         if (dk == DK_NONE)
             break;
-        dtype_push(out, (declarator_t){dk, .amount = amount});
+        dtype_push(out, (declarator_t){(unsigned)dk, .amount = amount});
         const char *s = dtype_kind_string[dk];
         tok(context);
         pcs(s);
@@ -3018,10 +3018,10 @@ src_t read_source(const char *source_name) {
         size_t source_len = (size_t)ftell(source_file);
         rewind(source_file);
 
-        char *source_start = malloc(source_len);
+        char *source_start = malloc(source_len + 1);
         if (!source_start)
             malloc_failed();
-        memset(source_start, 0, source_len);
+        memset(source_start, 0, source_len + 1);
 
         size_t bytes_read = fread(source_start, sizeof (char), source_len, source_file);
         if (bytes_read > source_len) {
@@ -3031,7 +3031,7 @@ src_t read_source(const char *source_name) {
         fclose(source_file);
         TIMER_END(clock_read_source);
 
-        src_t src = (src_t){ .cur = source_start, .start = source_start, .end = source_start + source_len };
+        src_t src = (src_t){ .cur = source_start, .start = source_start, .end = source_start + bytes_read };
         strncpy(src.filename, source_name, sizeof src.filename);
     return src;
 }
