@@ -851,7 +851,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
                 count_reg.rsize = sizeof(void *);
                 check_bounds_reg(context, offset_regable.reg, count_reg, EXCL);
             } else {
-                check_bounds(context, offset_regable.reg, decl.amount, EXCL);
+                check_bounds(context, offset_regable.reg, decl.amount, INCL);
             }
         }
     } else unreachable;
@@ -1283,8 +1283,12 @@ bool binary_op(parser_context *restrict context, regable *restrict lhs) {
             if (context->reg.reg_type == SCRATCH) {
                 tmp_reg_off += 1;
             }
-            emit_mov((reg_t){.reg_type = SCRATCH, .offset = tmp_reg_off}, lhs->value);
-            emit_sub_reg(context->reg, (reg_t){.reg_type = SCRATCH, .offset = tmp_reg_off}, rhs.reg);
+            const reg_t tmp = {
+                .reg_type = SCRATCH, .offset = tmp_reg_off,
+                .rsize = rhs.reg.rsize, .dtype = rhs.reg.dtype,
+            };
+            emit_mov(tmp, lhs->value);
+            emit_sub_reg(context->reg, tmp, rhs.reg);
         } else if(lhs->tag == REG && rhs.tag == VALUE) {
             emit_sub(context->reg, lhs->reg, rhs.value);
         } else if (lhs->tag == REG && rhs.tag == REG) {
