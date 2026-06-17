@@ -1,6 +1,6 @@
 
 if [ $# -eq 0 ]; then
-    echo "usage: run-asm.sh [<emit-arch.c> <emit-os.c>] <source.al>" >&2
+    echo "usage: run-asm.sh [<asm-arch.c> <asm-os.c>] <source.al>" >&2
     exit 1
 fi
 
@@ -16,7 +16,7 @@ if [[ "$1" == *.al ]]; then
     ./build.sh "${@:2}"
     BUILD_EXIT=$?
 else
-    # Normal case with explicit emit files: $1=$emit-arch, $2=$emit-os, $3=$source
+    # Normal case with explicit asm files: $1=$asm-arch, $2=$asm-os, $3=$source
     SOURCE="$3"
     ./build.sh $1 $2 "${@:4}"
     BUILD_EXIT=$?

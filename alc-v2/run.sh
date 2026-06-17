@@ -11,20 +11,20 @@ SOURCE="$1"
 EXT=""
 case "$(uname -s):$(uname -m)" in
     Linux:x86_64)
-        EMIT_ARCH="emit-x86_64-bin.c"
-        EMIT_OS="emit-elf-x86_64-exe.c"
+        EMIT_ARCH="exe-x86_64.c"
+        EMIT_OS="exe-elf-x86_64.c"
         ;;
     Linux:aarch64|Linux:arm64)
-        EMIT_ARCH="emit-aarch64-bin.c"
-        EMIT_OS="emit-elf-aarch64-exe.c"
+        EMIT_ARCH="exe-aarch64.c"
+        EMIT_OS="exe-elf-aarch64.c"
         ;;
     Darwin:arm64|Darwin:aarch64)
-        EMIT_ARCH="emit-aarch64-bin.c"
-        EMIT_OS="emit-macho-exe.c"
+        EMIT_ARCH="exe-aarch64.c"
+        EMIT_OS="exe-macho.c"
         ;;
     MINGW*:x86_64|MSYS*:x86_64|CYGWIN*:x86_64)
-        EMIT_ARCH="emit-x86_64-bin.c"
-        EMIT_OS="emit-pe-x86_64-exe.c"
+        EMIT_ARCH="exe-x86_64.c"
+        EMIT_OS="exe-pe-x86_64.c"
         EXT=".exe"
         ;;
     *)

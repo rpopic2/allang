@@ -14,13 +14,13 @@ fi
 if [ $# -eq 0 ] || [[ "$1" == *.al ]]; then
     case "$(uname -s)" in
         Linux)
-            EMIT_OS="emit-linux.c"
+            EMIT_OS="asm-linux.c"
             ;;
         Darwin)
-            EMIT_OS="emit-macos.c"
+            EMIT_OS="asm-macos.c"
             ;;
         MINGW*|MSYS*|CYGWIN*)
-            EMIT_OS="emit-windows.c"
+            EMIT_OS="asm-windows.c"
             ;;
         *)
             echo "Unknown OS: $(uname -s)" >&2
@@ -30,10 +30,10 @@ if [ $# -eq 0 ] || [[ "$1" == *.al ]]; then
 
     case "$(uname -m)" in
         x86_64)
-            EMIT_ARCH="emit-x86_64.c"
+            EMIT_ARCH="asm-x86_64.c"
             ;;
         aarch64|arm64)
-            EMIT_ARCH="emit-aarch64.c"
+            EMIT_ARCH="asm-aarch64.c"
             ;;
         *)
             echo "Unknown architecture: $(uname -m)" >&2
