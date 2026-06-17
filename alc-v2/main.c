@@ -2391,13 +2391,13 @@ bool stmt_ret(parser_context *context) {
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against) {
     if (!str_eq_lit(context->cur_token.id, "ret"))
         return false;
+    if (!stmt_ret_pre(context))
+        return false;
     if (against.tag == REG) {
         emit_cmp_reg(cmp_reg, against.reg, cond);
     } else {
         emit_cmp(cmp_reg, against.value);
     }
-    if (!stmt_ret_pre(context))
-        return false;
     context->has_branched_ret = true;
     emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
     return true;
