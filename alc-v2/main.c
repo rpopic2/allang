@@ -32,6 +32,9 @@ symbol_t *fn_call(parser_context *context);
 bool stmt_reg_assign(parser_context *context);
 target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
+void resolve_stack_store_target(parser_context *context, target *cur_target,
+        reg_t *src, int *out_offset);
+bool nullary_op(parser_context *context, regable lhs);
 void struct_report(type_t *type);
 void stack_report(parser_context *context);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against);
@@ -946,16 +949,39 @@ bool resolve_comptime_to(reg_t *const src, const reg_t *const target) {
     return true;
 }
 
-bool binary_op_store(const regable *restrict lhs, parser_context *restrict context) {
+bool do_store(const regable *restrict lhs, parser_context *restrict context) {
     const token_t *token = &context->cur_token;
-    if (!streq(token->end + 1, "=["))
-        return false;
-    if (token->end[3] == ']')    // =[]. TODO need to merge this with stmt_stack_store? ->yes, after store api change
-        return false;
-
-    tok(context);
     str s = token->id;
     s.data += 1;
+
+    if (token->id.data[2] == ']') {
+        target *targ = get_current_target_stack(context);
+        if (!targ)
+            return true;
+        int offset;
+        if (lhs->tag == VALUE) {
+            reg_t src = (reg_t){
+                .reg_type = SCRATCH, .offset = context->reg.offset,
+                .rsize = context->reg.rsize,
+                .dtype = {.base = context->reg.dtype.base},
+            };
+            resolve_stack_store_target(context, targ, &src, &offset);
+            reg_t dst = FP;
+            dst.dtype = src.dtype;
+            dst.rsize = src.rsize;
+            emit_str_imm(dst, lhs->value, -offset);
+        } else {
+            reg_t src = lhs->reg;
+            if (src.reg_type != SCRATCH) {
+                nullary_op(context, *lhs);
+                src = context->reg;
+            }
+            resolve_stack_store_target(context, targ, &src, &offset);
+            emit_str_reg(FP, src, -offset);
+        }
+        return true;
+    }
+
     reg_t dst;
     regable offset;
     if (!read_load_store_offset(context, s, &dst, &offset))
@@ -1011,6 +1037,14 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
         emit_str_reg(dst, src, (int)offset.value);
     }
     return true;
+}
+
+bool binary_op_store(const regable *restrict lhs, parser_context *restrict context) {
+    const token_t *token = &context->cur_token;
+    if (!streq(token->end + 1, "=["))
+        return false;
+    tok(context);
+    return do_store(lhs, context);
 }
 
 void named_bcond(parser_context *context, cond_t cond) {
@@ -1491,6 +1525,51 @@ void struct_expr_report(dyn_agg_member *args, type_t *type, int depth) {
         printd("\n");
 }
 
+void resolve_stack_store_target(parser_context *context, target *cur_target,
+        reg_t *src, int *out_offset) {
+    reg_t *target_reg = cur_target->reg;
+
+    if (!resolve_comptime_default(src) && src->dtype.base == NULL) {
+        src->dtype.base = type_i32;
+        src->rsize = (reg_size)type_i32->size;
+    }
+    target_reg->rsize = src->rsize;
+    if (target_reg->dtype.base == NULL) {
+        target_reg->dtype = src->dtype;
+    }
+
+    if (!cur_target->target_assigned) {
+        assert(src->dtype.base);
+        assert(src->dtype.base->size);
+
+        size_t size = next_pow2((u32)src->dtype.base->size);
+        i32 src_arr = dtype_tryget_arr(&src->dtype);
+        if (src_arr) {
+            size *= (size_t)src_arr;
+        }
+        context->stack_size += size;
+        if (size > 8) {
+            context->stack_size = ALIGN_TO(context->stack_size, 8);
+        }
+        *out_offset = context->stack_size;
+
+        if (context->stack_slot_count < MAX_STACK_SLOTS) {
+            stack_slot_t *slot = &context->stack_slots[context->stack_slot_count++];
+            slot->name = cur_target->name;
+            slot->type_name = src->dtype.base ? src->dtype.base->name : str_null;
+            slot->offset = (size_t)*out_offset;
+            slot->size = size;
+        }
+    } else {
+        *out_offset = target_reg->offset;
+    }
+
+    target_reg->offset = *out_offset;
+
+    assert(src->rsize);
+    cur_target->target_assigned = true;
+}
+
 bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
     const token_t *token = &context->cur_token;
     const str *token_str = &token->id;
@@ -1528,48 +1607,8 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
         compile_err(token, "store target expected\n");
         return true;
     }
-    reg_t *target_reg = cur_target->reg;
 
-    target_reg->rsize = src->rsize;
-
-    if (!resolve_comptime_default(src) && src->dtype.base == NULL) {
-        src->dtype.base = type_i32;
-        src->rsize = (reg_size)type_i32->size;
-    }
-    if (target_reg->dtype.base == NULL) {
-        target_reg->dtype = src->dtype;
-    }
-
-    if (!cur_target->target_assigned) {
-        assert(src->dtype.base);
-        assert(src->dtype.base->size);
-
-        size_t size = next_pow2((u32)src->dtype.base->size);
-        i32 src_arr = dtype_tryget_arr(&src->dtype);
-        if (src_arr) {
-            size *= (size_t)src_arr;
-        }
-        context->stack_size += size;
-        if (size > 8) {
-            context->stack_size = ALIGN_TO(context->stack_size, 8);
-        }
-        *out_offset = context->stack_size;
-
-        if (context->stack_slot_count < MAX_STACK_SLOTS) {
-            stack_slot_t *slot = &context->stack_slots[context->stack_slot_count++];
-            slot->name = cur_target->name;
-            slot->type_name = src->dtype.base ? src->dtype.base->name : str_null;
-            slot->offset = (size_t)*out_offset;
-            slot->size = size;
-        }
-    } else {
-        *out_offset = target_reg->offset;
-    }
-
-    target_reg->offset = *out_offset;
-
-    assert(src->rsize);
-    cur_target->target_assigned = true;
+    resolve_stack_store_target(context, cur_target, src, out_offset);
     return true;
 }
 
@@ -1856,6 +1895,9 @@ bool nullary_op(parser_context *context, regable lhs) {
 bool binary_op_chain(parser_context *context, regable acc) {
     while (binary_op(context, &acc)) {
 
+    }
+    if (binary_op_store(&acc, context)) {
+        return true;
     }
     return nullary_op(context, acc);
 }
@@ -2146,18 +2188,6 @@ target *get_current_target_stack(parser_context *context) {
     return cur_target;
 }
 
-bool stmt_stack_store(parser_context *context, reg_t src) {
-    int offset;
-    bool ok = get_store_offset(context, &src, &offset);
-    if (!ok) {
-        return false;
-    }
-    emit_str_reg(FP, src, -offset);
-
-    printd("%s\n", __func__);
-    return true;
-}
-
 bool decl_vars(parser_context *context) {
     const token_t *token = &context->cur_token;
 
@@ -2262,7 +2292,10 @@ bool decl_vars(parser_context *context) {
                 tok(context);
                 reg_t last_reg = context->reg;
                 last_reg.offset -= 1;
-                if (!stmt_stack_store(context, last_reg)) {
+                regable src = {.tag = REG, .reg = last_reg};
+                if (streq(context->cur_token.id.data, "=[")) {
+                    do_store(&src, context);
+                } else {
                     compile_err(&context->cur_token, "store statement '=[]' expected\n");
                 }
             }
@@ -2751,8 +2784,9 @@ void parse(parser_context *context) {
 
     } else if (expr_line(context)) {
 
-    } else if (stmt_stack_store(context, last_reg)) {
-
+    } else if (streq(token->id.data, "=[")) {
+        regable src = {.tag = REG, .reg = last_reg};
+        do_store(&src, context);
     } else if (stmt_reg_assign(context)) {
 
     } else if (islower(token->data[0]) || token->data[0] == '_') {
