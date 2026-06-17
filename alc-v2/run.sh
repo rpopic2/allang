@@ -7,7 +7,6 @@ fi
 
 SOURCE="$1"
 
-
 EXT=""
 case "$(uname -s):$(uname -m)" in
     Linux:x86_64)
