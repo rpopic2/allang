@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <stdint.h>
 #include <string.h>
@@ -10,6 +11,7 @@
 
 #include "emit.h"
 #include "emit-bin.h"
+#include "err.h"
 
 extern bool link_c;
 
@@ -19,7 +21,6 @@ extern bool link_c;
 
 #define DYLD_PATH "/usr/lib/dyld"
 #define LIB_PATH  "/usr/lib/libSystem.B.dylib"
-#define DATA_VM   (TEXT_VM + FILE_PAGE)
 
 #define CD_HDR_SZ 88u
 #define CD_IDENT  "alc"
@@ -84,7 +85,7 @@ static void set_name(char dst[16], const char *s) {
     memcpy(dst, s, strlen(s));
 }
 
-static void write_signature(uint8_t *sig, uint32_t code_limit, uint32_t n_slots, const uint8_t hashes[][CC_SHA256_DIGEST_LENGTH]) {
+static void write_signature(uint8_t *sig, uint32_t code_limit, uint32_t text_fp, uint32_t n_slots, const uint8_t hashes[][CC_SHA256_DIGEST_LENGTH]) {
     uint32_t ident_len = (uint32_t)strlen(CD_IDENT) + 1;
     uint32_t cd_hash_off = CD_HDR_SZ + ident_len;
     uint32_t cd_len = cd_hash_off + n_slots * CC_SHA256_DIGEST_LENGTH;
@@ -116,7 +117,7 @@ static void write_signature(uint8_t *sig, uint32_t code_limit, uint32_t n_slots,
     put_u32_be(cd + 52, 0u);
     put_u64_be(cd + 56, 0u);
     put_u64_be(cd + 64, 0u);
-    put_u64_be(cd + 72, FILE_PAGE);
+    put_u64_be(cd + 72, text_fp);
     put_u64_be(cd + 80, 1u);
 
     memcpy(cd + CD_HDR_SZ, CD_IDENT, ident_len);
@@ -125,7 +126,7 @@ static void write_signature(uint8_t *sig, uint32_t code_limit, uint32_t n_slots,
 }
 
 static uint32_t build_chained_imports(uint8_t *dst, uint32_t nsegs, uint32_t data_seg_idx,
-                                      uint32_t n_imp, const bin_import *imports) {
+                                      uint32_t n_imp, const bin_import *imports, uint32_t data_off) {
     struct dyld_chained_fixups_header *h = (struct dyld_chained_fixups_header *)dst;
     memset(h, 0, sizeof *h);
     uint32_t sii_off = align_up((uint32_t)sizeof *h, 8u);
@@ -146,7 +147,7 @@ static uint32_t build_chained_imports(uint8_t *dst, uint32_t nsegs, uint32_t dat
     sis->size = (uint32_t)sizeof *sis;
     sis->page_size = FILE_PAGE;
     sis->pointer_format = DYLD_CHAINED_PTR_64_OFFSET;
-    sis->segment_offset = FILE_PAGE;
+    sis->segment_offset = data_off;
     sis->page_count = 1;
     sis->page_start[0] = 0;
 
@@ -171,8 +172,6 @@ static uint32_t build_chained_imports(uint8_t *dst, uint32_t nsegs, uint32_t dat
 }
 
 static void write_macho(FILE *out) {
-    _Alignas(16) static uint8_t img[0x10000];
-
     bin_image image;
     bin_emit(&image);
     uint32_t n_imp = image.imports_count;
@@ -180,34 +179,27 @@ static void write_macho(FILE *out) {
     uint32_t nsegs = dyn ? 4u : 3u;
     uint32_t data_seg_idx = 2u;
 
-    uint32_t le_fileoff = dyn ? 2u * FILE_PAGE : FILE_PAGE;
-    uint32_t cf_off = le_fileoff;
-    uint32_t cf_size;
-    if (dyn) {
-        cf_size = build_chained_imports(img + cf_off, nsegs, data_seg_idx, n_imp, image.imports);
-    } else {
-        uint32_t starts_off = align_up((uint32_t)sizeof(struct dyld_chained_fixups_header), 8u);
-        struct dyld_chained_fixups_header cfh = {0};
-        cfh.starts_offset = starts_off;
-        cfh.imports_format = DYLD_CHAINED_IMPORT;
-        struct dyld_chained_starts_in_image starts = {0};
-        starts.seg_count = nsegs;
-        cf_size = starts_off + (uint32_t)(sizeof(uint32_t) * (1u + nsegs));
-        cfh.imports_offset = cf_size;
-        cfh.symbols_offset = cf_size;
-        memcpy(img + cf_off, &cfh, sizeof cfh);
-        memcpy(img + cf_off + starts_off, &starts, sizeof starts);
-    }
-
-    uint32_t sig_off = align_up(cf_off + cf_size, 16u);
-    uint32_t code_limit = sig_off;
-    uint32_t n_slots = (code_limit + CS_PAGE - 1u) / CS_PAGE;
-    uint32_t ident_len = (uint32_t)strlen(CD_IDENT) + 1u;
-    uint32_t sb_len = 20u + (CD_HDR_SZ + ident_len) + n_slots * CC_SHA256_DIGEST_LENGTH;
-
     uint32_t text_bytes = (uint32_t)image.text_size;
     uint32_t stub_pad = align_up(text_bytes, 4u) - text_bytes;
     uint32_t sect_size = text_bytes + stub_pad + n_imp * 12u;
+
+    uint32_t ident_len = (uint32_t)strlen(CD_IDENT) + 1u;
+    uint32_t name_bytes = 1u;
+    for (uint32_t i = 0; i < n_imp; i++)
+        name_bytes += (uint32_t)strlen(image.imports[i].name) + 2u;
+
+    size_t cmd_max = sizeof(struct mach_header_64) + 0x400u;
+    size_t cf_max = 0x100u + 4u * n_imp + name_bytes;
+    size_t body_max = cmd_max + sect_size + 2u * FILE_PAGE + cf_max;
+    size_t sig_max = 64u + CD_HDR_SZ + ident_len
+                   + (body_max / CS_PAGE + 2u) * CC_SHA256_DIGEST_LENGTH;
+    size_t img_cap = body_max + 16u + sig_max;
+
+    uint8_t *img = calloc(1, img_cap);
+    if (!img) {
+        report_error("macho: out of memory\n");
+        return;
+    }
 
     builder b = { .img = img, .off = sizeof(struct mach_header_64) };
 
@@ -223,12 +215,10 @@ static void write_macho(FILE *out) {
     text.cmdsize = (uint32_t)(sizeof text + sizeof(struct section_64));
     set_name(text.segname, SEG_TEXT);
     text.vmaddr = TEXT_VM;
-    text.vmsize = FILE_PAGE;
-    text.filesize = FILE_PAGE;
     text.maxprot = VM_PROT_READ | VM_PROT_EXECUTE;
     text.initprot = VM_PROT_READ | VM_PROT_EXECUTE;
     text.nsects = 1;
-    add_segment(&b, &text, sizeof text);
+    struct segment_command_64 *ptext = add_segment(&b, &text, sizeof text);
 
     struct section_64 sect = {0};
     set_name(sect.sectname, SECT_TEXT);
@@ -238,27 +228,24 @@ static void write_macho(FILE *out) {
     sect.flags = S_ATTR_PURE_INSTRUCTIONS | S_ATTR_SOME_INSTRUCTIONS;
     struct section_64 *psect = add_payload(&b, &sect, sizeof sect);
 
+    struct segment_command_64 *pdata = NULL;
     struct section_64 *pgot = NULL;
     if (dyn) {
         struct segment_command_64 data = {0};
         data.cmd = LC_SEGMENT_64;
         data.cmdsize = (uint32_t)(sizeof data + sizeof(struct section_64));
         set_name(data.segname, "__DATA_CONST");
-        data.vmaddr = DATA_VM;
         data.vmsize = FILE_PAGE;
-        data.fileoff = FILE_PAGE;
         data.filesize = FILE_PAGE;
         data.maxprot = VM_PROT_READ | VM_PROT_WRITE;
         data.initprot = VM_PROT_READ | VM_PROT_WRITE;
         data.nsects = 1;
-        add_segment(&b, &data, sizeof data);
+        pdata = add_segment(&b, &data, sizeof data);
 
         struct section_64 got = {0};
         set_name(got.sectname, "__got");
         set_name(got.segname, "__DATA_CONST");
-        got.addr = DATA_VM;
         got.size = n_imp * 8u;
-        got.offset = FILE_PAGE;
         got.align = 3;
         pgot = add_payload(&b, &got, sizeof got);
     }
@@ -267,20 +254,15 @@ static void write_macho(FILE *out) {
     linkedit.cmd = LC_SEGMENT_64;
     linkedit.cmdsize = (uint32_t)sizeof linkedit;
     set_name(linkedit.segname, SEG_LINKEDIT);
-    linkedit.vmaddr = TEXT_VM + le_fileoff;
     linkedit.vmsize = FILE_PAGE;
-    linkedit.fileoff = le_fileoff;
-    linkedit.filesize = (sig_off + sb_len) - le_fileoff;
     linkedit.maxprot = VM_PROT_READ;
     linkedit.initprot = VM_PROT_READ;
-    add_segment(&b, &linkedit, sizeof linkedit);
+    struct segment_command_64 *plinkedit = add_segment(&b, &linkedit, sizeof linkedit);
 
     struct linkedit_data_command chained = {0};
     chained.cmd = LC_DYLD_CHAINED_FIXUPS;
     chained.cmdsize = (uint32_t)sizeof chained;
-    chained.dataoff = cf_off;
-    chained.datasize = cf_size;
-    add_command(&b, &chained, sizeof chained);
+    struct linkedit_data_command *pchained = add_command(&b, &chained, sizeof chained);
 
     uint32_t dyld_cmdsize = align_up((uint32_t)(sizeof(struct dylinker_command) + strlen(DYLD_PATH) + 1u), 8u);
     struct dylinker_command dylinker = {0};
@@ -323,14 +305,59 @@ static void write_macho(FILE *out) {
     struct linkedit_data_command codesig = {0};
     codesig.cmd = LC_CODE_SIGNATURE;
     codesig.cmdsize = (uint32_t)sizeof codesig;
-    codesig.dataoff = sig_off;
-    codesig.datasize = sb_len;
-    add_command(&b, &codesig, sizeof codesig);
+    struct linkedit_data_command *pcodesig = add_command(&b, &codesig, sizeof codesig);
 
     uint32_t code_off = (uint32_t)b.off;
+    if (code_off > cmd_max) {
+        report_error("macho: load commands overflow\n");
+        free(img);
+        return;
+    }
+    uint32_t text_fp = align_up(code_off + sect_size, FILE_PAGE);
+    uint64_t data_vm = TEXT_VM + text_fp;
+    uint32_t le_fileoff = dyn ? text_fp + FILE_PAGE : text_fp;
+    uint32_t cf_off = le_fileoff;
+
+    uint32_t cf_size;
+    if (dyn) {
+        cf_size = build_chained_imports(img + cf_off, nsegs, data_seg_idx, n_imp, image.imports, text_fp);
+    } else {
+        uint32_t starts_off = align_up((uint32_t)sizeof(struct dyld_chained_fixups_header), 8u);
+        struct dyld_chained_fixups_header cfh = {0};
+        cfh.starts_offset = starts_off;
+        cfh.imports_format = DYLD_CHAINED_IMPORT;
+        struct dyld_chained_starts_in_image starts = {0};
+        starts.seg_count = nsegs;
+        cf_size = starts_off + (uint32_t)(sizeof(uint32_t) * (1u + nsegs));
+        cfh.imports_offset = cf_size;
+        cfh.symbols_offset = cf_size;
+        memcpy(img + cf_off, &cfh, sizeof cfh);
+        memcpy(img + cf_off + starts_off, &starts, sizeof starts);
+    }
+
+    uint32_t sig_off = align_up(cf_off + cf_size, 16u);
+    uint32_t code_limit = sig_off;
+    uint32_t n_slots = (code_limit + CS_PAGE - 1u) / CS_PAGE;
+    uint32_t sb_len = 20u + (CD_HDR_SZ + ident_len) + n_slots * CC_SHA256_DIGEST_LENGTH;
+
+    ptext->vmsize = text_fp;
+    ptext->filesize = text_fp;
     psect->addr = TEXT_VM + code_off;
     psect->offset = code_off;
     pmain->entryoff = code_off + image.entry;
+    if (dyn) {
+        pdata->vmaddr = data_vm;
+        pdata->fileoff = text_fp;
+        pgot->addr = data_vm;
+        pgot->offset = text_fp;
+    }
+    plinkedit->vmaddr = TEXT_VM + le_fileoff;
+    plinkedit->fileoff = le_fileoff;
+    plinkedit->filesize = (sig_off + sb_len) - le_fileoff;
+    pchained->dataoff = cf_off;
+    pchained->datasize = cf_size;
+    pcodesig->dataoff = sig_off;
+    pcodesig->datasize = sb_len;
 
     struct mach_header_64 hdr = {0};
     hdr.magic = MH_MAGIC_64;
@@ -347,7 +374,7 @@ static void write_macho(FILE *out) {
     uint32_t stub_off = code_off + text_bytes + stub_pad;
     for (uint32_t i = 0; i < n_imp; i++) {
         uint64_t stub_vm = TEXT_VM + stub_off + i * 12u;
-        uint64_t got_vm = DATA_VM + i * 8u;
+        uint64_t got_vm = data_vm + i * 8u;
         int64_t pages = (int64_t)((got_vm & ~0xfffULL) - (stub_vm & ~0xfffULL)) >> 12;
         uint32_t immlo = (uint32_t)(pages & 3);
         uint32_t immhi = (uint32_t)(pages >> 2) & 0x7ffffu;
@@ -372,23 +399,30 @@ static void write_macho(FILE *out) {
         for (uint32_t i = 0; i < n_imp; i++) {
             uint64_t next = (i + 1u < n_imp) ? 2u : 0u;
             uint64_t slot = (1ull << 63) | (next << 51) | (uint64_t)i;
-            memcpy(img + FILE_PAGE + i * 8u, &slot, 8);
+            memcpy(img + text_fp + i * 8u, &slot, 8);
         }
         pgot->reserved1 = 0;
     }
 
-    uint8_t hashes[sizeof img / CS_PAGE + 1u][CC_SHA256_DIGEST_LENGTH];
+    uint8_t (*hashes)[CC_SHA256_DIGEST_LENGTH] = calloc(n_slots, CC_SHA256_DIGEST_LENGTH);
+    if (!hashes) {
+        report_error("macho: out of memory\n");
+        free(img);
+        return;
+    }
     for (uint32_t i = 0; i < n_slots; i++) {
         uint32_t start = i * CS_PAGE;
         uint32_t len = (code_limit - start > CS_PAGE) ? CS_PAGE : (code_limit - start);
         CC_SHA256(img + start, len, hashes[i]);
     }
 
-    write_signature(img + sig_off, code_limit, n_slots, hashes);
+    write_signature(img + sig_off, code_limit, text_fp, n_slots, hashes);
 
     fwrite(img, 1, sig_off + sb_len, out);
     fflush(out);
     fchmod(fileno(out), 0755);
+    free(hashes);
+    free(img);
 }
 
 void emit_init(void) {}

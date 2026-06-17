@@ -241,8 +241,13 @@ void bin_emit(bin_image *image) {
                         break;
                     }
                 }
-                if (imp == n_imports)
+                if (imp == n_imports) {
+                    if (n_imports >= sizeof imports / sizeof imports[0]) {
+                        report_error("aarch64-bin: import overflow\n");
+                        continue;
+                    }
                     imports[n_imports++].name = fx->key;
+                }
                 extcalls[n_extcalls].site = fx->site * (uint32_t)sizeof code[0];
                 extcalls[n_extcalls].import = imp;
                 n_extcalls++;
