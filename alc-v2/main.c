@@ -62,6 +62,7 @@ FILE *object_file;
 bool do_airity_check = true;
 bool import_all = true;
 bool dead_fn_elim = false;
+bool link_c = true;
 
 type_t *type_i32;
 type_t *type_usize;
@@ -78,7 +79,7 @@ u64 hash_fnv_1a(str id) {
     return hash;
 }
 
-HASHMAP_GENERIC(symbol_t, 128, hash_fnv_1a)
+HASHMAP_GENERIC(symbol_t, 1024, hash_fnv_1a)
 HASHMAP_GENERIC(type_t, 128, hash_fnv_1a)
 
 hashmap_symbol_t fn_ids;

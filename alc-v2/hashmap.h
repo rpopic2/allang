@@ -28,7 +28,7 @@ inline static hashentry_##T *hashmap_##T##_find(hashmap_##T self, const str id) 
         index += 1; \
         index &= array_len - 1; \
         if (index == start) { \
-            fprintf(stderr, "hash tabel is full!"); \
+            fprintf(stderr, "hash table is full! "#array_len" is not enough for hash entry "#T"\n"); \
             abort(); \
         } \
     } \

@@ -11,6 +11,8 @@
 #include "emit.h"
 #include "emit-bin.h"
 
+extern bool link_c;
+
 #define TEXT_VM   0x100000000ULL
 #define FILE_PAGE 0x4000u
 #define CS_PAGE   4096u
@@ -174,7 +176,7 @@ static void write_macho(FILE *out) {
     bin_image image;
     bin_emit(&image);
     uint32_t n_imp = image.imports_count;
-    bool dyn = n_imp > 0;
+    bool dyn = link_c && n_imp > 0;
     uint32_t nsegs = dyn ? 4u : 3u;
     uint32_t data_seg_idx = 2u;
 
