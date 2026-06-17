@@ -6,19 +6,19 @@ The emit backend files for your architecture and OS must be passed explicitly:
 
 ```bash
 # Build the compiler (Linux x86_64)
-./build.sh emit-x86_64.c emit-linux.c
+./build.sh asm-x86_64.c asm-linux.c
 
 # Compile and run an allang source file:
-# ./run.sh <arch-emit.c> <os-emit.c> <source.al>
-./run.sh emit-x86_64.c emit-linux.c hello.al
-./run.sh emit-aarch64.c emit-macos.c hello.al
+# ./run-asm.sh <asm-arch.c> <asm-os.c> <source.al>
+./run-asm.sh asm-x86_64.c asm-linux.c hello.al
+./run-asm.sh asm-aarch64.c asm-macos.c hello.al
 ```
 
 ## Done When
 
 - `test-all.sh` passes.
 - aarch64 emits assembly without error (no need to run it when you are in cloud conatiner).
-- `emit-ll.c` backend needs no testing.
+- `ll.c` backend needs no testing.
 - `examples/` contains ill-formed code; only `tests/` are valid programs.
 
 ## Coding Conventions
@@ -33,9 +33,11 @@ The compiler is a single-pass compiler entirely in `alc-v2/`:
 - **`main.c`** — Tokenizer (`tok()`), parser (`parse_block()`), type checker, and driver.
 - **`typesys.h`** — Type system: fundamental types, composite types, declarators, member layout.
 - **`emit.h`** — Abstract code generation interface.
-- **`emit-x86_64.c`** / **`emit-aarch64.c`** — Architecture-specific implementations of `emit.h`.
-- **`emit-linux.c`** / **`emit-macos.c`** / **`emit-windows.c`** — OS-specific assembly preamble/sections.
-- **`emit-ll.c`** — LLVM IR output backend.
+- **`asm-x86_64.c`** / **`asm-aarch64.c`** — Architecture-specific implementations of `emit.h` (ASM text pipeline).
+- **`asm-linux.c`** / **`asm-macos.c`** / **`asm-windows.c`** — OS-specific assembly preamble/sections.
+- **`exe-x86_64.c`** / **`exe-aarch64.c`** — Architecture-specific instruction encoders (binary pipeline).
+- **`exe-elf.c`** / **`exe-elf-x86_64.c`** / **`exe-elf-aarch64.c`** / **`exe-macho.c`** / **`exe-pe-x86_64.c`** — Binary executable format backends.
+- **`ll.c`** — LLVM IR output backend.
 
 **Data flow**: `.al` source → tokenizer → parser → type checker → `emit_*()` calls → platform emitter → `.s` assembly → clang → executable.
 

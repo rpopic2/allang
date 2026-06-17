@@ -2,21 +2,25 @@ if [ "$(uname -o)" = Android ]; then
     EXTRA_FLAGS+=" -lexecinfo -rdynamic -fno-omit-frame-pointer -fsanitize=undefined"
 elif [[ "$(uname -s)" = Linux ]]; then
     EXTRA_FLAGS+=" -fsanitize=undefined -fno-sanitize-link-runtime -lubsan"
-elif [[ "$(uname -s)" != MINGW* ]]; then
-    EXTRA_FLAGS+=" -fsanitize=undefined"
+elif [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
+    # Windows clang's ubsan runtime needs the clang-cl driver to link; use
+    # trap mode so UB is still caught (crashes at the fault site) with no runtime.
+    EXTRA_FLAGS+=" -fsanitize=undefined -fsanitize-trap=undefined"
+else
+    EXTRA_FLAGS+=" -fsanitize=undefined -lubsan"
 fi
 
 # Auto-detect emit files if first argument looks like a .al file or is missing
 if [ $# -eq 0 ] || [[ "$1" == *.al ]]; then
     case "$(uname -s)" in
         Linux)
-            EMIT_OS="emit-linux.c"
+            EMIT_OS="asm-linux.c"
             ;;
         Darwin)
-            EMIT_OS="emit-macos.c"
+            EMIT_OS="asm-macos.c"
             ;;
         MINGW*|MSYS*|CYGWIN*)
-            EMIT_OS="emit-windows.c"
+            EMIT_OS="asm-windows.c"
             ;;
         *)
             echo "Unknown OS: $(uname -s)" >&2
@@ -26,10 +30,10 @@ if [ $# -eq 0 ] || [[ "$1" == *.al ]]; then
 
     case "$(uname -m)" in
         x86_64)
-            EMIT_ARCH="emit-x86_64.c"
+            EMIT_ARCH="asm-x86_64.c"
             ;;
         aarch64|arm64)
-            EMIT_ARCH="emit-aarch64.c"
+            EMIT_ARCH="asm-aarch64.c"
             ;;
         *)
             echo "Unknown architecture: $(uname -m)" >&2

@@ -1,30 +1,41 @@
+#!/usr/bin/env bash
 
-if [ $# -eq 0 ]; then
-    echo "usage: run.sh [<emit-arch.c> <emit-os.c>] <source.al>" >&2
+if [ $# -ne 1 ]; then
+    echo "usage: run.sh <source.al>" >&2
     exit 1
 fi
 
-if [[ "$(uname -m)" == x86* ]]; then
-    EXTRA_FLAGS+=" -masm=intel"
-fi
+SOURCE="$1"
+
+
+EXT=""
+case "$(uname -s):$(uname -m)" in
+    Linux:x86_64)
+        EMIT_ARCH="exe-x86_64.c"
+        EMIT_OS="exe-elf-x86_64.c"
+        ;;
+    Linux:aarch64|Linux:arm64)
+        EMIT_ARCH="exe-aarch64.c"
+        EMIT_OS="exe-elf-aarch64.c"
+        ;;
+    Darwin:arm64|Darwin:aarch64)
+        EMIT_ARCH="exe-aarch64.c"
+        EMIT_OS="exe-macho.c"
+        ;;
+    MINGW*:x86_64|MSYS*:x86_64|CYGWIN*:x86_64)
+        EMIT_ARCH="exe-x86_64.c"
+        EMIT_OS="exe-pe-x86_64.c"
+        EXT=".exe"
+        ;;
+    *)
+        echo "FATAL: binary backend not supported on $(uname -s)/$(uname -m)" >&2
+        exit 1
+        ;;
+esac
 
 UBSAN_OPTIONS=print_stacktrace=1
 
-# If first argument is a .al file (no emit files provided), let build.sh auto-detect
-if [[ "$1" == *.al ]]; then
-    SOURCE="$1"
-    ./build.sh "${@:2}"
-    BUILD_EXIT=$?
-else
-    # Normal case with explicit emit files: $1=$emit-arch, $2=$emit-os, $3=$source
-    SOURCE="$3"
-    ./build.sh $1 $2 "${@:4}"
-    BUILD_EXIT=$?
-fi
+./build.sh "$EMIT_ARCH" "$EMIT_OS" || exit $?
 
-[ $BUILD_EXIT -ne 0 ] && exit $BUILD_EXIT
-
-FILENAME=$(echo "${SOURCE%.*}")
-$(which time) ./alc "$SOURCE" \
-    && clang "$FILENAME".s $EXTRA_FLAGS -o $FILENAME \
-    && ./$FILENAME
+FILENAME="${SOURCE%.*}"
+./alc "$SOURCE" && "./$FILENAME$EXT"

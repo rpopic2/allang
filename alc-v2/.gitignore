@@ -1,6 +1,11 @@
 *
 !*.*
 *.s
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.lib
 a.out
 compile_commands.json
 .claude
