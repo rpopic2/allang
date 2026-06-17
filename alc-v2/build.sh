@@ -1,7 +1,8 @@
+#!/usr/bin/env bash
 if [ "$(uname -o)" = Android ]; then
     EXTRA_FLAGS+=" -lexecinfo -rdynamic -fno-omit-frame-pointer -fsanitize=undefined"
 elif [[ "$(uname -s)" = Linux ]]; then
-    EXTRA_FLAGS+=" -fsanitize=undefined -fno-sanitize-link-runtime -lubsan"
+    EXTRA_FLAGS+=" -fsanitize=undefined -fno-sanitize-link-runtime -lubsan -rdynamic"
 elif [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
     # Windows clang's ubsan runtime needs the clang-cl driver to link; use
     # trap mode so UB is still caught (crashes at the fault site) with no runtime.
