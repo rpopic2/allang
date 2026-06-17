@@ -34,9 +34,9 @@ target *get_current_target(parser_context *context);
 target *get_current_target_stack(parser_context *context);
 void struct_report(type_t *type);
 void stack_report(parser_context *context);
-bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm);
-bool stmt_ret_cond_reg(parser_context *context, cond_t cond, reg_t cmp_reg, reg_t against);
+bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against);
 bool stmt_ret(parser_context *context);
+bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against);
 void stmt_label(parser_context *context);
 int expr_line(parser_context *context);
 void compile(src_t src);
@@ -574,6 +574,9 @@ regable read_regable(str s, const token_t *diagnostic) {
                 .offset = 1,
             };
             member = &member_storage;
+            if (result.reg.reg_type != STACK) {
+                result.reg.offset += member_storage.offset;
+            }
             break;
         }
 
@@ -679,7 +682,7 @@ void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
     i32 against = decl.amount;
 
     tok(context);
-    if (stmt_ret_cond(context, COND_EQ, *reg, (i64)against)) {
+    if (stmt_ret_cond(context, COND_EQ, *reg, (regable){.tag = VALUE, .value = against})) {
 
     } else {
         compile_err(cur_token, "expected ret\n");
@@ -687,7 +690,7 @@ void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
 }
 
 enum inclusive {INCL, EXCL};
-void check_bounds(parser_context *context, reg_t index, i32 len, enum inclusive inclusive) {
+void check_bounds(parser_context *context, reg_t index, regable against, enum inclusive inclusive) {
     const token_t cur_token = context->cur_token;
 
     reg_t stash = context->reg;
@@ -699,27 +702,9 @@ void check_bounds(parser_context *context, reg_t index, i32 len, enum inclusive 
 
     cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
     tok(context);
-    if (stmt_ret_cond(context, cond, index, len)) {
+    if (stmt_ret_cond(context, cond, index, against)) {
 
-    } else {
-        compile_err(&cur_token, "expected to handle check operator\n");
-    }
-    context->reg = stash;
-}
-
-void check_bounds_reg(parser_context *context, reg_t index, reg_t count, enum inclusive inclusive) {
-    const token_t cur_token = context->cur_token;
-
-    reg_t stash = context->reg;
-    tok(context);
-    if (!str_eq(context->cur_token.id, STR("!"))) {
-        compile_err(&cur_token, "expected to check bounds with operator !\n");
-        return;
-    }
-
-    cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
-    tok(context);
-    if (stmt_ret_cond_reg(context, cond, index, count)) {
+    } else if (stmt_eret_cond(context, cond, index, against)) {
 
     } else {
         compile_err(&cur_token, "expected to handle check operator\n");
@@ -817,7 +802,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             count_reg.offset += 1;
             count_reg.rsize = sizeof (void *);
             offset_regable.value = slice;
-            check_bounds(context, count_reg, slice, INCL);
+            check_bounds(context, count_reg, (regable){.tag = VALUE, .value = slice}, INCL);
         }
         size_t stride;
         if (reg.dtype.base == NULL) {
@@ -849,9 +834,9 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
                 reg_t count_reg = reg;
                 count_reg.offset += 1;
                 count_reg.rsize = sizeof(void *);
-                check_bounds_reg(context, offset_regable.reg, count_reg, EXCL);
+                check_bounds(context, offset_regable.reg, (regable){.tag = REG, .reg = count_reg}, EXCL);
             } else {
-                check_bounds(context, offset_regable.reg, decl.amount, INCL);
+                check_bounds(context, offset_regable.reg, (regable){.tag = VALUE, .value = decl.amount}, INCL);
             }
         }
     } else unreachable;
@@ -1140,6 +1125,14 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     token_t rhs_token = context->cur_token;
     str id = rhs_token.id;
 
+    bool is_range = false;
+    for (const char *p = rhs_token.id.data; p + 1 < rhs_token.id.end; ++p) {
+        if (p[0] == '.' && p[1] == '.') {
+            is_range = true;
+            break;
+        }
+    }
+
     regable _begin = {0};
     regable *begin = &_begin;
     str first = dot_iter(&id, '.');
@@ -1167,48 +1160,69 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     }
     diagnostic_dyn_elem_access(context, begin);
 
+    const bool is_slice = dtype_top(&lhs->dtype).tag == DK_SLICE;
+    reg_t count_reg = *lhs;
+    count_reg.offset += 1;
+    count_reg.rsize = sizeof (void *);
+    const regable length = is_slice
+        ? (regable){.tag = REG, .reg = count_reg}
+        : (regable){.tag = VALUE, .value = len};
+
     reg_t dst = context->reg;
     if (begin->tag != NONE && end->tag != NONE) {
         const cond_t cond = COND_HI;
         emit_cmp_reg(begin->reg, end->reg, cond);
         emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
-        check_bounds(context, end->reg, len, EXCL);
+        check_bounds(context, end->reg, length, EXCL);
     } else if (begin->tag != NONE) {
-        check_bounds(context, begin->reg, len, INCL);
+        check_bounds(context, begin->reg, length, INCL);
     } else if (end->tag != NONE) {
-        check_bounds(context, end->reg, len, EXCL);
+        check_bounds(context, end->reg, length, EXCL);
     } else {
         unreachable;
     }
 
-    dst.rsize = sizeof (void *); // TODO move this out when fixing typecheck
+    dst.rsize = sizeof (void *);
 
     reg_t dst2 = dst;
     dst2.rsize = sizeof (void *);
     dst2.offset += 1;
 
-    if (begin->tag != NONE) {
+    if (begin->tag != NONE && end->tag == NONE && !is_range) {
         emit_elem_addr(dst, *lhs, begin->reg);
-        if (end->tag == NONE) {
-            begin->reg.rsize = sizeof(void *);
-            emit_mov(dst2, len);
-            emit_sub_reg(dst2, dst2, begin->reg);
-        } else {
-            reg_t tmp_dst2 = dst2;
-            tmp_dst2.rsize = begin->reg.rsize;
-            emit_sub_reg(tmp_dst2, end->reg, begin->reg);
-            tmp_dst2.dtype = begin->reg.dtype;
-            if (!dtype_eq(&end->reg.dtype, &begin->reg.dtype)) {
-                compile_err(&rhs_token, "type for begin and end range differs\n");
-            }
-            emit_mov_reg(dst2, tmp_dst2);
-        }
-    } else if (end->tag != NONE) {
-        emit_sub(dst, FP, lhs->offset);
-        emit_mov_reg(dst2, end->reg);
+        context->reg.dtype = (dtype_t){.base = lhs->dtype.base};
+        dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
     } else {
-        unreachable;
+        if (begin->tag != NONE) {
+            emit_elem_addr(dst, *lhs, begin->reg);
+            if (end->tag == NONE) {
+                begin->reg.rsize = sizeof(void *);
+                if (is_slice) {
+                    emit_mov_reg(dst2, count_reg);
+                } else {
+                    emit_mov(dst2, len);
+                }
+                emit_sub_reg(dst2, dst2, begin->reg);
+            } else {
+                reg_t tmp_dst2 = dst2;
+                tmp_dst2.rsize = begin->reg.rsize;
+                emit_sub_reg(tmp_dst2, end->reg, begin->reg);
+                tmp_dst2.dtype = begin->reg.dtype;
+                if (!dtype_eq(&end->reg.dtype, &begin->reg.dtype)) {
+                    compile_err(&rhs_token, "type for begin and end range differs\n");
+                }
+                emit_mov_reg(dst2, tmp_dst2);
+            }
+        } else if (end->tag != NONE) {
+            emit_sub(dst, FP, lhs->offset);
+            emit_mov_reg(dst2, end->reg);
+        } else {
+            unreachable;
+        }
+        context->reg.dtype = (dtype_t){.base = lhs->dtype.base};
+        dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = len});
     }
+    context->reg.rsize = sizeof (void *);
 }
 
 bool binary_op(parser_context *restrict context, regable *restrict lhs) {
@@ -1798,15 +1812,22 @@ bool nullary_op(parser_context *context, regable lhs) {
         const reg_t *nreg = &lhs.reg;
         register_dst reg_type = nreg->reg_type;
         if (reg_type == NREG) {
-            if (context->reg.reg_type == PARAM) {
-                context->reg.dtype = nreg->dtype;
-                context->reg.rsize = nreg->rsize;
-            }
+            context->reg.dtype = nreg->dtype;
+            context->reg.rsize = nreg->rsize;
             if (nreg->dtype.base == NULL) {
                 compile_err(token, "use of unassigned register "), str_printerr(token->id);
                 return true;
             }
             emit_mov_reg(context->reg, lhs.reg);
+            if (dtype_top(&nreg->dtype).tag == DK_SLICE) {
+                reg_t src_len = lhs.reg;
+                src_len.offset += 1;
+                src_len.rsize = sizeof (void *);
+                reg_t dst_len = context->reg;
+                dst_len.offset += 1;
+                dst_len.rsize = sizeof (void *);
+                emit_mov_reg(dst_len, src_len);
+            }
         } else if (reg_type == STACK) {
             context->reg.rsize = sizeof (void *);
             if (nreg->dtype.base == NULL) {
@@ -2333,10 +2354,14 @@ bool stmt_ret(parser_context *context) {
     return true;
 }
 
-bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_imm) {
+bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against) {
     if (!str_eq_lit(context->cur_token.id, "ret"))
         return false;
-    emit_cmp(cmp_reg, cmp_imm);
+    if (against.tag == REG) {
+        emit_cmp_reg(cmp_reg, against.reg, cond);
+    } else {
+        emit_cmp(cmp_reg, against.value);
+    }
     if (!stmt_ret_pre(context))
         return false;
     context->has_branched_ret = true;
@@ -2344,12 +2369,14 @@ bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, i64 cmp_
     return true;
 }
 
-bool stmt_ret_cond_reg(parser_context *context, cond_t cond, reg_t cmp_reg, reg_t against) {
-    if (!str_eq_lit(context->cur_token.id, "ret"))
+bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against) {
+    if (!str_eq_lit(context->cur_token.id, "eret"))
         return false;
-    emit_cmp_reg(cmp_reg, against, cond);
-    if (!stmt_ret_pre(context))
-        return false;
+    if (against.tag == REG) {
+        emit_cmp_reg(cmp_reg, against.reg, cond);
+    } else {
+        emit_cmp(cmp_reg, against.value);
+    }
     context->has_branched_ret = true;
     emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
     return true;

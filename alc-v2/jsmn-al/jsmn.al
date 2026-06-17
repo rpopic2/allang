@@ -54,10 +54,10 @@ jsmntok:
         Size i32,
     }
 
-jsmn_alloc_token: Parser addr jsmn_parser, Tokens slice jsmntok, => addr jsmntok
+jsmn_alloc_token: Parser addr jsmn_parser, Tokens slice jsmntok => addr! jsmntok
     Toknext :: [Parser.Toknext]
 
-    Tok :: [Tokens * Toknext] ! ret !
-    ret !
+    Tok :: Tokens * Toknext ! eret
+    ret Tok
 
 

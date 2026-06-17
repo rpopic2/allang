@@ -933,7 +933,10 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
 
 void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
     reg_t base = { .reg_type = SCRATCH, .offset = 0, .rsize = sizeof (void *) };
-    emit_sub(base, FP, object.offset);
+    if (object.reg_type == STACK)
+        emit_sub(base, FP, object.offset);
+    else
+        base = object;
 
     const size_t elem_size = object.dtype.base->size;
     const uint32_t shift = (uint32_t)__builtin_ctz((unsigned)elem_size);
