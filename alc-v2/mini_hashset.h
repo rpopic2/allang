@@ -49,7 +49,7 @@ inline static hash_entry *find_entry(mini_hashset self, const str id) {
         index += 1;
         index %= array_len;
         if (index == start) {
-            fprintf(stderr, "hash tabel is full!");
+            fprintf(stderr, "hash table is full: entry");
             abort();
         }
     }
@@ -154,7 +154,7 @@ inline static u64 const_hashmap_find_index(const_hashmap_t *self, str id) {
         index += 1;
         index &= (array_len - 1);
         if (index == start) {
-            fprintf(stderr, "hash tabel is full!");
+            fprintf(stderr, "hash table is full: const_hashmap");
             abort();
         }
     }
