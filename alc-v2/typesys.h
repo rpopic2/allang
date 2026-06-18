@@ -133,7 +133,7 @@ static inline i32 dtype_tryget(const dtype_t *self, dtype_kind_t kind) {
 }
 
 static inline i32 dtype_tryget_addr(const dtype_t *self) {
-    declarator_t top = dtype_top(self);
+    declarator_t top = dtype_bottom(self);
     if (top.tag != DK_ADDR)
         return 0;
     else return top.amount;

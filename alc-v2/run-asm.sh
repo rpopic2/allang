@@ -10,15 +10,13 @@ fi
 
 UBSAN_OPTIONS=print_stacktrace=1
 
-# If first argument is a .al file (no emit files provided), let build.sh auto-detect
 if [[ "$1" == *.al ]]; then
     SOURCE="$1"
-    ./build.sh "${@:2}"
+    ./build-asm.sh "${@:2}"
     BUILD_EXIT=$?
 else
-    # Normal case with explicit asm files: $1=$asm-arch, $2=$asm-os, $3=$source
     SOURCE="$3"
-    ./build.sh $1 $2 "${@:4}"
+    ./build-asm.sh $1 $2 "${@:4}"
     BUILD_EXIT=$?
 fi
 

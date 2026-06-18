@@ -2411,7 +2411,6 @@ bool stmt_eret(parser_context *context) {
     reg_t ret = *context->symbol->rets.begin;
     ret.reg_type = RET;
     ret.offset = 0;
-    ret.rsize = get_rsize(&ret);
     declarator_t decl = dtype_bottom(&ret.dtype);
     if (decl.tag != DK_CHECK) {
         compile_err(&context->cur_token, "a frontmost check(!) annotation is expected for the return type when using eret statement.\n");
@@ -2431,9 +2430,8 @@ bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable
     reg_t ret = *context->symbol->rets.begin;
     ret.reg_type = RET;
     ret.offset = 0;
-    ret.rsize = get_rsize(&ret);
     pdtype(&ret.dtype);
-    declarator_t decl = dtype_top(&ret.dtype);
+    declarator_t decl = dtype_bottom(&ret.dtype);
     if (decl.tag != DK_CHECK) {
         compile_err(&context->cur_token, "check(!) type is expected when using eret statement.\n");
     }
