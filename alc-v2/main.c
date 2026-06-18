@@ -2334,12 +2334,11 @@ void read_and_check_types(parser_context *context, list_reg_t *rets) {
         } while (token->end[0] == ',' && isspace(token->end[1]));
 }
 
-bool detect_mainfn_end(parser_context *context, bool start_of_line) {
+bool at_block_end(parser_context *context, bool start_of_line) {
     if (context->cur_token.data == NULL || (start_of_line && context->indent == context->cur_token.indent)) {
         if (start_of_line) {
             context->ended = true;
         }
-        context->last_line_ret = true;
         return true;
     }
     return false;
@@ -2375,13 +2374,14 @@ bool stmt_ret_pre(parser_context *context) {
             compile_err(token, "expected to return %d values (found %d)\n", expected, arg_count);
         // }
     }
-    detect_mainfn_end(context, start_of_line);
+    at_block_end(context, start_of_line);
     return true;
 }
 
 bool stmt_ret(parser_context *context) {
     if (!stmt_ret_pre(context))
         return false;
+    context->returns_on_exit = true;
     if (!context->ended) {
         context->has_branched_ret = true;
         emit_branch(context->symbol->name, STR("ret"), 0);
@@ -2418,7 +2418,7 @@ bool stmt_eret(parser_context *context) {
     
     emit_mov(ret, decl.amount);
     context->has_branched_ret = true;
-    context->last_line_ret = true;
+    context->returns_on_exit = true;
     emit_branch(context->symbol->name, STR("ret"), 0);
     return true;
 }
@@ -2811,6 +2811,7 @@ void parse(parser_context *context) {
     const token_t *token = &context->cur_token;
     reg_t last_reg = context->reg;
     last_reg.offset -= 1;
+    context->returns_on_exit = false;
     if (directives(context)) {
 
     } else if (stmt(context)) {
@@ -2963,7 +2964,7 @@ void function(src_t *src) {
     if (context->has_branched_ret) {
         emit_label(context->name, STR("ret"), 0);
     }
-    if (do_airity_check && !context->last_line_ret) {
+    if (do_airity_check && !context->returns_on_exit) {
         if (context->symbol->ret_airity != 0) {
             compile_err(&context->cur_token, "expected to return %d value(s)\n", context->symbol->ret_airity);
         }
@@ -2995,7 +2996,7 @@ void skip_function(src_t *src) {
         directives(context);
 
         if (str_eq_lit(cur_token->id, "ret")) {
-            if (detect_mainfn_end(context, context->start_of_line)) {
+            if (at_block_end(context, context->start_of_line)) {
                 while (!context->end_of_line && src->cur < src->end)
                     tok(context);
                 break;

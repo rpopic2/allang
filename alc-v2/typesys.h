@@ -329,7 +329,7 @@ typedef struct parser_context {
     bool calls_fn;
     bool ended;
     bool has_branched_ret;
-    bool last_line_ret;
+    bool returns_on_exit;
     u8 indent;
     u8 nreg_count;
     u8 max_nreg_count;
