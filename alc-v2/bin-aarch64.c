@@ -446,6 +446,7 @@ void emit_sub_reg(reg_t dst, reg_t lhs, reg_t rhs) {
 }
 
 void emit_cmp_reg(reg_t lhs, reg_t rhs, cond_t cond) {
+    (void)cond;
     reg_t zr = { .reg_type = RD_NONE, .rsize = lhs.rsize };
     if (lhs.rsize == rhs.rsize) {
         addsub_reg(OP_SUBS_REG, zr, lhs, rhs);
