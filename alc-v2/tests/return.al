@@ -7,3 +7,6 @@ ret_addr: => addr i32
 ret_addr_nullable: => addr! i32
     [I] :: 1 =[]
     ret I
+
+eret_test: => addr! i32
+    eret

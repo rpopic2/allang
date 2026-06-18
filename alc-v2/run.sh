@@ -37,4 +37,16 @@ UBSAN_OPTIONS=print_stacktrace=1
 ./build.sh "$EMIT_ARCH" "$EMIT_OS" || exit $?
 
 FILENAME="${SOURCE%.*}"
-./alc "$SOURCE" && "./$FILENAME$EXT"
+./alc "$SOURCE" || exit $?
+
+BINARY="./$FILENAME$EXT"
+case "$(uname -s)" in
+    Darwin)
+        otool -tvV "$BINARY" > "$FILENAME.s"
+        ;;
+    *)
+        objdump -d "$BINARY" > "$FILENAME.s"
+        ;;
+esac
+
+"$BINARY"

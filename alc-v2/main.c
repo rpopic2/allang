@@ -37,8 +37,9 @@ void resolve_stack_store_target(parser_context *context, target *cur_target,
 bool nullary_op(parser_context *context, regable lhs);
 void struct_report(type_t *type);
 void stack_report(parser_context *context);
-bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against);
 bool stmt_ret(parser_context *context);
+bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against);
+bool stmt_eret(parser_context *context);
 bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against);
 void stmt_label(parser_context *context);
 int expr_line(parser_context *context);
@@ -2403,9 +2404,38 @@ bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable 
     return true;
 }
 
+bool stmt_eret(parser_context *context) {
+    if (!str_eq_lit(context->cur_token.id, "eret"))
+        return false;
+
+    reg_t ret = *context->symbol->rets.begin;
+    ret.reg_type = RET;
+    ret.offset = 0;
+    declarator_t decl = dtype_top(&ret.dtype);
+    if (decl.tag != DK_CHECK) {
+        compile_err(&context->cur_token, "check(!) type is expected when using eret statement.\n");
+    }
+    
+    emit_mov(ret, decl.amount);
+    context->has_branched_ret = true;
+    context->last_line_ret = true;
+    emit_branch(context->symbol->name, STR("ret"), 0);
+    return true;
+}
+
 bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against) {
     if (!str_eq_lit(context->cur_token.id, "eret"))
         return false;
+
+    reg_t ret = *context->symbol->rets.begin;
+    ret.reg_type = RET;
+    ret.offset = 0;
+    declarator_t decl = dtype_top(&ret.dtype);
+    if (decl.tag != DK_CHECK) {
+        compile_err(&context->cur_token, "check(!) type is expected when using eret statement.\n");
+    }
+    
+    emit_mov(ret, decl.amount);
     if (against.tag == REG) {
         emit_cmp_reg(cmp_reg, against.reg, cond);
     } else {
@@ -2424,6 +2454,8 @@ bool stmt(parser_context *context) {
         return true;
     }
     if (stmt_ret(context)) {
+        return true;
+    } else if (stmt_eret(context)) {
         return true;
     } else if (streq(token->data, ">>")) {
         u16 index = context->unnamed_labels++;
