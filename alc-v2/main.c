@@ -993,59 +993,67 @@ bool do_store(const regable *restrict lhs, parser_context *restrict context) {
         return true;
     }
 
-    reg_t dst;
-    regable offset;
-    if (!read_load_store_offset(context, s, &dst, &offset))
-        return true;
+    while (true) {
+        reg_t dst;
+        regable offset;
+        if (!read_load_store_offset(context, s, &dst, &offset))
+            return true;
 
-    reg_t src;
-    const bool src_is_imm = lhs->tag == VALUE;
-    if (lhs->tag == VALUE) {
-        src = (reg_t){
-            .reg_type = SCRATCH, .offset = context->reg.offset,
-            .rsize = context->reg.rsize,
-            .dtype = {.base = context->reg.dtype.base},
-        };
+        reg_t src;
+        const bool src_is_imm = lhs->tag == VALUE;
+        if (lhs->tag == VALUE) {
+            src = (reg_t){
+                .reg_type = SCRATCH, .offset = context->reg.offset,
+                .rsize = context->reg.rsize,
+                .dtype = {.base = context->reg.dtype.base},
+            };
 
-        if (dst.dtype.base->tag == TK_FUND && src.dtype.base == type_comptime_int) {
-            src.dtype = dst.dtype;
+            if (dst.dtype.base->tag == TK_FUND && src.dtype.base == type_comptime_int) {
+                src.dtype = dst.dtype;
 
-            if (dst.dtype.base->size > MAX_REG_SIZE) {
-                compile_err(NULL, "compiler bug: this register size exceeds max register size\n");
-                src.rsize = 4;
-            } else {
-                src.rsize = (reg_size)dst.dtype.base->size;
+                if (dst.dtype.base->size > MAX_REG_SIZE) {
+                    compile_err(NULL, "compiler bug: this register size exceeds max register size\n");
+                    src.rsize = 4;
+                } else {
+                    src.rsize = (reg_size)dst.dtype.base->size;
+                }
             }
-        }
-    } else if (lhs->tag == REG) {
-        src = lhs->reg;
-        dst.dtype.base = lhs->reg.dtype.base;
-    } else {
-        unreachable;
-    }
-    typecheck(token, dst.dtype.base, src.dtype.base);
-
-    printd("binary_op:store\n");
-    if (offset.tag == REG) {
-        declarator_t top = dtype_top(&dst.dtype);
-        // TODO tmp solution
-        if (top.tag == DK_ADDR) {
-            dtype_pop(&dst.dtype);
-            top = dtype_top(&dst.dtype);
-        }
-        if (top.tag == DK_ARRAY) {
-            if (src_is_imm)
-                emit_mov(src, lhs->value);
-            emit_array_access(dst, src, offset.reg, STORE);
-        } else if (src_is_imm) {
-            emit_str_imm_regoff(dst, lhs->value, offset.reg);
+        } else if (lhs->tag == REG) {
+            src = lhs->reg;
+            dst.dtype.base = lhs->reg.dtype.base;
         } else {
-            emit_str_regoff(dst, src, offset.reg);
+            unreachable;
         }
-    } else if (src_is_imm) {
-        emit_str_imm(dst, lhs->value, (int)offset.value);
-    } else {
-        emit_str_reg(dst, src, (int)offset.value);
+        typecheck(token, dst.dtype.base, src.dtype.base);
+
+        printd("binary_op:store\n");
+        if (offset.tag == REG) {
+            declarator_t top = dtype_top(&dst.dtype);
+            // TODO tmp solution
+            if (top.tag == DK_ADDR) {
+                dtype_pop(&dst.dtype);
+                top = dtype_top(&dst.dtype);
+            }
+            if (top.tag == DK_ARRAY) {
+                if (src_is_imm)
+                    emit_mov(src, lhs->value);
+                emit_array_access(dst, src, offset.reg, STORE);
+            } else if (src_is_imm) {
+                emit_str_imm_regoff(dst, lhs->value, offset.reg);
+            } else {
+                emit_str_regoff(dst, src, offset.reg);
+            }
+        } else if (src_is_imm) {
+            emit_str_imm(dst, lhs->value, (int)offset.value);
+        } else {
+            emit_str_reg(dst, src, (int)offset.value);
+        }
+
+        if (!streq(token->end + 1, "=["))
+            break;
+        tok(context);
+        s = token->id;
+        s.data += 1;
     }
     return true;
 }

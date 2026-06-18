@@ -499,6 +499,8 @@ void emit_cond_set(reg_t dst, cond_t cond) {
 
 static uint32_t ldst_size_bits(reg_t r) {
     size_t sz = dtype_tryget_addr(&r.dtype) ? 8 : r.rsize;
+    if (sz == 0)
+        report_error("aarch64-bin: cannot load or store size of zero\n");
     if (sz >= 8)
         return 3;
     if (sz >= 4)

@@ -5,7 +5,8 @@
 // The empty-target store used to route through a separate stmt_stack_store
 // path; these checks verify each source form lands the right value:
 // untyped-immediate (emit_str_imm + comptime rsize), typed-immediate,
-// binary-op-led, and load-led stores.
+// binary-op-led, and load-led stores. The chained case verifies a single
+// source value lands in every target of `v =[A] =[B]`.
 
 R0 :: imm_untyped =>
 R0 isnt 7 -> _Exit 110 =>
@@ -18,6 +19,10 @@ R2 isnt 5 -> _Exit 112 =>
 
 R3 :: load_led =>
 R3 isnt 7 -> _Exit 113 =>
+
+[S] :: pair{.. 0} =[]
+R4 :: chained S =>
+R4 isnt 7 -> _Exit 114 =>
 
 printf "all store tests passed\n" =>
 ret 0
@@ -38,3 +43,10 @@ load_led: => R i32
     [X] :: 7 =[]
     [Y] :: [X] =[]
     ret [Y]
+
+pair:
+    struct { A i32, B i32 }
+
+chained: P addr pair => R i32
+    7 =[P.A] =[P.B]
+    ret [P.B]

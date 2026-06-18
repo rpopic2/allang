@@ -133,10 +133,10 @@ static inline i32 dtype_tryget(const dtype_t *self, dtype_kind_t kind) {
 }
 
 static inline i32 dtype_tryget_addr(const dtype_t *self) {
-    declarator_t top = dtype_bottom(self);
-    if (top.tag != DK_ADDR)
+    usize i = (self->decl_len > 0 && self->decl[0].tag == DK_CHECK) ? 1 : 0;
+    if (i >= self->decl_len || self->decl[i].tag != DK_ADDR)
         return 0;
-    else return top.amount;
+    return self->decl[i].amount;
 }
 
 static inline size_t dtype_size(const dtype_t *self) {
