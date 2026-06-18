@@ -8,7 +8,7 @@ if [[ "$(uname -m)" == x86* ]]; then
 fi
 
 echo "==> Building alc..."
-if ! ./build.sh; then
+if ! ./build-asm.sh; then
     echo "FATAL: build failed"
     exit 1
 fi

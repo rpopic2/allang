@@ -82,6 +82,13 @@ static inline declarator_t dtype_top(const dtype_t *self) {
     return self->decl[self->decl_len - 1];
 }
 
+static inline declarator_t dtype_bottom(const dtype_t *self) {
+    if (self->decl_len == 0) {
+        return (declarator_t){0};
+    }
+    return self->decl[0];
+}
+
 static inline declarator_t dtype_pop(dtype_t *self) {
     if (self->decl_len == 0) {
         return (declarator_t){0};

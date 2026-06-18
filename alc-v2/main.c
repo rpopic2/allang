@@ -2411,9 +2411,9 @@ bool stmt_eret(parser_context *context) {
     reg_t ret = *context->symbol->rets.begin;
     ret.reg_type = RET;
     ret.offset = 0;
-    declarator_t decl = dtype_top(&ret.dtype);
+    declarator_t decl = dtype_bottom(&ret.dtype);
     if (decl.tag != DK_CHECK) {
-        compile_err(&context->cur_token, "check(!) type is expected when using eret statement.\n");
+        compile_err(&context->cur_token, "a frontmost check(!) annotation is expected for the return type when using eret statement.\n");
     }
     
     emit_mov(ret, decl.amount);
@@ -2520,7 +2520,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                 } else {
                     symbol.ret_airity += 1;
                 }
-            } else if (islower(token->data[0])) {
+            } else if (islower(token->data[0]) || token->data[0] == '!') {
                 reg_t reg = {
                     .offset = symbol.airity,
                 };
