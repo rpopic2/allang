@@ -534,7 +534,7 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
         size = 8;
     }
     if (r0.rsize <= 0) {
-        report_error(NULL, "cannot %s size of zero\n", op);
+        report_error("cannot %s size of zero\n", op);
     } else if (size <= 1) {
         if (*op == 'l' && r0.dtype.base->sign)
             suffix = "sb";
