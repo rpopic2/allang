@@ -1758,11 +1758,11 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
     dyn_agg_member_free(args);
 }
 
-reg_size get_rsize(reg_t reg) {
-    if (dtype_tryget_addr(&reg.dtype)) {
+reg_size get_rsize(const reg_t *reg) {
+    if (dtype_tryget_addr(&reg->dtype)) {
         return (reg_size)sizeof (void *);
     }
-    size_t size = reg.dtype.base->size;
+    size_t size = reg->dtype.base->size;
     if (size > MAX_REG_SIZE) {
         compile_err(NULL, "compiler bug: this register size exceeds max register size\n");
         return 0;
@@ -1847,7 +1847,7 @@ bool nullary_op(parser_context *context, regable lhs) {
     const token_t *token = &context->cur_token;
     printd("nullary op\n");
     if (lhs.tag == VALUE) {
-        context->reg.rsize = get_rsize(context->reg);
+        context->reg.rsize = get_rsize(&context->reg);
         emit_mov(context->reg, lhs.value);
     } else if (lhs.tag == REG) {
         const reg_t *nreg = &lhs.reg;
@@ -2323,7 +2323,7 @@ void read_and_check_types(parser_context *context, list_reg_t *rets) {
             tok(context);
             if (!expr(context))
                 break;
-            context->reg.rsize = get_rsize(context->reg);
+            context->reg.rsize = get_rsize(&context->reg);
             if (rets_it < rets->cur) {
                 resolve_comptime_to(&context->reg, rets_it);
                 reg_typecheck(&context->cur_token, *rets_it, context->reg);
@@ -2411,6 +2411,7 @@ bool stmt_eret(parser_context *context) {
     reg_t ret = *context->symbol->rets.begin;
     ret.reg_type = RET;
     ret.offset = 0;
+    ret.rsize = get_rsize(&ret);
     declarator_t decl = dtype_bottom(&ret.dtype);
     if (decl.tag != DK_CHECK) {
         compile_err(&context->cur_token, "a frontmost check(!) annotation is expected for the return type when using eret statement.\n");
@@ -2430,6 +2431,8 @@ bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable
     reg_t ret = *context->symbol->rets.begin;
     ret.reg_type = RET;
     ret.offset = 0;
+    ret.rsize = get_rsize(&ret);
+    pdtype(&ret.dtype);
     declarator_t decl = dtype_top(&ret.dtype);
     if (decl.tag != DK_CHECK) {
         compile_err(&context->cur_token, "check(!) type is expected when using eret statement.\n");
@@ -2525,7 +2528,7 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
                     .offset = symbol.airity,
                 };
                 parse_dtype(context, &reg.dtype);
-                reg.rsize = get_rsize(reg);
+                reg.rsize = get_rsize(&reg);
                 if (parsing_arg) {
                     if (param_count >= MAX_PARAMS)
                         compile_err(token, "too many parameters\n");
