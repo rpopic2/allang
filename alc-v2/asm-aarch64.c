@@ -57,7 +57,7 @@ static const char *get_wx(reg_size reg_size) {
     } else if (reg_size <= 8) {
         format = "x";
     } else {
-        report_error(error_too_big, reg_size);
+        report_err(error_too_big, reg_size);
         format = "x";
     }
     return format;
@@ -77,7 +77,7 @@ void buf_putreg(buf *buffer, reg_t reg) {
         } else if (reg.rsize <= 8) {
             format = "x%d";
         } else {
-            report_error(CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg.rsize);
+            report_err(CSI_RED"aarch64: cannot load size bigger than 8 to register (was %d)\n"CSI_RESET, reg.rsize);
             return;
         }
         buf_snprintf(buffer, format, get_regoff(reg));
@@ -361,7 +361,7 @@ void put_xt(const type_t *type) {
     } else if (type->size == 4) {
         buf_putc(fn_buf, 'w');
     } else {
-        report_error("incorrect src size %zd\n", type->size);
+        report_err("incorrect src size %zd\n", type->size);
     }
     buf_putc(fn_buf, ' ');
 }
@@ -369,7 +369,7 @@ void put_xt(const type_t *type) {
 void type_conv(reg_t dst, reg_t src) {
     const type_t *srct = src.dtype.base;
     if (srct == NULL) {
-        report_error("compiler bug: type of the src reg was null\n");
+        report_err("compiler bug: type of the src reg was null\n");
         return;
     }
 
@@ -392,7 +392,7 @@ void type_conv(reg_t dst, reg_t src) {
         } else if (srct->size == 4) {
             buf_snprintf(fn_buf, "mov w%d, w%d\n", get_regoff(dst), get_regoff(src));
         } else {
-            report_error("compiler_bug: use mov instead of type_conv\n");
+            report_err("compiler_bug: use mov instead of type_conv\n");
         }
     }
 }
@@ -534,7 +534,7 @@ static void load_store_x(const char *op, reg_t r0, reg_t r1) {
         size = 8;
     }
     if (r0.rsize <= 0) {
-        report_error("cannot %s size of zero\n", op);
+        report_err("cannot %s size of zero\n", op);
     } else if (size <= 1) {
         if (*op == 'l' && r0.dtype.base->sign)
             suffix = "sb";
@@ -620,7 +620,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
 
     if (elem_size == 0) {
-        report_error("element size was zero\n");
+        report_err("element size was zero\n");
         return;
     }
     if (elem_size == 1) {
@@ -692,7 +692,7 @@ void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
     if (src.rsize > MAX_REG_SIZE) {
-        report_error("%s", error_too_big);
+        report_err("%s", error_too_big);
         return;
     }
     if (src.rsize > 8) {

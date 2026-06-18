@@ -197,7 +197,7 @@ static void write_macho(FILE *out) {
 
     uint8_t *img = calloc(1, img_cap);
     if (!img) {
-        report_error("macho: out of memory\n");
+        report_err("macho: out of memory\n");
         return;
     }
 
@@ -309,7 +309,7 @@ static void write_macho(FILE *out) {
 
     uint32_t code_off = (uint32_t)b.off;
     if (code_off > cmd_max) {
-        report_error("macho: load commands overflow\n");
+        report_err("macho: load commands overflow\n");
         free(img);
         return;
     }
@@ -406,7 +406,7 @@ static void write_macho(FILE *out) {
 
     uint8_t (*hashes)[CC_SHA256_DIGEST_LENGTH] = calloc(n_slots, CC_SHA256_DIGEST_LENGTH);
     if (!hashes) {
-        report_error("macho: out of memory\n");
+        report_err("macho: out of memory\n");
         free(img);
         return;
     }

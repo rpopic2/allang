@@ -64,7 +64,7 @@ static void write_pe(FILE *out, const bin_image *image) {
 
     static uint32_t name_off[PE_MAX_IMPORTS];
     if (nimp > PE_MAX_IMPORTS) {
-        report_error("pe-exe: too many imports\n");
+        report_err("pe-exe: too many imports\n");
         return;
     }
     uint32_t cur = iat_off + iat_size;
@@ -83,7 +83,7 @@ static void write_pe(FILE *out, const bin_image *image) {
     const uint32_t total_file = idata_raw_ptr + idata_raw_size;
 
     if (total_file > sizeof img) {
-        report_error("pe-exe: image too large\n");
+        report_err("pe-exe: image too large\n");
         return;
     }
     memset(img, 0, total_file);

@@ -1840,8 +1840,7 @@ bool expr_load(parser_context *context) {
     if (src.dtype.base->size > MAX_REG_SIZE) {
         compile_err(&context->cur_token, "cannot load object of size bigger than 16 bytes to register\n");
         printd("array: %d, type_size: %zd, rsize: %d\n", dtype_tryget_arr(&src.dtype), src.dtype.base->size, src.rsize);
-        dyn_member_t *members = &src.dtype.base->struct_t.members;
-        printd("memb_cnt: %zd\n", members->cur - members->begin);
+        printd("memb_cnt: %zd\n", src.dtype.base->struct_t.members.cur - src.dtype.base->struct_t.members.begin);
         str_printd(src.dtype.base->name);
     }
     size_t load_size = src.dtype.base->size;
@@ -2094,9 +2093,7 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
         if (dk == DK_NONE)
             break;
         dtype_push(out, (declarator_t){(unsigned)dk, .amount = amount});
-        const char *s = dtype_kind_string[dk];
         tok(context);
-        pcs(s);
         if (cur_token->end[0] == ')') {
             break_out = true;
         }
@@ -2127,8 +2124,6 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
             compile_err(cur_token, "array length was too big");
         dtype_push(out, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
     }
-    p(parsed dtype)
-    pdtype(out);
 
     return break_out;
 }
@@ -2447,7 +2442,6 @@ bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable
     reg_t ret = *context->symbol->rets.begin;
     ret.reg_type = RET;
     ret.offset = 0;
-    pdtype(&ret.dtype);
     declarator_t decl = dtype_bottom(&ret.dtype);
     if (decl.tag != DK_CHECK) {
         compile_err(&context->cur_token, "check(!) type is expected when using eret statement.\n");
@@ -3162,18 +3156,26 @@ void compile(src_t src) {
     }
 }
 
-void report_error(const char *format, ...) {
+void report_backtrace(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+#ifndef _WIN32
+    void *array[0x1000];
+    int size = backtrace(array, 0x1000);
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
+#endif
+}
+
+void report_err(const char *format, ...) {
     va_list args;
     va_start(args, format);
     fprintf(stderr, CSI_RED"error: "CSI_RESET);
     vfprintf(stderr, format, args);
     va_end(args);
     compile_err(NULL, "");
-#ifndef _WIN32
-    void *array[0x1000];
-    int size = backtrace(array, 0x1000);
-    backtrace_symbols_fd(array, size, STDERR_FILENO);
-#endif
+    report_backtrace("");
 }
 
 int main(int argc, const char *argv[]) {

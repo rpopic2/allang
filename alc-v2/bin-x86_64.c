@@ -10,9 +10,6 @@
 #include "typesys.h"
 #include "emit-bin.h"
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-parameter"
-
 #define CODE_CAP 0x20000
 #define PROL_CAP 256
 #define LABEL_CAP 1024
@@ -133,14 +130,14 @@ static const uint8_t cond_cc[] = {
 static void put8(uint8_t b) {
     if (emit_to_prol) {
         if (prol_len >= PROL_CAP) {
-            report_error("x86_64-bin: prologue buffer overflow\n");
+            report_err("x86_64-bin: prologue buffer overflow\n");
             return;
         }
         prol[prol_len++] = b;
         return;
     }
     if (body_len >= CODE_CAP) {
-        report_error("x86_64-bin: code buffer overflow\n");
+        report_err("x86_64-bin: code buffer overflow\n");
         return;
     }
     body[body_len++] = b;
@@ -340,7 +337,7 @@ void emit_fn_end(emit_context_t *context) {
     uint32_t base = code_len;
     uint32_t delta = base + prol_len;
     if (code_len + prol_len + body_len > CODE_CAP) {
-        report_error("x86_64-bin: code buffer overflow\n");
+        report_err("x86_64-bin: code buffer overflow\n");
         return;
     }
     memcpy(code + code_len, prol, prol_len);
@@ -411,7 +408,7 @@ void bin_emit(bin_image *image) {
             }
             if (imp == n_imports) {
                 if (n_imports >= IMPORT_CAP) {
-                    report_error("x86_64-bin: import overflow\n");
+                    report_err("x86_64-bin: import overflow\n");
                     continue;
                 }
                 char *name = malloc(KEY_CAP);
@@ -427,7 +424,7 @@ void bin_emit(bin_image *image) {
         }
         uint32_t target;
         if (!find_at(labels, nlabels, fx->key, &target)) {
-            report_error("x86_64-bin: unresolved label '%s'\n", fx->key);
+            report_err("x86_64-bin: unresolved label '%s'\n", fx->key);
             continue;
         }
         int32_t rel = (int32_t)target - (int32_t)(fx->site + 4);
@@ -652,7 +649,7 @@ void emit_string_lit(reg_t dst, const str *s) {
         n -= 2;
     }
     if (cstrs_len + n + 1 > CSTR_CAP) {
-        report_error("x86_64-bin: cstring buffer overflow\n");
+        report_err("x86_64-bin: cstring buffer overflow\n");
         return;
     }
     uint32_t str_off = cstrs_len;
@@ -673,7 +670,7 @@ void emit_string_lit(reg_t dst, const str *s) {
     put8((uint8_t)(0x00u | ((r & 7u) << 3) | 5u));
 
     if (nfixups >= FIXUP_CAP) {
-        report_error("x86_64-bin: fixup overflow\n");
+        report_err("x86_64-bin: fixup overflow\n");
         return;
     }
     fixup_t *fx = &fixups[nfixups++];
@@ -768,7 +765,7 @@ void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
 
 void emit_branch(str fn_name, str label, int index) {
     if (nfixups >= FIXUP_CAP) {
-        report_error("x86_64-bin: fixup overflow\n");
+        report_err("x86_64-bin: fixup overflow\n");
         return;
     }
     put8(OP_JMP_REL32);
@@ -781,11 +778,11 @@ void emit_branch(str fn_name, str label, int index) {
 
 bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
     if (condition >= (cond_t)(sizeof cond_cc)) {
-        report_error("x86_64-bin: unknown condition %d\n", condition);
+        report_err("x86_64-bin: unknown condition %d\n", condition);
         return false;
     }
     if (nfixups >= FIXUP_CAP) {
-        report_error("x86_64-bin: fixup overflow\n");
+        report_err("x86_64-bin: fixup overflow\n");
         return false;
     }
     put8(OP_0F);
@@ -800,7 +797,7 @@ bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
 
 void emit_label(str fn_name, str label, int index) {
     if (nlabels >= LABEL_CAP) {
-        report_error("x86_64-bin: label overflow\n");
+        report_err("x86_64-bin: label overflow\n");
         return;
     }
     label_t *l = &labels[nlabels++];
@@ -810,7 +807,7 @@ void emit_label(str fn_name, str label, int index) {
 
 void emit_cond_set(reg_t dst, cond_t cond) {
     if (cond >= (cond_t)(sizeof cond_cc)) {
-        report_error("x86_64-bin: unknown condition %d\n", cond);
+        report_err("x86_64-bin: unknown condition %d\n", cond);
         return;
     }
     uint32_t r = reg_no(dst);
@@ -890,7 +887,7 @@ void emit_fn_prologue_epilogue(const parser_context *pc) {
 
 void emit_fn_call(const str *s) {
     if (nfixups >= FIXUP_CAP) {
-        report_error("x86_64-bin: fixup overflow\n");
+        report_err("x86_64-bin: fixup overflow\n");
         return;
     }
     put8(OP_CALL_REL32);
@@ -1055,8 +1052,8 @@ void emit_zerofill(reg_t base, i64 offset, const dtype_t *dtype) {
     }
 }
 
-void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {}
-void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args) {}
+void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) { (void)dst; (void)type; (void)len; (void)args; }
+void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args) { (void)dst; (void)offset; (void)type; (void)len; (void)args; }
 
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store) {
     dtype_t *dtype = &src.dtype;
@@ -1073,7 +1070,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
 
     if (elem_size == 0) {
-        report_error("element size was zero\n");
+        report_err("element size was zero\n");
         return;
     }
 
@@ -1165,7 +1162,5 @@ void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
         emit_add_reg(dst, base, idx);
     }
 }
-
-#pragma clang diagnostic pop
 
 const size_t default_register_size = 8;
