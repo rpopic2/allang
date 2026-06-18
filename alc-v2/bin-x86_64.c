@@ -10,9 +10,6 @@
 #include "typesys.h"
 #include "emit-bin.h"
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-parameter"
-
 #define CODE_CAP 0x20000
 #define PROL_CAP 256
 #define LABEL_CAP 1024
@@ -1055,8 +1052,8 @@ void emit_zerofill(reg_t base, i64 offset, const dtype_t *dtype) {
     }
 }
 
-void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) {}
-void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args) {}
+void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) { (void)dst; (void)type; (void)len; (void)args; }
+void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args) { (void)dst; (void)offset; (void)type; (void)len; (void)args; }
 
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store) {
     dtype_t *dtype = &src.dtype;
@@ -1165,7 +1162,5 @@ void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
         emit_add_reg(dst, base, idx);
     }
 }
-
-#pragma clang diagnostic pop
 
 const size_t default_register_size = 8;
