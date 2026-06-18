@@ -637,7 +637,7 @@ void emit_branch(str fn_name, str label, int index) {
 }
 
 const char *const cond_str[] = {
-    "e", "ne", "ge", "l", "g", "le", "ae", "b", "a", "be",
+    "e", "ne", "ae", "b", "s", "ns", "o", "no", "a", "be", "ge", "l", "g", "le",
 };
 bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
     if (condition >= (cond_t)(sizeof cond_str / sizeof cond_str[0])) {

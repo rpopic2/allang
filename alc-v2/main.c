@@ -129,6 +129,15 @@ bool cond_eval(cond_t cond, i64 lhs, i64 rhs) {
         return (u64)lhs > (u64)rhs;
     case COND_LS:
         return (u64)lhs <= (u64)rhs;
+    case COND_AL:
+        return true;
+    case COND_NV:
+        return false;
+    case COND_MI:
+    case COND_PL:
+    case COND_VS:
+    case COND_VC:
+        break;
     }
     unreachable;
 }

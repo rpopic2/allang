@@ -24,7 +24,8 @@ const char *imm_prefix = "#";
 
 // see enum cond
 const char *const cond_str[] = {
-    "eq", "ne", "ge", "lt", "gt", "le", "hs", "lo", "hi", "ls",
+    "eq", "ne", "hs", "lo", "mi", "pl", "vs", "vc",
+    "hi", "ls", "ge", "lt", "gt", "le", "al", "nv",
 };
 
 const size_t default_register_size = 8;
