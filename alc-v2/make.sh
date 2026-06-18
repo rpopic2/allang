@@ -6,6 +6,8 @@ case "${1:-build}" in
     build)
         if [ ! -e alc ] || [ -n "$(find *.c *.h -newer alc 2>/dev/null)" ]; then
             ./build.sh
+        else
+            echo nothing to build
         fi
         ;;
     clean)
