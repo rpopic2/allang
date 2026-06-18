@@ -41,7 +41,7 @@ void emit_init(void) {
 
 void emit_fn_begin(emit_context_t *in_context) {
     if (contexts_top == contexts + MAX_CONTEXTS) {
-        report_error("max contexts reached. #import or #compile recursion might be too deep");
+        report_err("max contexts reached. #import or #compile recursion might be too deep");
         return;
     }
     *contexts_top++ = context;

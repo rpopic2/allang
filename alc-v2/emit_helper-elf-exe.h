@@ -49,7 +49,7 @@ static void write_static_elf(FILE *out, const bin_image *image) {
     const u64 total_size = shdr_off + 3 * sizeof(Elf64_Shdr);
 
     if (total_size > sizeof img) {
-        report_error("elf-exe: image too large\n");
+        report_err("elf-exe: image too large\n");
         return;
     }
     memset(img, 0, total_size);
@@ -200,7 +200,7 @@ static void write_dynamic_elf(FILE *out, const bin_image *image) {
     const u64 total_size = shdr_dyn_off + 4 * sizeof(Elf64_Shdr);
 
     if (total_size > sizeof img || dynstr_len > sizeof dynstr || nimp > 62) {
-        report_error("elf-exe: dynamic image too large\n");
+        report_err("elf-exe: dynamic image too large\n");
         return;
     }
     memset(img, 0, total_size);

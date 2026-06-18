@@ -6,7 +6,11 @@ void compile_warning(const token_t *token, const char *format, ...);
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((format(printf, 1, 2)))
 #endif
-void report_error(const char *format, ...);
+void report_err(const char *format, ...);
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 1, 2)))
+#endif
+void report_backtrace(const char *format, ...);
 
 #if NDEBUG
 #define printd(...) ((void)0)
@@ -27,7 +31,7 @@ void report_error(const char *format, ...);
 #define pc(i) printf(#i": '%c'\n", i);
 #define pcs(s) printf(#s": '%s'\n", s);
 #define ps(s) printf(#s": "), str_print(s);
-#define bt(s) report_error("\n");
+#define bt(s) report_backtrace("\n");
 #define pdtype(dtype) ALLOCATOR_MAKE(_alloc, 1024); ps(dtype_to_str((dtype), &_alloc));
 #endif
 

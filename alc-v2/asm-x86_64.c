@@ -39,7 +39,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
         return;
     }
     if (reg.offset < 0) {
-        report_error("unexpected negative register offset %d", reg.offset);
+        report_err("unexpected negative register offset %d", reg.offset);
         return;
     }
     size_t offset = (size_t)reg.offset;
@@ -49,7 +49,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
 #define RNAME(RTYPE, rtype) \
     } else if (reg_type == RTYPE) { \
         if (offset >= rname_##rtype##_len) { \
-            report_error("used up all "#rtype" registers. offset was %zd\n", offset); \
+            report_err("used up all "#rtype" registers. offset was %zd\n", offset); \
             return; \
         } \
         rname_original = rname_##rtype[offset];
@@ -94,7 +94,7 @@ static void buf_putreg(buf *buffer, reg_t reg) {
             *--rname = 'r';
         }
     } else {
-        report_error("incorrect rsize %d\n", rsize);
+        report_err("incorrect rsize %d\n", rsize);
     }
     buf_snprintf(buffer, "%s", rname);
 }
@@ -537,7 +537,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
 
     if (elem_size == 0) {
-        report_error("element size was zero\n");
+        report_err("element size was zero\n");
         return;
     }
 

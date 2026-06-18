@@ -119,7 +119,7 @@ static const uint8_t cond_aarch64[] = {
 
 static void put_word(uint32_t w) {
     if (body_len >= CODE_CAP) {
-        report_error("aarch64-bin: code buffer overflow\n");
+        report_err("aarch64-bin: code buffer overflow\n");
         return;
     }
     body[body_len++] = w;
@@ -127,7 +127,7 @@ static void put_word(uint32_t w) {
 
 static void put_prologue(uint32_t w) {
     if (prol_len >= PROL_CAP) {
-        report_error("aarch64-bin: prologue buffer overflow\n");
+        report_err("aarch64-bin: prologue buffer overflow\n");
         return;
     }
     prol[prol_len++] = w;
@@ -173,7 +173,7 @@ void emit_fn_end(emit_context_t *context) {
     uint32_t base = code_len;
     uint32_t delta = base + prol_len;
     if (code_len + prol_len + body_len > CODE_CAP) {
-        report_error("aarch64-bin: code buffer overflow\n");
+        report_err("aarch64-bin: code buffer overflow\n");
         return;
     }
     memcpy(code + code_len, prol, prol_len * sizeof prol[0]);
@@ -242,7 +242,7 @@ void bin_emit(bin_image *image) {
                 }
                 if (imp == n_imports) {
                     if (n_imports >= sizeof imports / sizeof imports[0]) {
-                        report_error("aarch64-bin: import overflow\n");
+                        report_err("aarch64-bin: import overflow\n");
                         continue;
                     }
                     imports[n_imports++].name = fx->key;
@@ -253,7 +253,7 @@ void bin_emit(bin_image *image) {
                 continue;
             }
         } else if (!find_word(labels, nlabels, fx->key, &target)) {
-            report_error("aarch64-bin: unresolved label '%s'\n", fx->key);
+            report_err("aarch64-bin: unresolved label '%s'\n", fx->key);
             continue;
         }
         int32_t rel = (int32_t)target - (int32_t)fx->site;
@@ -497,7 +497,7 @@ void emit_cond_set(reg_t dst, cond_t cond) {
 static uint32_t ldst_size_bits(reg_t r) {
     size_t sz = dtype_tryget_addr(&r.dtype) ? 8 : r.rsize;
     if (sz == 0)
-        report_error("aarch64-bin: cannot load or store size of zero\n");
+        report_err("aarch64-bin: cannot load or store size of zero\n");
     if (sz >= 8)
         return 3;
     if (sz >= 4)
@@ -602,7 +602,7 @@ void emit_fn_prologue_epilogue(const parser_context *pc) {
 
     int regs_to_save = pc->max_nreg_count;
     if (regs_to_save + CALLEE_START >= 28) {
-        report_error("aarch64-bin: out of callee-saved registers\n");
+        report_err("aarch64-bin: out of callee-saved registers\n");
         return;
     }
     bool calls_fn = pc->calls_fn;
@@ -674,7 +674,7 @@ void emit_fn_prologue_epilogue(const parser_context *pc) {
 
 void emit_branch(str fn_name, str label, int index) {
     if (nfixups >= FIXUP_CAP) {
-        report_error("aarch64-bin: fixup overflow\n");
+        report_err("aarch64-bin: fixup overflow\n");
         return;
     }
     fixup_t *fx = &fixups[nfixups++];
@@ -686,11 +686,11 @@ void emit_branch(str fn_name, str label, int index) {
 
 bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
     if (condition >= (cond_t)(sizeof cond_aarch64)) {
-        report_error("aarch64-bin: unknown condition %d\n", condition);
+        report_err("aarch64-bin: unknown condition %d\n", condition);
         return false;
     }
     if (nfixups >= FIXUP_CAP) {
-        report_error("aarch64-bin: fixup overflow\n");
+        report_err("aarch64-bin: fixup overflow\n");
         return false;
     }
     fixup_t *fx = &fixups[nfixups++];
@@ -703,7 +703,7 @@ bool emit_branch_cond(cond_t condition, str fn_name, str label, int index) {
 
 void emit_label(str fn_name, str label, int index) {
     if (nlabels >= LABEL_CAP) {
-        report_error("aarch64-bin: label overflow\n");
+        report_err("aarch64-bin: label overflow\n");
         return;
     }
     label_t *l = &labels[nlabels++];
@@ -848,7 +848,7 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
             dst_initialized = true;
             size_acc += memb_size;
         } else {
-            report_error("aarch64-bin: unexpected aggregate member tag\n");
+            report_err("aarch64-bin: unexpected aggregate member tag\n");
             break;
         }
     }
@@ -937,7 +937,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
 
     if (elem_size == 0) {
-        report_error("element size was zero\n");
+        report_err("element size was zero\n");
         return;
     }
     if (elem_size == 1) {
@@ -1001,7 +1001,7 @@ void emit_string_lit(reg_t dst, const str *s) {
         n -= 2;
     }
     if (cstrs_len + n + 1 > sizeof cstrs) {
-        report_error("aarch64-bin: cstring buffer overflow\n");
+        report_err("aarch64-bin: cstring buffer overflow\n");
         return;
     }
     uint32_t str_off = cstrs_len;
@@ -1010,7 +1010,7 @@ void emit_string_lit(reg_t dst, const str *s) {
     cstrs[cstrs_len++] = '\0';
 
     if (nfixups >= FIXUP_CAP) {
-        report_error("aarch64-bin: fixup overflow\n");
+        report_err("aarch64-bin: fixup overflow\n");
         return;
     }
     fixup_t *fx = &fixups[nfixups++];
@@ -1022,7 +1022,7 @@ void emit_string_lit(reg_t dst, const str *s) {
 
 void emit_fn_call(const str *s) {
     if (nfixups >= FIXUP_CAP) {
-        report_error("aarch64-bin: fixup overflow\n");
+        report_err("aarch64-bin: fixup overflow\n");
         return;
     }
     fixup_t *fx = &fixups[nfixups++];
