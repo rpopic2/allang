@@ -20,6 +20,7 @@
 #define KEY_CAP 96
 #define CALLEE_START 19
 
+#define OP_MOVN           0x12800000u
 #define OP_MOVZ           0x52800000u
 #define OP_MOVK           0x72800000u
 #define OP_ORR_REG        0x2a000000u
@@ -288,6 +289,36 @@ void emit_mov(reg_t dst, i64 value) {
         sf = 1;
     int lanes = sf ? 4 : 2;
     uint64_t uv = (uint64_t)value;
+
+    int movz_count = 0;
+    int movn_count = 0;
+    for (int lane = 0; lane < lanes; lane++) {
+        uint32_t chunk = (uint32_t)((uv >> (lane * 16)) & 0xffff);
+        if (chunk != 0)
+            movz_count++;
+        if (chunk != 0xffff)
+            movn_count++;
+    }
+
+    if (movn_count < movz_count) {
+        bool initialized = false;
+        for (int lane = 0; lane < lanes; lane++) {
+            uint32_t chunk = (uint32_t)((uv >> (lane * 16)) & 0xffff);
+            if (chunk == 0xffff)
+                continue;
+            if (initialized) {
+                put_word((sf << 31) | OP_MOVK | ((uint32_t)lane << 21) | (chunk << 5) | rd);
+            } else {
+                uint32_t inv = (~chunk) & 0xffff;
+                put_word((sf << 31) | OP_MOVN | ((uint32_t)lane << 21) | (inv << 5) | rd);
+                initialized = true;
+            }
+        }
+        if (!initialized)
+            put_word((sf << 31) | OP_MOVN | rd);
+        return;
+    }
+
     bool initialized = false;
     for (int lane = 0; lane < lanes; lane++) {
         uint32_t chunk = (uint32_t)((uv >> (lane * 16)) & 0xffff);
@@ -518,11 +549,15 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
 
 void emit_str_imm(reg_t dst, i64 value, int offset) {
     reg_t tmp = {
-        .reg_type = SCRATCH, .offset = 8,
+        .reg_type = SCRATCH, .offset = 0,
         .rsize = dst.dtype.base ? (reg_size)dst.dtype.base->size : 8,
         .dtype = { .base = dst.dtype.base },
     };
-    emit_mov(tmp, value);
+    if (value != 0) {
+        emit_mov(tmp, value);
+    } else {
+        tmp = XZR;
+    }
     emit_str_reg(dst, tmp, offset);
 }
 

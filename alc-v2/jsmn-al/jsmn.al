@@ -56,12 +56,12 @@ jsmntok:
 
 jsmn_alloc_token: Parser addr jsmn_parser, Tokens slice jsmntok => !addr jsmntok
     Toknext :: [Parser.Toknext]
-    Toknext + 1 =[Parser.Toknext]
 
     Tok :: Tokens * Toknext ! eret
 
-    -1 =[Tok.End]
-    -1 =[Tok.Start]
+    Toknext + 1 =[Parser.Toknext]
+
+    -1 =[Tok.End] =[Tok.Start]
     0 =[Tok.Size]
 
     ret Tok
