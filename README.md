@@ -1,5 +1,4 @@
-# allang: a programming language for modern hardware
-by rpopic2
+# allang: A simple, low-level language for writing predictable, optimized machine code on modern hardware
 
 ```
 - low-level as assembly, simple as python
