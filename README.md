@@ -1,4 +1,4 @@
-# allang: A simple, low-level language for writing predictable, optimized machine code on modern hardware
+# allang: A simple, low-level language
 
 ```
 - low-level as assembly, simple as python
