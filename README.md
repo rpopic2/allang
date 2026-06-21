@@ -2,23 +2,22 @@
 by rpopic2
 
 ```
-- low level as assembly, simple as python
-- explicit error handling, not verbose
-- write optimized code without optimizers, compile fast
+- low-level as assembly, simple as python
+- explicit error handling, without the verbosity
+- write optimized code without an optimizer, and compile fast
 ```
 
 
 ### why allang?
 - interoperates with c.
-- all variables are immutable outside declaration scope
-- when it comes to performance tuning, you have to look at assembly anyway, and just hope that the compiler will generate the code you want.
-- some languages like c++ and rust are so complex that learning how the actual computers work is simpler and beneficial
-- we only target x86_64, aarch64, linux, macos and windows. which makes abstracting the real hardware much easier. (not targeting some ancient systems like 10-bit machines)
-- known footguns are allowed but needs to be explicitly requested. (use unchecked to remove bounds checking, undefined to use uninitialized value)
-- c compiler model and the compilation pipeline is based on the good ol' days' hardwares and constraints. we need a language that respects modern hardwares
-- it is easy to write a simple program, like python. easily spin up a shell script.
-- ergonomic design. type less, type easy.
-
+- all variables are immutable outside their declaration scope.
+- performance tuning means reading the assembly anyway and hoping the compiler emits what you want; allang lets you write it directly.
+- languages like c++ and rust are so complex that learning how computers actually work is simpler, and pays off more.
+- it targets only x86_64, aarch64, linux, macos and windows, which makes abstracting real hardware far easier. (no ancient systems like 10-bit machines.)
+- footguns are allowed, but must be requested explicitly. (use `unchecked` to remove bounds checking, `undefined` to use an uninitialized value.)
+- the c compilation model reflects the hardware and constraints of decades ago; we need a language that respects modern hardware.
+- writing a simple program is easy, like python. spin up a shell script in seconds.
+- ergonomic design: type less, type easy.
 
 
 hello.al
@@ -32,13 +31,12 @@ Number :: 1234
 `This prints `Number` to the `std.Out .name @`!`n
 .print_to std.Out =>
 // result: "This prints 1234 to the std.Out!"
-
 ```
 
 error.al
 ```
 get_third_elem: Slice slice i32 => option i32
-    [Slice. 2] ! eret  // zero-indexed. ! operator checks bound. eret statement returns error.
+    [Slice. 2] ! eret  // zero-indexed. ! checks bounds. eret returns an error.
 ```
 
 vectorization.al
