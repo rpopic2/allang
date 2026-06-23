@@ -142,7 +142,7 @@ bool cond_eval(cond_t cond, i64 lhs, i64 rhs) {
     unreachable;
 }
 
-inline static void src_consume_line(src_t *const src) {
+inline static void src_advance(src_t *const src) {
     if (src->cur[0] == '\n') {
         ++lineno;
     }
@@ -168,7 +168,7 @@ retry:;
                 c = *(++src->cur);
             } while (c != '"' && c != '\n');
             cur_token->end = ++src->cur;
-            src_consume_line(src);
+            src_advance(src);
             break;
         }
         if (c == '/' && src->cur[1] == '/') {
@@ -183,7 +183,7 @@ retry:;
                 src->cur++;
                 cur_token->end++;
                 if (src->cur[0] == '\n') {
-                    src_consume_line(src);
+                    src_advance(src);
                 }
                 break;
             }
@@ -194,7 +194,7 @@ retry:;
         if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';'
                 || c == ')' || c == '(') {
             cur_token->end = src->cur;
-            src_consume_line(src);
+            src_advance(src);
             break;
         }
         ++src->cur;
@@ -229,7 +229,7 @@ retry:;
         while (true) {
             new_indent = 0;
             while (src->cur[0] == '\n') {
-                src_consume_line(src);
+                src_advance(src);
             }
             while (src->cur[0] == ' ') {
                 src->cur++;
