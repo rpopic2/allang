@@ -94,13 +94,6 @@ inline static bool is_id(char c) {
     return isalnum(c) || c == '_';
 }
 
-inline static void src_advance(src_t *const src) {
-    if (src->cur[0] == '\n') {
-        ++lineno;
-    }
-    ++src->cur;
-}
-
 u32 next_pow2(u32 n) {
     if (n <= 1) return 1;
     return 1 << (32 - __builtin_clz(n - 1));
@@ -149,6 +142,13 @@ bool cond_eval(cond_t cond, i64 lhs, i64 rhs) {
     unreachable;
 }
 
+inline static void src_consume_line(src_t *const src) {
+    if (src->cur[0] == '\n') {
+        ++lineno;
+    }
+    ++src->cur;
+}
+
 bool tok(parser_context *context) {
 retry:;
     src_t *src = context->src;
@@ -168,7 +168,7 @@ retry:;
                 c = *(++src->cur);
             } while (c != '"' && c != '\n');
             cur_token->end = ++src->cur;
-            src_advance(src);
+            src_consume_line(src);
             break;
         }
         if (c == '/' && src->cur[1] == '/') {
@@ -183,7 +183,7 @@ retry:;
                 src->cur++;
                 cur_token->end++;
                 if (src->cur[0] == '\n') {
-                    src_advance(src);
+                    src_consume_line(src);
                 }
                 break;
             }
@@ -194,7 +194,7 @@ retry:;
         if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';'
                 || c == ')' || c == '(') {
             cur_token->end = src->cur;
-            src_advance(src);
+            src_consume_line(src);
             break;
         }
         ++src->cur;
@@ -229,7 +229,7 @@ retry:;
         while (true) {
             new_indent = 0;
             while (src->cur[0] == '\n') {
-                src_advance(src);
+                src_consume_line(src);
             }
             while (src->cur[0] == ' ') {
                 src->cur++;
