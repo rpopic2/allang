@@ -94,6 +94,13 @@ inline static bool is_id(char c) {
     return isalnum(c) || c == '_';
 }
 
+inline static void src_advance(src_t *const src) {
+    if (src->cur[0] == '\n') {
+        ++lineno;
+    }
+    ++src->cur;
+}
+
 u32 next_pow2(u32 n) {
     if (n <= 1) return 1;
     return 1 << (32 - __builtin_clz(n - 1));
@@ -153,9 +160,7 @@ retry:;
 
     while (true) {
         if (src->cur > src->end) {
-            *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno, .filename = src->filename};
-            eof = true;
-            return false;
+            break;
         }
         char c = *src->cur;
         if (c == '"') {
@@ -163,9 +168,7 @@ retry:;
                 c = *(++src->cur);
             } while (c != '"' && c != '\n');
             cur_token->end = ++src->cur;
-            if (src->cur[0] == '\n')
-                ++lineno;
-            ++src->cur;
+            src_advance(src);
             break;
         }
         if (c == '/' && src->cur[1] == '/') {
@@ -175,16 +178,12 @@ retry:;
             cur_token->data = src->cur;
         }
         c = *src->cur;
-        if (src->cur[0] == '\n') {
-            ++lineno;
-        }
         if (c == '}' || c == '{' || c == '!') {
             if (src->cur == cur_token->data) {
                 src->cur++;
                 cur_token->end++;
                 if (src->cur[0] == '\n') {
-                    src->cur++;
-                    ++lineno;
+                    src_advance(src);
                 }
                 break;
             }
@@ -194,12 +193,13 @@ retry:;
         }
         if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';'
                 || c == ')' || c == '(') {
-            cur_token->end = src->cur++;
+            cur_token->end = src->cur;
+            src_advance(src);
             break;
         }
         ++src->cur;
     }
-    if (cur_token->end > src->end) {
+    if (src->cur > src->end || cur_token->end > src->end) {
         *cur_token = (token_t){.data = src->end, .end = src->end, .eob = true, .indent = indent, .lineno = lineno, .filename = src->filename};
         eof = true;
         return false;
@@ -224,13 +224,12 @@ retry:;
 
     context->end_of_line = end_of_line;
     if (end_of_line) {
-        unsigned char new_indent = 0;
+        u8 new_indent = 0;
         context->end_of_line = true;
         while (true) {
             new_indent = 0;
             while (src->cur[0] == '\n') {
-                ++lineno;
-                src->cur++;
+                src_advance(src);
             }
             while (src->cur[0] == ' ') {
                 src->cur++;
