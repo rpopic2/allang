@@ -1,4 +1,4 @@
-# allang: A simple, low-level language
+# allang: a simple, low-level language
 
 ```
 - low-level as assembly, simple as python
