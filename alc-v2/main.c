@@ -282,15 +282,11 @@ void consume_line(parser_context *context) {
 void consume_block(parser_context *context) {
     const token_t *cur_token = &context->cur_token;
     int start_indent = cur_token->indent;
-    bool check_start = true;
+    tok(context);
+    if (cur_token->indent != start_indent + 4) {
+        compile_err(cur_token, "indented block expected\n");
+    }
     while (true) {
-        tok(context);
-        if (check_start) {
-            check_start = false;
-            if (cur_token->indent != start_indent + 4) {
-                compile_err(cur_token, "indented block expected\n");
-            }
-        }
         if (str_len(cur_token->id) == 0) {
             return;
         }
@@ -302,6 +298,7 @@ void consume_block(parser_context *context) {
                 return;
             }
         }
+        tok(context);
     }
 }
 
