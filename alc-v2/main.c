@@ -458,11 +458,14 @@ int extract_scope_up(str *s) {
     return scope_up;
 }
 
+void update_if_greater(u8 *const dst, const u8 cmp) {
+    if (cmp > *dst)
+        *dst = cmp;
+}
+
 void context_add_nreg(parser_context *context, const dtype_t *dtype) {
     context->nreg_count += dtype_reg_count(dtype);
-#define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
-UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
-#undef UPDATE_IF_GREATER
+    update_if_greater(&context->max_nreg_count, context->nreg_count);
 }
 
 str dot_iter(str *s, char c) {
