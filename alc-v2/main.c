@@ -292,11 +292,9 @@ void consume_block(parser_context *context) {
         }
         consume_line(context);
 
-        if (cur_token->eob == EOB) {
-            if (cur_token->indent == start_indent + 4) {
-                printd("end of a block ret\n\n");
-                return;
-            }
+        if (cur_token->eob == EOB && cur_token->indent == start_indent + 4) {
+            printd("end of a block ret\n\n");
+            return;
         }
         tok(context);
     }
