@@ -171,7 +171,7 @@ retry:;
             src_consume_line(src);
             break;
         }
-        if (c == '/' && src->cur[1] == '/') {
+        if (streq(src->cur, "//")) {
             do {
                 c = *(++src->cur);
             } while (c != '\n');
