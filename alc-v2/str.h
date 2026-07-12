@@ -102,6 +102,22 @@ enum str_fmt_len {
 static void str_vfprintf(FILE *const file, const str fmt, va_list args) {
     const char *p = fmt.data;
     const char *const end = fmt.end;
+
+    bool has_str_spec = false;
+    for (const char *q = p; q + 1 < end; ++q) {
+        if (q[0] == '%' && q[1] == 'S') {
+            has_str_spec = true;
+            break;
+        }
+    }
+    char buf[1024];
+    if (!has_str_spec && str_len(fmt) < sizeof buf) {
+        memcpy(buf, fmt.data, str_len(fmt));
+        buf[str_len(fmt)] = '\0';
+        vfprintf(file, buf, args);
+        return;
+    }
+
     while (p < end) {
         if (*p != '%') {
             const char *const run = p;
