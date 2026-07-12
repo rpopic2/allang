@@ -142,7 +142,7 @@ bool cond_eval(cond_t cond, i64 lhs, i64 rhs) {
     unreachable;
 }
 
-inline static void src_consume_line(src_t *const src) {
+inline static void src_advance(src_t *const src) {
     if (src->cur[0] == '\n') {
         ++lineno;
     }
@@ -168,10 +168,10 @@ retry:;
                 c = *(++src->cur);
             } while (c != '"' && c != '\n');
             cur_token->end = ++src->cur;
-            src_consume_line(src);
+            src_advance(src);
             break;
         }
-        if (c == '/' && src->cur[1] == '/') {
+        if (streq(src->cur, "//")) {
             do {
                 c = *(++src->cur);
             } while (c != '\n');
@@ -183,7 +183,7 @@ retry:;
                 src->cur++;
                 cur_token->end++;
                 if (src->cur[0] == '\n') {
-                    src_consume_line(src);
+                    src_advance(src);
                 }
                 break;
             }
@@ -194,7 +194,7 @@ retry:;
         if (c == ',' || c == '\n' || c == ' ' || c == '\0' || c == ';'
                 || c == ')' || c == '(') {
             cur_token->end = src->cur;
-            src_consume_line(src);
+            src_advance(src);
             break;
         }
         ++src->cur;
@@ -229,7 +229,7 @@ retry:;
         while (true) {
             new_indent = 0;
             while (src->cur[0] == '\n') {
-                src_consume_line(src);
+                src_advance(src);
             }
             while (src->cur[0] == ' ') {
                 src->cur++;
@@ -282,26 +282,21 @@ void consume_line(parser_context *context) {
 void consume_block(parser_context *context) {
     const token_t *cur_token = &context->cur_token;
     int start_indent = cur_token->indent;
-    bool check_start = true;
+    tok(context);
+    if (cur_token->indent != start_indent + 4) {
+        compile_err(cur_token, "indented block expected\n");
+    }
     while (true) {
-        tok(context);
-        if (check_start) {
-            check_start = false;
-            if (cur_token->indent != start_indent + 4) {
-                compile_err(cur_token, "indented block expected\n");
-            }
-        }
         if (str_len(cur_token->id) == 0) {
             return;
         }
         consume_line(context);
 
-        if (cur_token->eob == EOB) {
-            if (cur_token->indent == start_indent + 4) {
-                printd("end of a block ret\n\n");
-                return;
-            }
+        if (cur_token->eob == EOB && cur_token->indent == start_indent + 4) {
+            printd("end of a block ret\n\n");
+            return;
         }
+        tok(context);
     }
 }
 
@@ -463,11 +458,11 @@ int extract_scope_up(str *s) {
     return scope_up;
 }
 
+#define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
+
 void context_add_nreg(parser_context *context, const dtype_t *dtype) {
     context->nreg_count += dtype_reg_count(dtype);
-#define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
-UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
-#undef UPDATE_IF_GREATER
+    UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
 }
 
 str dot_iter(str *s, char c) {
