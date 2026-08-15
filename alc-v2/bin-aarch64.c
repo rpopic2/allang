@@ -5,7 +5,7 @@
 
 #include "types.h"
 #include "emit.h"
-#include "err.h"
+#include "diagnostics.h"
 #include "str.h"
 #include "typesys.h"
 #include "emit-bin.h"

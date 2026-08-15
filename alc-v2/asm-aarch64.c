@@ -4,7 +4,6 @@
 
 #include "buffer.h"
 #include "emit.h"
-#include "err.h"
 #include "str.h"
 #include "typesys.h"
 #include "emit_helper.h"

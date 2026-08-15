@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include "types.h"
 #include "emit.h"
-#include "err.h"
+#include "diagnostics.h"
 #include "emit-bin.h"
 
 #define LOAD_BASE  0x400000UL

@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "diagnostics.h"
-#include "err.h"
 #include "str.h"
 #include "typesys.h"
 

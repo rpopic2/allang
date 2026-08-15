@@ -6,7 +6,7 @@
 #include <fcntl.h>
 #include <windows.h>
 #include "emit.h"
-#include "err.h"
+#include "diagnostics.h"
 #include "emit-bin.h"
 
 #define PE_IMAGE_BASE     0x140000000ULL

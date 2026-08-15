@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <inttypes.h>
 
 #ifndef _WIN32
@@ -8,7 +7,7 @@
 
 #include "buffer.h"
 #include "emit.h"
-#include "err.h"
+#include "diagnostics.h"
 #include "typesys.h"
 
 #define INIT_BUFSIZ 0x400

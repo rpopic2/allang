@@ -1,7 +1,7 @@
 #pragma once
 
 #include <inttypes.h>
-#include "err.h"
+#include "diagnostics.h"
 #include "typesys.h"
 
 // hash entry

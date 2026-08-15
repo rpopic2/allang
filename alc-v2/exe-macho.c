@@ -11,7 +11,7 @@
 
 #include "emit.h"
 #include "emit-bin.h"
-#include "err.h"
+#include "diagnostics.h"
 
 extern bool link_c;
 

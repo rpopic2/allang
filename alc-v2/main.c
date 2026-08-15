@@ -16,7 +16,6 @@
 #include "allocator.h"
 #include "diagnostics.h"
 #include "emit.h"
-#include "err.h"
 #include "hashmap.h"
 #include "mini_hashset.h"
 #include "opt.h"

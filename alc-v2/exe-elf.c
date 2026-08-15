@@ -1,10 +1,8 @@
-#include <stdarg.h>
 #include <stdio.h>
-#include <string.h>
 
 #include "emit.h"
 #include "typesys.h"
-#include "err.h"
+#include "diagnostics.h"
 
 /* Direct ELF backend: instead of emitting textual assembly for an external
    assembler and linker, this backend writes a complete, statically linked
