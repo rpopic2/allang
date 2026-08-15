@@ -325,50 +325,6 @@ void consume_line_or_block(parser_context *context) {
     }
 }
 
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((format(printf, 2, 3)))
-#endif
-void compile_err(const token_t *token, const char *format, ...) {
-    has_compile_err = true;
-    if (token) {
-        fprintf(stderr, CSI_RED"error"CSI_RESET": %s:%d: ", token->filename, token->lineno);
-    }
-
-    va_list args;
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-}
-
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((format(printf, 2, 3)))
-#endif
-void compile_warning(const token_t *token, const char *format, ...) {
-    has_compile_warning = true;
-    fputs(CSI_YELLOW, stderr);
-    if (token) {
-        fprintf(stderr, "warning in %s:%d: ", token->filename, token->lineno);
-    }
-
-    va_list args;
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    fputs(CSI_RESET, stderr);
-}
-
-void str_printerr(str s) {
-    str_fprint(s, stderr);
-}
-
-void str_printerrnl(str s) {
-    str_fprintnl(s, stderr);
-}
-
-void puterr(const char *s) {
-    fputs(s, stderr);
-}
-
 static inline str dtype_to_str(const dtype_t *self, allocator *alloc) {
     char *begin = allocator_alloc_undefined(alloc, 0);
     char *head = begin;

@@ -1,11 +1,58 @@
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "diagnostics.h"
 #include "err.h"
 #include "str.h"
-#include "types.h"
 #include "typesys.h"
+
+extern bool has_compile_err;
+extern bool has_compile_warning;
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 2, 3)))
+#endif
+void compile_err(const token_t *token, const char *format, ...) {
+    has_compile_err = true;
+    if (token) {
+        fprintf(stderr, CSI_RED"error"CSI_RESET": %s:%d: ", token->filename, token->lineno);
+    }
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 2, 3)))
+#endif
+void compile_warning(const token_t *token, const char *format, ...) {
+    has_compile_warning = true;
+    fputs(CSI_YELLOW, stderr);
+    if (token) {
+        fprintf(stderr, "warning in %s:%d: ", token->filename, token->lineno);
+    }
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputs(CSI_RESET, stderr);
+}
+
+void str_printerr(str s) {
+    str_fprint(s, stderr);
+}
+
+void str_printerrnl(str s) {
+    str_fprintnl(s, stderr);
+}
+
+void puterr(const char *s) {
+    fputs(s, stderr);
+}
 
 #if !NDEBUG
 
