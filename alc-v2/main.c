@@ -36,8 +36,6 @@ target *get_current_target_stack(parser_context *context);
 void resolve_stack_store_target(parser_context *context, target *cur_target,
         reg_t *src, int *out_offset);
 bool nullary_op(parser_context *context, regable lhs);
-void struct_report(type_t *type);
-void stack_report(parser_context *context);
 bool stmt_ret(parser_context *context);
 bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against);
 bool stmt_eret(parser_context *context);
@@ -2070,51 +2068,6 @@ int expr_line(parser_context *context) {
 }
 
 
-void struct_report(type_t *type) {
-#if !NDEBUG
-    printd(CSI_GREEN"struct report for "), str_printd(type->name);
-    printd("=================\n"CSI_RESET);
-    printd("\tsize: %zd, align %d\n", type->size, type->align);
-
-    dyn_member_t *members = &type->struct_t.members;
-    int ko = 0;
-    for (const member_t *it = members->begin; it != members->cur; ++it) {
-        const member_t *mem = it;
-        printd("\tmember %d: ", ko++);
-        str_printdnl(mem->name);
-        printd(" ");
-        str_printdnl(mem->dtype.base->name);
-        printd("\toffset: %zd, size: %zd\n",
-                mem->offset, dtype_size(&mem->dtype));
-    }
-    printd(CSI_GREEN"end report\n\n"CSI_RESET);
-#else
-    (void)type;
-#endif
-}
-
-void stack_report(parser_context *context) {
-#if !NDEBUG
-    if (context->stack_slot_count == 0)
-        return;
-
-    printd(CSI_GREEN"stack report for "), str_printd(context->name);
-    printd("=================\n"CSI_RESET);
-    printd("\tframe size: %d\n", context->stack_size);
-
-    for (int i = 0; i < context->stack_slot_count; ++i) {
-        const stack_slot_t *s = &context->stack_slots[i];
-        printd("\tslot %d: ", i);
-        str_printdnl(s->name);
-        printd(" ");
-        str_printdnl(s->type_name);
-        printd("\toffset: %zd, size: %zd\n", s->offset, s->size);
-    }
-    printd(CSI_GREEN"end report\n\n"CSI_RESET);
-#else
-    (void)context;
-#endif
-}
 
 bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
     bool break_out = false;
