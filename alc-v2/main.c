@@ -2,7 +2,6 @@
 #include <time.h>
 #include <ctype.h>
 #include <inttypes.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,15 +54,6 @@ type_t *type_usize;
 type_t *type_comptime_int = &(type_t){.align = 0, .sign = S_SIGNED, .size = 0, .tag = TK_NONE, .name = STR("comptime int")};
 type_t *error_type = &(type_t){.align = 0, .sign = S_UNSIGNED, .size = 0, .tag = TK_NONE, .name = STR("error_type")};
 
-u64 hash_fnv_1a(str id) {
-    u64 hash = 0xcbf29ce484222325;
-    while (id.data != id.end) {
-        hash ^= (u64)*id.data++;
-        hash *= 0x100000001b3;
-    }
-    return hash;
-}
-
 HASHMAP_GENERIC(symbol_t, 1024, hash_fnv_1a)
 HASHMAP_GENERIC(type_t, 128, hash_fnv_1a)
 
@@ -74,17 +64,12 @@ const_hashmap_t const_ids;
 static char symbol_arena_buf[256 * 1024];
 static allocator symbol_arena;
 
+// [ Lexer ]
+
 inline static bool is_id(char c) {
     return isalnum(c) || c == '_';
 }
 
-u32 next_pow2(u32 n) {
-    if (n <= 1)
-        return 1;
-    return 1 << (32 - __builtin_clz(n - 1));
-}
-
-// [ Parsing & Tokenizing ]
 
 inline static void src_advance(src_t *const src) {
     if (src->cur[0] == '\n') {

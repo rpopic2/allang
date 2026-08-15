@@ -295,7 +295,7 @@ typedef struct {
 
 #define MAX_PARAMS 8
 list_GENERIC(reg_t)
-typedef struct {
+typedef struct symbol {
     str name;
     u8 airity;
     u8 ret_airity;

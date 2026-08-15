@@ -1,4 +1,5 @@
 #pragma once
+#include "types.h"
 
 #define HASHMAP_GENERIC(T, array_len, hash_fn) \
  \
@@ -59,4 +60,13 @@ inline static T * __attribute__((unused)) hashmap_##T##_tryadd(hashmap_##T self,
     return &entry->value; \
 } \
  \
+
+u64 hash_fnv_1a(str id) {
+    u64 hash = 0xcbf29ce484222325;
+    while (id.data != id.end) {
+        hash ^= (u64)*id.data++;
+        hash *= 0x100000001b3;
+    }
+    return hash;
+}
 

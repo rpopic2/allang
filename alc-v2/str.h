@@ -1,15 +1,7 @@
 #pragma once
 
 #include <stdio.h>
-#include <stdbool.h>
-#include <string.h>
-
-void abort(void);
-
-typedef struct str {
-    const char *data;
-    const char *end;
-} str;
+#include "types.h"
 
 typedef struct iter {
     char *cur;

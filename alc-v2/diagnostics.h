@@ -2,15 +2,6 @@
 
 #include "types.h"
 
-typedef struct type_t type_t;
-typedef struct parser_context parser_context;
-typedef struct str str;
-typedef struct token token_t;
-typedef struct dtype dtype_t;
-typedef struct allocator allocator;
-typedef struct regable regable;
-typedef struct dyn_agg_member dyn_agg_member;
-
 #define DIAGRAM_SCALE_AUTO 0
 
 void compile_err(const token_t *token, const char *format, ...);

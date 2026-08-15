@@ -16,11 +16,24 @@ typedef int64_t i64;
 typedef ptrdiff_t isize;
 
 #define bool _Bool
+#define true 1
+#define false 0
 
 typedef u8 register_dst;
 typedef u8 reg_size;
 
 typedef struct type_t type_t;
+typedef struct parser_context parser_context;
+typedef struct token token_t;
+typedef struct dtype dtype_t;
+typedef struct allocator allocator;
+typedef struct regable regable;
+typedef struct dyn_agg_member dyn_agg_member;
+
+typedef struct str {
+    const char *data;
+    const char *end;
+} str;
 
 enum register_dst {
     RD_NONE, RET, PARAM, SCRATCH, NREG, STACK, FRAME
@@ -42,4 +55,10 @@ typedef enum cond {
 #define CSI_GREEN "\x1b[32m"
 #define CSI_YELLOW "\x1b[33m"
 #define CSI_RESET "\x1b[0m"
+
+u32 next_pow2(u32 n) {
+    if (n <= 1)
+        return 1;
+    return 1 << (32 - __builtin_clz(n - 1));
+}
 
