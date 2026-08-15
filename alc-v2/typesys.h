@@ -225,7 +225,7 @@ enum tag {
     NONE, VALUE, REG, AGGREGATE
 };
 
-typedef struct {
+typedef struct regable {
     union {
         i64 value;
         reg_t reg;

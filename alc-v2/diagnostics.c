@@ -1,3 +1,5 @@
+#include <inttypes.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -5,6 +7,12 @@
 #include "diagnostics.h"
 #include "str.h"
 #include "typesys.h"
+
+#ifndef _WIN32
+#include <execinfo.h>
+#include <unistd.h>
+#endif
+
 
 extern bool has_compile_err;
 extern bool has_compile_warning;
@@ -51,6 +59,77 @@ void str_printerrnl(str s) {
 
 void puterr(const char *s) {
     fputs(s, stderr);
+}
+
+str dtype_to_str(const dtype_t *self, allocator *alloc) {
+    char *begin = allocator_alloc_undefined(alloc, 0);
+    char *head = begin;
+
+    for (usize i = 0; i < self->decl_len; ++i) {
+        dtype_kind_t tag = self->decl[i].tag;
+        const char *s = dtype_kind_string[tag];
+        head = allocator_alloc_undefined(alloc, strlen(s));
+        memcpy(head, s, strlen(s));
+        head = allocator_alloc_undefined(alloc, 1);
+        *head = ' ';
+    }
+
+    str name = self->base->name;
+    head = allocator_alloc_undefined(alloc, str_len(name));
+    memcpy(head, name.data, str_len(name));
+    head = allocator_alloc_undefined(alloc, 1);
+    *head = '\0';
+    return (str){.data = begin, .end = head};
+}
+
+void diagnostic_slice(const token_t *token, i64 begin_index, i64 end_index, i32 array) {
+    if (end_index > INT_MAX) {
+        compile_err(token, "index was too big: %"PRId64, end_index);
+    }
+    if (begin_index > end_index) {
+        compile_err(token, "expected begin to be less than or equal to end index\n");
+    }
+    if (end_index > array) {
+        compile_err(token, "end index out of bounds\n");
+    }
+}
+
+bool diagnostic_dyn_elem_access(const parser_context *context, const regable *offset_regable) {
+    const token_t *cur_token = &context->cur_token;
+
+    if (offset_regable->tag == NONE) {
+        return false;
+    } else if (offset_regable->tag == VALUE) {
+        compile_warning(cur_token, "use static syntax [Arr.N] instead of [Arr * N]\n");
+    } else if (offset_regable->tag == REG && offset_regable->reg.reg_type == NREG) {
+
+    } else {
+        compile_err(&context->cur_token, "valid offset expected, but found "), str_printerr(context->cur_token.id);
+    }
+
+    return true;
+}
+
+void report_backtrace(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+#ifndef _WIN32
+    void *array[0x1000];
+    int size = backtrace(array, 0x1000);
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
+#endif
+}
+
+void report_err(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    fprintf(stderr, CSI_RED"error: "CSI_RESET);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    compile_err(NULL, "");
+    report_backtrace("");
 }
 
 #if !NDEBUG

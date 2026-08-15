@@ -1,14 +1,22 @@
 #pragma once
 
+#include "types.h"
+
 typedef struct type_t type_t;
 typedef struct parser_context parser_context;
 typedef struct str str;
 typedef struct token token_t;
+typedef struct dtype dtype_t;
+typedef struct allocator allocator;
+typedef struct regable regable;
 
 #define DIAGRAM_SCALE_AUTO 0
 
 void compile_err(const token_t *token, const char *format, ...);
 void compile_warning(const token_t *token, const char *format, ...);
+str dtype_to_str(const dtype_t *self, allocator *alloc);
+void diagnostic_slice(const token_t *token, i64 begin_index, i64 end_index, i32 array);
+bool diagnostic_dyn_elem_access(const parser_context *context, const regable *offset_regable);
 
 void str_printerr(str s);
 void str_printerrnl(str s);
