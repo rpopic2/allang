@@ -1104,35 +1104,6 @@ dyn_agg_member *read_aggregate(allocator *alloc, parser_context *context, dtype_
     return args;
 }
 
-void struct_expr_report(dyn_agg_member *args, type_t *type, int depth) {
-    dyn_member_t members = type->struct_t.members;
-    ptrdiff_t member_count = members.cur - members.begin;
-
-    if (depth == 0)
-        printd("\n");
-
-    printd("struct expr report: "), str_printd(type->name);
-    for (ptrdiff_t i = 0; i < member_count; ++i) {
-        agg_member *r = &args->begin[i];
-        for (int i = 0; i < depth; ++i) {
-            printd("\t");
-        }
-        printd("\targ %zd: ", i), str_printdnl(members.begin[i].name);
-        printd("\t");
-        if (r->tag == VALUE) {
-            printd("value: %"PRId64"\n", r->value);
-        } else if (r->tag == REG) {
-            printd("reg off: %d\n", r->reg.offset);
-        } else if (r->tag == AGGREGATE) {
-            struct_expr_report(r->agg, members.begin[i].dtype.base, depth + 1);
-        } else {
-            printd("error tag %d\n", r->tag);
-        }
-    }
-    if (depth == 0)
-        printd("\n");
-}
-
 void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     printd("slice access\n");
 

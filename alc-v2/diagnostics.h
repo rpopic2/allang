@@ -9,6 +9,7 @@ typedef struct token token_t;
 typedef struct dtype dtype_t;
 typedef struct allocator allocator;
 typedef struct regable regable;
+typedef struct dyn_agg_member dyn_agg_member;
 
 #define DIAGRAM_SCALE_AUTO 0
 
@@ -26,6 +27,7 @@ void struct_diagram(type_t *type, long scale);
 void stack_diagram(parser_context *context, long scale);
 void struct_report(type_t *type);
 void stack_report(parser_context *context);
+void struct_expr_report(dyn_agg_member *args, type_t *type, int depth);
 
 #if defined(__GNUC__) || defined(__clang__)
     __attribute__((format(printf, 1, 2)))
