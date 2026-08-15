@@ -438,6 +438,21 @@ void context_add_nreg(parser_context *context, const dtype_t *dtype) {
     UPDATE_IF_GREATER(context->max_nreg_count, context->nreg_count);
 }
 
+bool peek_expect(parser_context *context, const char *s) {
+    if (!streq(context->cur_token.end + 1, s)) {
+        compile_err(&context->cur_token, "expected %s\n", s);
+        return false;
+    }
+    return true;
+}
+bool expect(parser_context *context, str expected) {
+    if (!str_eq(context->cur_token.id, expected)) {
+        compile_err(&context->cur_token, "expected "), str_printerr(expected);
+        return false;
+    }
+    return true;
+}
+
 str dot_iter(str *s, char c) {
     const char *begin = s->data;
     if (s->data < s->end && *begin == c)
@@ -642,21 +657,6 @@ void check_unassigned(regable lhs, const parser_context *context) {
     }
 }
 
-bool peek_expect(parser_context *context, const char *s) {
-    if (!streq(context->cur_token.end + 1, s)) {
-        compile_err(&context->cur_token, "expected %s\n", s);
-        return false;
-    }
-    return true;
-}
-bool expect(parser_context *context, str expected) {
-    if (!str_eq(context->cur_token.id, expected)) {
-        compile_err(&context->cur_token, "expected "), str_printerr(expected);
-        return false;
-    }
-    return true;
-}
-
 void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
     if (decl.tag != DK_CHECK)
         return;
@@ -699,6 +699,168 @@ void check_bounds(parser_context *context, reg_t index, regable against, enum in
         compile_err(&cur_token, "expected to handle check operator\n");
     }
     context->reg = stash;
+}
+
+bool typecheck(const token_t *token, const type_t *ltype, const type_t *rtype) {
+    if (!ltype) {
+        compile_err(token, "compiler bug: type was null\n");
+        return false;
+    }
+    if (ltype == rtype)
+        return true;
+    str lname = ltype ? ltype->name : STR("NULL");
+    str rname = rtype ? rtype->name : STR("NULL");
+    compile_err(token, "type checker: expected type "), str_printerrnl(lname), puterr(", but found "), str_printerr(rname);
+    return false;
+}
+
+bool typecheck_regable(const token_t *token, const type_t *ltype, const regable *r) {
+    if (!ltype) {
+        compile_err(token, "compiler bug: type was null\n");
+        return false;
+    }
+
+    if (r->tag == REG) {
+        return typecheck(token, ltype, r->reg.dtype.base);
+    } else if (r->tag == VALUE) {
+        if (ltype->tag != TK_FUND) {
+            compile_err(token, "expected type "),
+                str_printerrnl(ltype->name),
+                str_printerr(STR(", but found numeric literal\n"));
+            return false;
+        }
+    }
+    return true;
+}
+
+void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
+    if (dtype_eq(&lhs.dtype, &rhs.dtype))
+        return;
+    if (dtype_check(&rhs.dtype, &lhs.dtype))
+        return;
+
+    ALLOCATOR_MAKE(alloc, 1024);
+    str lname = dtype_to_str(&lhs.dtype, &alloc);
+    str rname = dtype_to_str(&rhs.dtype, &alloc);
+    compile_err(token, "expected type '");
+    str_printerrnl(lname);
+    fprintf(stderr, "', but found type '");
+    str_printerrnl(rname);
+    fprintf(stderr, "'\n");
+}
+
+bool arithmetic_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
+    i32 laddr = dtype_tryget_addr(&lhs.dtype);
+    i32 raddr = dtype_tryget_addr(&rhs.dtype);
+
+    if (laddr != raddr) {
+        compile_err(token, "\t- address of %d indirection(s) expected, but found %d indirection(s)\n", laddr, raddr);
+        return false;
+    }
+
+    const type_t *const ltype = lhs.dtype.base;
+    const type_t *const rtype = rhs.dtype.base;
+    if (ltype == rtype)
+        return true;
+
+    assert(ltype);
+    assert(rtype);
+
+    const bool lsign = ltype->sign;
+    const bool rsign = rtype->sign;
+
+    if (lsign == rsign)
+        return true;
+
+    const size_t signed_size = lsign ? ltype->size : rtype->size;
+    const size_t unsigned_size = lsign ? rtype->size : ltype->size;
+    if (signed_size > unsigned_size)
+        return true;
+
+    if (lsign) {
+        compile_err(token, "\t- expected signed, but found unsigned\n");
+    } else {
+        compile_err(token, "\t- expected unsigned, but found signed\n");
+    }
+    return false;
+}
+
+bool resolve_comptime_default(reg_t *const r) {
+    if (r->dtype.base != type_comptime_int)
+        return false;
+    r->dtype.base = type_i32;
+    r->rsize = (reg_size)type_i32->size;
+    return true;
+}
+
+bool resolve_comptime_to(reg_t *const src, const reg_t *const target) {
+    if (src->dtype.base != type_comptime_int || target->dtype.base->tag != TK_FUND)
+        return false;
+    src->dtype.base = target->dtype.base;
+    src->rsize = target->rsize;
+    return true;
+}
+
+bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
+    bool break_out = false;
+    const token_t *cur_token = &context->cur_token;
+    *out = (dtype_t){0};
+
+    while (true) {
+        dtype_kind_t dk = DK_NONE;
+        int amount = 1;
+        if (str_eq_lit(cur_token->id, "addr")) {
+            dk = DK_ADDR;
+        } else if (str_eq_lit(cur_token->id, "slice")) {
+            dk = DK_SLICE;
+        } else if (str_eq_lit(cur_token->id, "!")) {
+            dk = DK_CHECK;
+            amount = (int)strtoll(cur_token->data + 1, NULL, 0);
+            if (amount) {
+                tok(context);       
+            }
+        }
+
+        if (streq(cur_token->id.end, "{"))
+            break;
+            
+        if (dk == DK_NONE)
+            break;
+
+        dtype_push(out, (declarator_t){(unsigned)dk, .amount = amount});
+        tok(context);
+        if (cur_token->end[0] == ')') {
+            break_out = true;
+        }
+    }
+
+    str iter = cur_token->id;
+
+    char *end_ptr = NULL;
+    unsigned long long len = strtoull(iter.data, &end_ptr, 0);
+    if (len) {
+        iter.data = end_ptr + 1;
+    }
+
+    if (cur_token->end[0] == ')') {
+        break_out = true;
+    }
+
+    str typename = iter;
+    type_t *type = hashmap_type_t_tryfind(types, typename);
+    if (!type) {
+        compile_err(cur_token, "unknown type "), str_printerr(typename);
+        type = error_type;
+    }
+    out->base = type;
+
+    if (len) {
+        if (len > INT_MAX)
+            compile_err(cur_token, "array length was too big");
+        dtype_push(out, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
+    }
+
+    return break_out;
 }
 
 bool diagnostic_dyn_elem_access(const parser_context *context, const regable *offset_regable) {
@@ -837,106 +999,6 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
 
     *out_offset = offset_regable;
     *out_reg = reg;
-    return true;
-}
-
-bool typecheck(const token_t *token, const type_t *ltype, const type_t *rtype) {
-    if (!ltype) {
-        compile_err(token, "compiler bug: type was null\n");
-        return false;
-    }
-    if (ltype == rtype)
-        return true;
-    str lname = ltype ? ltype->name : STR("NULL");
-    str rname = rtype ? rtype->name : STR("NULL");
-    compile_err(token, "type checker: expected type "), str_printerrnl(lname), puterr(", but found "), str_printerr(rname);
-    return false;
-}
-
-bool typecheck_regable(const token_t *token, const type_t *ltype, const regable *r) {
-    if (!ltype) {
-        compile_err(token, "compiler bug: type was null\n");
-        return false;
-    }
-
-    if (r->tag == REG) {
-        return typecheck(token, ltype, r->reg.dtype.base);
-    } else if (r->tag == VALUE) {
-        if (ltype->tag != TK_FUND) {
-            compile_err(token, "expected type "),
-                str_printerrnl(ltype->name),
-                str_printerr(STR(", but found numeric literal\n"));
-            return false;
-        }
-    }
-    return true;
-}
-
-void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
-    if (dtype_eq(&lhs.dtype, &rhs.dtype))
-        return;
-    if (dtype_check(&rhs.dtype, &lhs.dtype))
-        return;
-
-    ALLOCATOR_MAKE(alloc, 1024);
-    str lname = dtype_to_str(&lhs.dtype, &alloc);
-    str rname = dtype_to_str(&rhs.dtype, &alloc);
-    compile_err(token, "expected type '");
-    str_printerrnl(lname);
-    fprintf(stderr, "', but found type '");
-    str_printerrnl(rname);
-    fprintf(stderr, "'\n");
-}
-
-bool arithmetic_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
-    i32 laddr = dtype_tryget_addr(&lhs.dtype);
-    i32 raddr = dtype_tryget_addr(&rhs.dtype);
-
-    if (laddr != raddr) {
-        compile_err(token, "\t- address of %d indirection(s) expected, but found %d indirection(s)\n", laddr, raddr);
-        return false;
-    }
-
-    const type_t *const ltype = lhs.dtype.base;
-    const type_t *const rtype = rhs.dtype.base;
-    if (ltype == rtype)
-        return true;
-
-    assert(ltype);
-    assert(rtype);
-
-    const bool lsign = ltype->sign;
-    const bool rsign = rtype->sign;
-
-    if (lsign == rsign)
-        return true;
-
-    const size_t signed_size = lsign ? ltype->size : rtype->size;
-    const size_t unsigned_size = lsign ? rtype->size : ltype->size;
-    if (signed_size > unsigned_size)
-        return true;
-
-    if (lsign) {
-        compile_err(token, "\t- expected signed, but found unsigned\n");
-    } else {
-        compile_err(token, "\t- expected unsigned, but found signed\n");
-    }
-    return false;
-}
-
-bool resolve_comptime_default(reg_t *const r) {
-    if (r->dtype.base != type_comptime_int)
-        return false;
-    r->dtype.base = type_i32;
-    r->rsize = (reg_size)type_i32->size;
-    return true;
-}
-
-bool resolve_comptime_to(reg_t *const src, const reg_t *const target) {
-    if (src->dtype.base != type_comptime_int || target->dtype.base->tag != TK_FUND)
-        return false;
-    src->dtype.base = target->dtype.base;
-    src->rsize = target->rsize;
     return true;
 }
 
@@ -1149,7 +1211,6 @@ void compare_branch(parser_context *context, cond_t cond, const regable *restric
         }
     }
 }
-
 
 void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     printd("slice access\n");
@@ -1394,7 +1455,7 @@ bool binary_op(parser_context *restrict context, regable *restrict lhs) {
     return true;
 }
 
-dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *dtype) {
+dyn_agg_member *read_aggregate(allocator *alloc, parser_context *context, dtype_t *dtype) {
     const token_t *token = &context->cur_token;
     const str *s = &context->cur_token.id;
 
@@ -1473,7 +1534,7 @@ dyn_agg_member *read_braces(allocator *alloc, parser_context *context, dtype_t *
                 dtype_pop(&inner);
             }
 
-            dyn_agg_member *aggs = read_braces(alloc, context, &inner);
+            dyn_agg_member *aggs = read_aggregate(alloc, context, &inner);
             args->begin[index].tag = AGGREGATE;
             args->begin[index].agg = aggs;
             continue;
@@ -1733,7 +1794,7 @@ void expr_struct(parser_context *context, reg_t target, dtype_t *dtype) {
     allocator alloc;
     allocator_init(&alloc, buffer, sizeof buffer);
 
-    dyn_agg_member *args = read_braces(&alloc, context, dtype);
+    dyn_agg_member *args = read_aggregate(&alloc, context, dtype);
 
     type_t *type = dtype->base;
     struct_report(type);
@@ -2021,71 +2082,6 @@ int expr_line(parser_context *context) {
     }
     return expr_count;
 }
-
-
-
-bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
-    bool break_out = false;
-    const token_t *cur_token = &context->cur_token;
-    *out = (dtype_t){0};
-
-    while (true) {
-        dtype_kind_t dk = DK_NONE;
-        int amount = 1;
-        if (str_eq_lit(cur_token->id, "addr")) {
-            dk = DK_ADDR;
-        } else if (str_eq_lit(cur_token->id, "slice")) {
-            dk = DK_SLICE;
-        } else if (str_eq_lit(cur_token->id, "!")) {
-            dk = DK_CHECK;
-            amount = (int)strtoll(cur_token->data + 1, NULL, 0);
-            if (amount) {
-                tok(context);       
-            }
-        }
-
-        if (streq(cur_token->id.end, "{"))
-            break;
-            
-        if (dk == DK_NONE)
-            break;
-
-        dtype_push(out, (declarator_t){(unsigned)dk, .amount = amount});
-        tok(context);
-        if (cur_token->end[0] == ')') {
-            break_out = true;
-        }
-    }
-
-    str iter = cur_token->id;
-
-    char *end_ptr = NULL;
-    unsigned long long len = strtoull(iter.data, &end_ptr, 0);
-    if (len) {
-        iter.data = end_ptr + 1;
-    }
-
-    if (cur_token->end[0] == ')') {
-        break_out = true;
-    }
-
-    str typename = iter;
-    type_t *type = hashmap_type_t_tryfind(types, typename);
-    if (!type) {
-        compile_err(cur_token, "unknown type "), str_printerr(typename);
-        type = error_type;
-    }
-    out->base = type;
-
-    if (len) {
-        if (len > INT_MAX)
-            compile_err(cur_token, "array length was too big");
-        dtype_push(out, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
-    }
-
-    return break_out;
-}
-
 
 bool stmt_struct(parser_context *context) {
     const token_t *cur_token = &context->cur_token;

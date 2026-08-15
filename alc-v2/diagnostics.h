@@ -7,6 +7,9 @@ typedef struct token token_t;
 
 #define DIAGRAM_SCALE_AUTO 0
 
+void compile_err(const token_t *token, const char *format, ...);
+void compile_warning(const token_t *token, const char *format, ...);
+
 void str_printerr(str s);
 void str_printerrnl(str s);
 void puterr(const char *s);
@@ -15,9 +18,6 @@ void struct_diagram(type_t *type, long scale);
 void stack_diagram(parser_context *context, long scale);
 void struct_report(type_t *type);
 void stack_report(parser_context *context);
-
-void compile_err(const token_t *token, const char *format, ...);
-void compile_warning(const token_t *token, const char *format, ...);
 
 #if defined(__GNUC__) || defined(__clang__)
     __attribute__((format(printf, 1, 2)))
