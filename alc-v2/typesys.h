@@ -5,8 +5,6 @@
 #include "dyn.h"
 #include "str.h"
 #include "types.h"
-#include <stdbool.h>
-#include <stdio.h>
 
 typedef struct dtype dtype_t;
 typedef struct emit_context emit_context_t;

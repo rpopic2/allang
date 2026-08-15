@@ -3,9 +3,6 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "arr.h"
-#include "str.h"
-#include "types.h"
 #include "buffer.h"
 
 typedef struct reg reg_t;
