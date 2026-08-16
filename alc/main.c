@@ -2408,9 +2408,7 @@ bool decl_vars(parser_context *context) {
             
             if (!targ->target_assigned) {
                 tok(context);
-                reg_t last_reg = context->reg;
-                last_reg.offset -= 1;
-                regable src = {.tag = REG, .reg = last_reg};
+                regable src = {.tag = REG, .reg = context->reg};
                 if (streq(context->cur_token.id.data, "=[")) {
                     do_store(&src, context);
                 } else {
@@ -2497,8 +2495,6 @@ bool stmt_reg_assign(parser_context *context) {
         return false;
     reg_t *target_reg = cur_target->reg;
     reg_t src_reg = context->reg;
-    if (src_reg.reg_type == SCRATCH)
-        src_reg.offset -= 1;
     if (!cur_target->target_assigned) {
         if (src_reg.dtype.base == NULL) {
             compile_err(token, "assignment has no value to assign; expected the form '<value> ='\n");
@@ -2520,8 +2516,6 @@ bool stmt_reg_assign(parser_context *context) {
 
 void parse(parser_context *context) {
     const token_t *token = &context->cur_token;
-    reg_t last_reg = context->reg;
-    last_reg.offset -= 1;
     context->returns_on_exit = false;
     if (directives(context)) {
 
@@ -2530,7 +2524,7 @@ void parse(parser_context *context) {
     } else if (expr_line(context)) {
 
     } else if (streq(token->id.data, "=[")) {
-        regable src = {.tag = REG, .reg = last_reg};
+        regable src = {.tag = REG, .reg = context->reg};
         do_store(&src, context);
     } else if (stmt_reg_assign(context)) {
 
