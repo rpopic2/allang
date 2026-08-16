@@ -599,20 +599,21 @@ reg_size get_rsize(const reg_t *reg) {
     return (reg_size)next_pow2((u32)size);
 }
 
-void checkop_err(parser_context *context, const reg_t *reg, declarator_t decl) {
+void checkop_err(parser_context *context, const reg_t *reg) {
+    declarator_t decl = dtype_outer(&reg->dtype);
     if (decl.tag != DK_CHECK)
         return;
 
     const token_t *cur_token = &context->cur_token;
 
-    if (!peek_expect(context, "!"))
+    if (!expect(context, STR("!")))
         return;
 
     tok(context);
 
     i32 against = decl.amount;
 
-    tok(context);
+    str_printerr(cur_token->id);
     if (stmt_ret_cond(context, COND_EQ, *reg, (regable){.tag = VALUE, .value = against})) {
 
     } else {
@@ -2119,9 +2120,9 @@ int expr_line(parser_context *context) {
     bool ok = expr(context);
     if (!ok)
         return 0;
-    context->reg.offset += dtype_reg_count(&context->reg.dtype);
 
     while (token->end[0] == ',' && isspace(token->end[1])) {
+        context->reg.offset += dtype_reg_count(&context->reg.dtype);
         printd(", ");
         tok(context);
         *token = context->cur_token;
@@ -2129,10 +2130,9 @@ int expr_line(parser_context *context) {
         ok = expr(context);
         if (!ok)
             break;
-        context->reg.offset += dtype_reg_count(&context->reg.dtype);
     }
 
-    int expr_count = context->reg.offset;
+    int expr_count = context->reg.offset + dtype_reg_count(&context->reg.dtype);
     if (context->cur_token.end[0] == '\n') {
         context->reg.offset = 0;
         context->reg.reg_type = SCRATCH;
@@ -2296,12 +2296,6 @@ symbol_t *fn_call(parser_context *context) {
         context->reg.rsize = (reg_size)return_size;
     } else if (symbol->ret_airity > 1) {
         compile_err(token, "returning two values is not implemented\n");
-    }
-
-
-    declarator_t outer = dtype_outer(&context->reg.dtype);
-    if (outer.tag == DK_CHECK) {
-        checkop_err(context, &context->reg, outer);
     }
 
     context->calls_fn = true;
@@ -2542,6 +2536,8 @@ void parse(parser_context *context) {
 
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         control_flow(context);
+    } else if (token->data[0] == '!') {
+        checkop_err(context, &context->reg);
     } else {
         compile_err(token, "unexpected token "), str_printerr(token->id);
     }
