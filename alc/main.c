@@ -599,15 +599,15 @@ reg_size get_rsize(const reg_t *reg) {
     return (reg_size)next_pow2((u32)size);
 }
 
-void checkop_err(parser_context *context, const reg_t *reg) {
+bool checkop_err(parser_context *context, reg_t *reg) {
     declarator_t decl = dtype_outer(&reg->dtype);
     if (decl.tag != DK_CHECK)
-        return;
+        return false;
 
     const token_t *cur_token = &context->cur_token;
 
     if (!expect(context, STR("!")))
-        return;
+        return false;
 
     tok(context);
 
@@ -619,6 +619,8 @@ void checkop_err(parser_context *context, const reg_t *reg) {
     } else {
         compile_err(cur_token, "expected ret\n");
     }
+    dtype_unwrap(&reg->dtype);
+    return true;
 }
 
 void checkop_bounds(parser_context *context, reg_t index_reg, regable against, enum inclusive inclusive) {
@@ -2027,7 +2029,7 @@ bool nullary_op(parser_context *context, regable lhs) {
     return false;
 }
 
-bool binary_op_chain(parser_context *context, regable acc) {
+bool expr_chain(parser_context *context, regable acc) {
     while (binary_op(context, &acc)) {
 
     }
@@ -2083,12 +2085,13 @@ bool expr(parser_context *context) {
         const char *next = context->cur_token.end;
         if (next[0] == ' ') {
             regable lhs = {.tag = REG, .reg = context->reg};
-            binary_op_chain(context, lhs);
+            expr_chain(context, lhs);
         }
         return true;
     }
 
-    regable lhs = read_regable(token->id, token);
+    str lhs_name = token->id;
+    regable lhs = read_regable(lhs_name, token);
     if (lhs.tag == NONE)
         return false;
 
@@ -2103,12 +2106,25 @@ bool expr(parser_context *context) {
 
     if (binary_op_store(&lhs, context)) {
 
-    } else if (binary_op_chain(context, lhs)) {
+    } else if (expr_chain(context, lhs)) {
 
     }
     if (explicit_type) {
         tok(context);
         expect(context, STR("}"));
+    }
+    if (token->end[1] == '!') {
+        reg_t *reg = NULL;
+        const int scope_up = extract_scope_up(&lhs_name);
+        if (!find_id(&local_ids, lhs_name, token, &reg, scope_up)
+            || reg->reg_type == RD_NONE) {
+            compile_err(token, "unknown id "), str_printerr(lhs_name);
+        }
+
+        tok(context);
+        bool ok = checkop_err(context, reg);
+        if (!ok)
+            compile_err(token, "nothing to check with "), str_printerr(lhs_name);
     }
     return true;
 }
@@ -2530,8 +2546,6 @@ void parse(parser_context *context) {
 
     } else if (islower(token->data[0]) || token->data[0] == '_') {
         control_flow(context);
-    } else if (token->data[0] == '!') {
-        checkop_err(context, &context->reg);
     } else {
         compile_err(token, "unexpected token "), str_printerr(token->id);
     }
