@@ -62,54 +62,58 @@ typedef struct type_t {
 
 // derived type
 
-static inline void dtype_push(dtype_t *self, declarator_t decl) {
+// decl[0] is the outermost declarator, as written in source.
+
+static inline bool dtype_full(const dtype_t *self) {
     if (self->decl_len >= DECLARATOR_MAX) {
 #define XSTR(X) #X
 #define DECL_ERROR_STR(X) "there can be only max "XSTR(X)" declarators\n"
         fputs(DECL_ERROR_STR(DECLARATOR_MAX), stderr);
-        return;
+        return true;
     }
 #undef DECL_ERROR_STR
+    return false;
+}
+
+static inline void dtype_append(dtype_t *self, declarator_t decl) {
+    if (dtype_full(self))
+        return;
     self->decl[self->decl_len++] = decl;
 }
 
-static inline declarator_t dtype_top(const dtype_t *self) {
-    if (self->decl_len == 0) {
-        return (declarator_t){0};
+static inline void dtype_wrap(dtype_t *self, declarator_t decl) {
+    if (dtype_full(self))
+        return;
+    for (usize i = self->decl_len; i > 0; --i) {
+        self->decl[i] = self->decl[i - 1];
     }
-    return self->decl[self->decl_len - 1];
+    self->decl[0] = decl;
+    self->decl_len += 1;
 }
 
-static inline declarator_t dtype_bottom(const dtype_t *self) {
+static inline declarator_t dtype_outer(const dtype_t *self) {
     if (self->decl_len == 0) {
         return (declarator_t){0};
     }
     return self->decl[0];
 }
 
-static inline declarator_t dtype_pop(dtype_t *self) {
+static inline declarator_t dtype_unwrap(dtype_t *self) {
     if (self->decl_len == 0) {
         return (declarator_t){0};
     }
-    return self->decl[--self->decl_len];
-}
-
-static inline dtype_t dtype_pop_dup(const dtype_t *self) {
-    if (self->decl_len == 0) {
-        return *self;
+    declarator_t outer = self->decl[0];
+    self->decl_len -= 1;
+    for (usize i = 0; i < self->decl_len; ++i) {
+        self->decl[i] = self->decl[i + 1];
     }
-    dtype_t copy = *self;
-    dtype_pop(&copy);
-    return copy;
-}
-static inline void dtype_pushone(dtype_t *self, dtype_kind_t kind) {
-    dtype_push(self, (declarator_t){.tag = (unsigned)kind, .amount = 1});
+    return outer;
 }
 
-static inline dtype_t dtype_dup_strip(dtype_t *self) {
-    dtype_t ret = *self;
-    dtype_pop(&ret);
-    return ret;
+static inline dtype_t dtype_unwrap_dup(const dtype_t *self) {
+    dtype_t copy = *self;
+    dtype_unwrap(&copy);
+    return copy;
 }
 
 static inline bool dtype_empty(const dtype_t *self) {
@@ -117,17 +121,17 @@ static inline bool dtype_empty(const dtype_t *self) {
 }
 
 static inline i32 dtype_tryget_arr(const dtype_t *self) {
-    declarator_t top = dtype_top(self);
-    if (top.tag != DK_ARRAY)
+    declarator_t outer = dtype_outer(self);
+    if (outer.tag != DK_ARRAY)
         return 0;
-    else return top.amount;
+    else return outer.amount;
 }
 
 static inline i32 dtype_tryget(const dtype_t *self, dtype_kind_t kind) {
-    declarator_t top = dtype_top(self);
-    if (top.tag != kind)
+    declarator_t outer = dtype_outer(self);
+    if (outer.tag != kind)
         return 0;
-    else return top.amount;
+    else return outer.amount;
 }
 
 static inline i32 dtype_tryget_addr(const dtype_t *self) {
@@ -141,18 +145,17 @@ static inline size_t dtype_size(const dtype_t *self) {
     if (dtype_empty(self)) {
         return self->base->size;
     }
-    declarator_t top = dtype_top(self);
-    if (top.tag == DK_ADDR) {
+    declarator_t outer = dtype_outer(self);
+    if (outer.tag == DK_ADDR) {
         return sizeof (void *);
-    } else if (top.tag == DK_ARRAY) {
-        if (top.amount <= 0)
-            fprintf(stderr, "array length was <= 0 (%d)", top.amount);
-        return self->base->size * (usize)top.amount;
-    } else if (top.tag == DK_CHECK) {
-        dtype_t stripped = *self;
-        dtype_pop(&stripped);
+    } else if (outer.tag == DK_ARRAY) {
+        if (outer.amount <= 0)
+            fprintf(stderr, "array length was <= 0 (%d)", outer.amount);
+        return self->base->size * (usize)outer.amount;
+    } else if (outer.tag == DK_CHECK) {
+        const dtype_t stripped = dtype_unwrap_dup(self);
         return dtype_size(&stripped);
-    } else if (top.tag == DK_SLICE) {
+    } else if (outer.tag == DK_SLICE) {
         return sizeof (void *) * 2;
     } else {
         unreachable;

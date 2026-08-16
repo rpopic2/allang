@@ -821,7 +821,7 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
     ptrdiff_t member_count = args->cur - args->begin;
     dst.rsize = type->size > 8 ? 8 : (reg_size)type->size;
 
-    bool is_arr = dtype_top(dtype).tag == DK_ARRAY;
+    bool is_arr = dtype_outer(dtype).tag == DK_ARRAY;
     const dyn_member_t *members = is_arr ? NULL : &type->struct_t.members;
     bool dst_initialized = false;
     size_t size_acc = 0;
@@ -932,7 +932,7 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         tmp_src.reg_type = SCRATCH;
         tmp_src.offset = 3;
         tmp_src.rsize = 8;
-        dtype_push(&tmp_src.dtype, (declarator_t){ .tag = DK_ADDR, .amount = 1 });
+        dtype_wrap(&tmp_src.dtype, (declarator_t){ .tag = DK_ADDR, .amount = 1 });
         emit_sub(tmp_src, FP, src.offset);
         src = tmp_src;
     }

@@ -917,7 +917,7 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
     type_t *type = dtype->base;
     ptrdiff_t member_count = args->cur - args->begin;
 
-    bool is_arr = !dtype_empty(dtype) && dtype_top(dtype).tag == DK_ARRAY;
+    bool is_arr = !dtype_empty(dtype) && dtype_outer(dtype).tag == DK_ARRAY;
 
     if (is_arr) {
         size_t remaining = (size_t)(member_count - *index) * dtype->base->size;

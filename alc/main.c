@@ -305,7 +305,7 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
     }
     context->reg.rsize = sizeof (char *);
     context->reg.dtype = (dtype_t){.base = hashmap_type_t_tryfind(types, STR("u8"))};
-    dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+    dtype_wrap(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
     if (!escape) {
         emit_string_lit(context->reg, (str *)token);
         return;
@@ -540,7 +540,7 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
         if (dk == DK_NONE)
             break;
 
-        dtype_push(out, (declarator_t){(unsigned)dk, .amount = amount});
+        dtype_append(out, (declarator_t){(unsigned)dk, .amount = amount});
         tok(context);
         if (cur_token->end[0] == ')') {
             break_out = true;
@@ -570,7 +570,7 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
     if (len) {
         if (len > INT_MAX)
             compile_err(cur_token, "array length was too big");
-        dtype_push(out, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
+        dtype_append(out, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
     }
 
     return break_out;
@@ -735,8 +735,8 @@ regable read_regable(str s, const token_t *diagnostic) {
                 end_index = array;
             }
             diagnostic_slice(diagnostic, begin_index, end_index, array);
-            dtype_pop(&result.reg.dtype);
-            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
+            dtype_unwrap(&result.reg.dtype);
+            dtype_wrap(&result.reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)end_index - begin_index});
             result.reg.rsize = sizeof(void *);
             break;
         }
@@ -785,7 +785,7 @@ regable read_regable(str s, const token_t *diagnostic) {
             };
             member = &member_storage;
             if (slice) {
-                dtype_push(&member->dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)index});
+                dtype_wrap(&member->dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)index});
             }
             begin_index = (i32)index;
         } else {
@@ -815,7 +815,7 @@ regable read_regable(str s, const token_t *diagnostic) {
         result.reg.dtype = member->dtype;
         bool is_basetype_addr = dtype_tryget_addr(&reg->dtype) > 0;
         if (is_basetype_addr) {
-            dtype_push(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            dtype_wrap(&result.reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
             result.reg.displacement += member->offset;
         }
     }
@@ -1002,9 +1002,9 @@ dyn_agg_member *read_aggregate(allocator *alloc, parser_context *context, dtype_
     if (dtype_empty(dtype)) {
         members = dtype->base->struct_t.members;
         member_count = members.cur - members.begin;
-    } else if (dtype_top(dtype).tag == DK_ARRAY) {
+    } else if (dtype_outer(dtype).tag == DK_ARRAY) {
         members = (dyn_member_t){0};
-        member_count = dtype_top(dtype).amount;
+        member_count = dtype_outer(dtype).amount;
         is_arr = true;
     } else {
         unreachable;
@@ -1068,7 +1068,7 @@ dyn_agg_member *read_aggregate(allocator *alloc, parser_context *context, dtype_
                 inner = (dtype_t){.base = mem_type};
             } else {
                 inner = *dtype;
-                dtype_pop(&inner);
+                dtype_unwrap(&inner);
             }
 
             dyn_agg_member *aggs = read_aggregate(alloc, context, &inner);
@@ -1143,7 +1143,7 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     }
     diagnostic_dyn_elem_access(context, begin);
 
-    const bool is_slice = dtype_top(&lhs->dtype).tag == DK_SLICE;
+    const bool is_slice = dtype_outer(&lhs->dtype).tag == DK_SLICE;
     reg_t count_reg = *lhs;
     count_reg.offset += 1;
     count_reg.rsize = sizeof (void *);
@@ -1174,7 +1174,7 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     if (begin->tag != NONE && end->tag == NONE && !is_range) {
         emit_elem_addr(dst, *lhs, begin->reg);
         context->reg.dtype = (dtype_t){.base = lhs->dtype.base};
-        dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+        dtype_wrap(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
     } else {
         if (begin->tag != NONE) {
             emit_elem_addr(dst, *lhs, begin->reg);
@@ -1203,7 +1203,7 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
             unreachable;
         }
         context->reg.dtype = (dtype_t){.base = lhs->dtype.base};
-        dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = len});
+        dtype_wrap(&context->reg.dtype, (declarator_t){.tag = DK_SLICE, .amount = len});
     }
     context->reg.rsize = sizeof (void *);
 }
@@ -1290,7 +1290,7 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
     const ptrdiff_t member_count = args->cur - args->begin;
     const size_t total_size = dtype_size(dtype);
 
-    bool is_arr = dtype_top(dtype).tag == DK_ARRAY;
+    bool is_arr = dtype_outer(dtype).tag == DK_ARRAY;
 
     int index = 0;
     size_t size = 0;
@@ -1313,7 +1313,7 @@ void store_struct(reg_t dst, i64 offset, const dtype_t *dtype, const dyn_agg_mem
                     inner = member_type;
                 } else {
                     inner = *dtype;
-                    dtype_pop(&inner);
+                    dtype_unwrap(&inner);
                 }
                 store_struct(dst, offset + (i64)size, &inner, arg->agg);
             } else if (arg->tag == VALUE && arg->value == 0) {
@@ -1577,14 +1577,14 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
                 .reg_type = FP.reg_type, .rsize = FP.rsize,
                 .dtype = {.base = reg.dtype.base},
             };
-            dtype_push(&reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            dtype_wrap(&reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
         }
         offset_regable.value += reg.displacement;
     } else if (offset_regable.tag == REG) {
         if (streq(cur_token->end + 1, "unchecked")) {
             tok(context);
         } else {
-            declarator_t decl = dtype_top(&reg.dtype);
+            declarator_t decl = dtype_outer(&reg.dtype);
             if (decl.tag != DK_ARRAY && decl.tag != DK_SLICE) {
                 compile_err(cur_token, "register was not an array\n");
             } else if (decl.tag == DK_SLICE) {
@@ -1672,13 +1672,13 @@ bool do_store(const regable *restrict lhs, parser_context *restrict context) {
 
         printd("binary_op:store\n");
         if (offset.tag == REG) {
-            declarator_t top = dtype_top(&dst.dtype);
+            declarator_t outer = dtype_outer(&dst.dtype);
             // TODO tmp solution
-            if (top.tag == DK_ADDR) {
-                dtype_pop(&dst.dtype);
-                top = dtype_top(&dst.dtype);
+            if (outer.tag == DK_ADDR) {
+                dtype_unwrap(&dst.dtype);
+                outer = dtype_outer(&dst.dtype);
             }
-            if (top.tag == DK_ARRAY) {
+            if (outer.tag == DK_ARRAY) {
                 if (src_is_imm)
                     emit_mov(src, lhs->value);
                 emit_array_access(dst, src, offset.reg, STORE);
@@ -1757,8 +1757,8 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
     dtype_t *dtype = &src.dtype;
 
     // TODO tmp poppin'
-    if (dtype_top(dtype).tag == DK_ADDR) {
-        dtype_pop(dtype);
+    if (dtype_outer(dtype).tag == DK_ADDR) {
+        dtype_unwrap(dtype);
     }
 
     i32 len = dtype_tryget_arr(dtype);
@@ -1778,7 +1778,7 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
 
     reg_t off = offset.reg;
     dst->rsize = (reg_size)elem_type->size;
-    dst->dtype = dtype_dup_strip(dtype);
+    dst->dtype = dtype_unwrap_dup(dtype);
     emit_array_access(*dst, src, off, LOAD);
 }
 
@@ -1844,7 +1844,7 @@ bool binary_op(parser_context *restrict context, regable *restrict lhs) {
     token_t op_token = context->cur_token;
 
     if (lhs->tag == REG) {
-        declarator_t decl = dtype_top(&lhs->reg.dtype);
+        declarator_t decl = dtype_outer(&lhs->reg.dtype);
         if (op_token.data[0] == '*'
             && (decl.tag == DK_ARRAY || decl.tag == DK_SLICE)) {
             dyn_slice_access(context, &lhs->reg, decl.amount);
@@ -1983,7 +1983,7 @@ bool nullary_op(parser_context *context, regable lhs) {
             }
 
             emit_mov_reg(context->reg, lhs.reg);
-            if (dtype_top(&nreg->dtype).tag == DK_SLICE) {
+            if (dtype_outer(&nreg->dtype).tag == DK_SLICE) {
                 reg_t src_len = lhs.reg;
                 src_len.offset += 1;
                 src_len.rsize = sizeof (void *);
@@ -1999,15 +1999,15 @@ bool nullary_op(parser_context *context, regable lhs) {
             }
 
             context->reg.dtype = nreg->dtype;
-            const declarator_t top = dtype_top(&nreg->dtype);
-            if (top.tag != DK_SLICE) {
-                dtype_push(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            const declarator_t outer = dtype_outer(&nreg->dtype);
+            if (outer.tag != DK_SLICE) {
+                dtype_wrap(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
             }
             emit_sub(context->reg, FP, nreg->offset);
-            if (top.tag == DK_SLICE) {
+            if (outer.tag == DK_SLICE) {
                 reg_t dst = context->reg;
                 dst.offset += 1;
-                emit_mov(dst, top.amount);
+                emit_mov(dst, outer.amount);
             }
         } else {
             nop;
@@ -2217,7 +2217,7 @@ bool stmt_eret(parser_context *context) {
     reg_t ret = *context->symbol->rets.begin;
     ret.reg_type = RET;
     ret.offset = 0;
-    declarator_t decl = dtype_bottom(&ret.dtype);
+    declarator_t decl = dtype_outer(&ret.dtype);
     if (decl.tag != DK_CHECK) {
         compile_err(&context->cur_token, "a frontmost check(!) annotation is expected for the return type when using eret statement.\n");
     }
@@ -2236,7 +2236,7 @@ bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable
     reg_t ret = *context->symbol->rets.begin;
     ret.reg_type = RET;
     ret.offset = 0;
-    declarator_t decl = dtype_bottom(&ret.dtype);
+    declarator_t decl = dtype_outer(&ret.dtype);
     if (decl.tag != DK_CHECK) {
         compile_err(&context->cur_token, "expected to return check(!) type when using eret statement.\n");
     }
@@ -2291,9 +2291,9 @@ symbol_t *fn_call(parser_context *context) {
     }
 
 
-    declarator_t top = dtype_top(&context->reg.dtype);
-    if (top.tag == DK_CHECK) {
-        checkop_err(context, &context->reg, top);
+    declarator_t outer = dtype_outer(&context->reg.dtype);
+    if (outer.tag == DK_CHECK) {
+        checkop_err(context, &context->reg, outer);
     }
 
     context->calls_fn = true;
@@ -2387,7 +2387,7 @@ bool decl_vars(parser_context *context) {
         bool one_liner = context->cur_token.end[0] != '\n';
         context->reg.reg_type = SCRATCH;
         reg_t stack_reg = {.reg_type = STACK};
-        dtype_push(&stack_reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+        dtype_wrap(&stack_reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
         reg_t *reg = overwrite_id(*local_ids.cur, name, &stack_reg);
 
         if (one_liner) {

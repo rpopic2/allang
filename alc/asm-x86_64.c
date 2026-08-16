@@ -358,7 +358,7 @@ bool emit_eightbyte_struct(reg_t dst, const dtype_t *dtype, const dyn_agg_member
     type_t *type = dtype->base;
     ptrdiff_t member_count = args->cur - args->begin;
 
-    bool is_arr = !dtype_empty(dtype) && dtype_top(dtype).tag == DK_ARRAY;
+    bool is_arr = !dtype_empty(dtype) && dtype_outer(dtype).tag == DK_ARRAY;
 
     /* For arrays, size dst to the bytes packed into this eightbyte so the
        packing uses a wide-enough register (e.g. rax, not eax). */
