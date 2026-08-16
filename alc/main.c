@@ -119,7 +119,7 @@ retry:;
         }
 
         c = *src->cur;
-        if (c == '}' || c == '{' || c == '!') {
+        if (c == '}' || c == '{' || c == '!' || c == '[' || c == ']') {
             if (src->cur == cur_token->data) {
                 src->cur++;
                 cur_token->end++;
@@ -279,6 +279,29 @@ bool expect(parser_context *context, str expected) {
         return false;
     }
     return true;
+}
+
+inline static bool is_char_token(const token_t *token, char c) {
+    return str_len(token->id) == 1 && token->id.data[0] == c;
+}
+
+// the current token is the '=' of a store, whose '[' follows in the source
+inline static bool at_store(const token_t *token) {
+    return is_char_token(token, '=') && token->end[0] == '[';
+}
+
+inline static bool store_follows(const token_t *token) {
+    return streq(token->end + 1, "=[");
+}
+
+// bracketed constructs never span a line, so the closing ']' of the '[' the
+// lexer just produced is reachable without consuming any token
+inline static const char *close_bracket(const char *cur) {
+    while (*cur != ']' && *cur != '\n' && *cur != '\0')
+        ++cur;
+    if (*cur != ']')
+        return NULL;
+    return cur;
 }
 
 str dot_iter(str *s, char c) {
@@ -618,7 +641,7 @@ bool checkop_err(parser_context *context, reg_t *reg) {
 
 void checkop_bounds(parser_context *context, reg_t index_reg, regable against, enum inclusive inclusive) {
     const token_t cur_token = context->cur_token;
-    str *cur_str = &context->cur_token.id;
+    const str *const cur_str = &context->cur_token.id;
 
     reg_t stash = context->reg;
     tok(context);
@@ -629,8 +652,6 @@ void checkop_bounds(parser_context *context, reg_t index_reg, regable against, e
 
     cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
     tok(context);
-    if (cur_str->end[-1] == ']')
-        cur_str->end -= 1;
 
     if (stmt_ret_cond(context, cond, index_reg, against)) {
 
@@ -1486,23 +1507,31 @@ void resolve_stack_store_target(parser_context *context, target *cur_target,
     cur_target->target_assigned = true;
 }
 
-bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, regable *out_offset) {
+// enters on '[', leaves on the matching ']'
+bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *out_reg, regable *out_offset) {
     const token_t *cur_token = &context->cur_token;
     regable offset_regable = {.tag = VALUE, .value = 0};
-    s.data += 1;
+    bool unchecked = false;
 
-    if (s.end[-1] == ']') {
-        s.end -= 1;
-    } else if (streq(s.end, " *")) {
-        tok(context);
-        tok(context);
-        str offset_str = cur_token->id;
-        if (offset_str.end[-1] == ']')
-            offset_str.end -= 1;
-        offset_regable = read_regable(offset_str, cur_token);
-        diagnostic_dyn_elem_access(context, &offset_regable);
+    tok(context);
+    str s = cur_token->id;
+    if (is_char_token(cur_token, ']')) {
+        s = str_null;
     } else {
-        compile_err(cur_token, "closing ']' expected\n");
+        tok(context);
+        if (is_char_token(cur_token, '*')) {
+            tok(context);
+            offset_regable = read_regable(cur_token->id, cur_token);
+            diagnostic_dyn_elem_access(context, &offset_regable);
+            tok(context);
+            if (str_eq_lit(cur_token->id, "unchecked")) {
+                unchecked = true;
+                tok(context);
+            }
+        }
+        if (!is_char_token(cur_token, ']')) {
+            compile_err(cur_token, "closing ']' expected\n");
+        }
     }
 
     regable regable_target;
@@ -1525,7 +1554,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
     if (regable_target.tag == NONE)
         return false;
 
-    if (s.data[-2] != '=')
+    if (kind == LOAD)
         check_unassigned(regable_target, context);
     if (regable_target.tag != REG) {
         compile_err(cur_token, "register expected\n");
@@ -1587,9 +1616,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
         }
         offset_regable.value += reg.displacement;
     } else if (offset_regable.tag == REG) {
-        if (streq(cur_token->end + 1, "unchecked")) {
-            tok(context);
-        } else {
+        if (!unchecked) {
             declarator_t decl = dtype_outer(&reg.dtype);
             if (decl.tag != DK_ARRAY && decl.tag != DK_SLICE) {
                 compile_err(cur_token, "register was not an array\n");
@@ -1611,10 +1638,11 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
 
 bool do_store(const regable *restrict lhs, parser_context *restrict context) {
     const token_t *token = &context->cur_token;
-    str s = token->id;
-    s.data += 1;
 
-    if (token->id.data[2] == ']') {
+    tok(context);
+
+    if (token->end[0] == ']') {
+        tok(context);
         target *targ = get_current_target_stack(context);
         if (!targ)
             return true;
@@ -1646,7 +1674,7 @@ bool do_store(const regable *restrict lhs, parser_context *restrict context) {
     while (true) {
         reg_t dst;
         regable offset;
-        if (!read_load_store_offset(context, s, &dst, &offset))
+        if (!read_load_store_offset(context, STORE, &dst, &offset))
             return true;
 
         reg_t src;
@@ -1699,18 +1727,17 @@ bool do_store(const regable *restrict lhs, parser_context *restrict context) {
             emit_str_reg(dst, src, (int)offset.value);
         }
 
-        if (!streq(token->end + 1, "=["))
+        if (!store_follows(token))
             break;
         tok(context);
-        s = token->id;
-        s.data += 1;
+        tok(context);
     }
     return true;
 }
 
 bool binary_op_store(const regable *restrict lhs, parser_context *restrict context) {
     const token_t *token = &context->cur_token;
-    if (!streq(token->end + 1, "=["))
+    if (!store_follows(token))
         return false;
     tok(context);
     return do_store(lhs, context);
@@ -1718,16 +1745,17 @@ bool binary_op_store(const regable *restrict lhs, parser_context *restrict conte
 
 bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
     const token_t *token = &context->cur_token;
-    const str *token_str = &token->id;
     *out_offset = 0;
 
-    if (!streq(token_str->data, "=["))
+    if (!at_store(token))
         return false;
 
-    char next = token_str->data[2];
+    tok(context);
+    tok(context);
+
     target *cur_target;
     reg_t indexed_target;
-    if (next == ']') {
+    if (is_char_token(token, ']')) {
         cur_target = arr_target_top(&context->targets);
         if (cur_target == NULL) {
             compile_err(token, "nothing to store to\n");
@@ -1736,12 +1764,12 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
             compile_err(token, "target is not a stack variable\n");
             return true;
         }
-    } else if (isupper(next)) {
-        str full_name = *token_str;
-        full_name.data += 2;
-        full_name.end -= 1;
-
-        regable resolved = read_regable(full_name, token);
+    } else if (isupper(token->id.data[0])) {
+        regable resolved = read_regable(token->id, token);
+        tok(context);
+        if (!is_char_token(token, ']')) {
+            compile_err(token, "closing ']' expected\n");
+        }
         if (resolved.tag != REG) {
             return true;
         }
@@ -1791,13 +1819,13 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
 bool expr_load(parser_context *context) {
     token_t *token = &context->cur_token;
 
-    if (token->data[0] != '[')
+    if (!is_char_token(token, '['))
         return false;
 
     reg_t *dst = &context->reg;
     reg_t src;
     regable offset;
-    if (!read_load_store_offset(context, token->id, &src, &offset))
+    if (!read_load_store_offset(context, LOAD, &src, &offset))
         return true;
 
     if (!src.dtype.base) {
@@ -2339,6 +2367,64 @@ bool decl_vars(parser_context *context) {
         return true;
     }
 
+    if (is_char_token(token, '[')) {
+        const char *const close = close_bracket(token->end);
+        if (close == NULL || !streq(close + 1, " ::"))
+            return false;
+
+        tok(context);
+        str name = token->id;
+        tok(context);
+        if (!is_char_token(token, ']')) {
+            compile_err(token, "closing ']' expected(stmt)\n");
+        }
+        if (!isupper(name.data[0])) {
+            compile_err(token, "name of stack objects must start with uppercase\n");
+        }
+
+        tok(context);
+        bool one_liner = context->cur_token.end[0] != '\n';
+        context->reg.reg_type = SCRATCH;
+        reg_t stack_reg = {.reg_type = STACK};
+        dtype_wrap(&stack_reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+        reg_t *reg = overwrite_id(*local_ids.cur, name, &stack_reg);
+
+        if (one_liner) {
+            target *targ = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
+            tok(context);
+            if (expr_line(context)) { }
+            else {
+                symbol_t *fn = fn_call(context);
+                if (fn) {
+                    if (fn->ret_airity != 1) {
+                        compile_err(&context->cur_token, "this function does not return exactly one value\n");
+                    }
+                    context->reg.offset += 1;
+                }
+            }
+
+            if (!targ->target_assigned) {
+                tok(context);
+                regable src = {.tag = REG, .reg = context->reg};
+                if (at_store(&context->cur_token)) {
+                    do_store(&src, context);
+                } else {
+                    compile_err(&context->cur_token, "store statement '=[]' expected\n");
+                }
+            }
+
+            arr_target_pop(&context->targets);
+        } else {
+            target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
+            parse_block(context);
+            if (!t->target_assigned) {
+                compile_err(&context->cur_token, "this block must store\n");
+            }
+            arr_target_pop(&context->targets);
+        }
+        return true;
+    }
+
     if (!streq(token->end, " ::"))
         return false;
 
@@ -2384,58 +2470,6 @@ bool decl_vars(parser_context *context) {
             parse_block(context);
             if (!t->target_assigned) {
                 compile_err(&context->cur_token, "this block must assign\n");
-            }
-            arr_target_pop(&context->targets);
-        }
-        return true;
-    } else if (token->data[0] == '[') {
-        str name = token->id;
-        name.data += 1;
-        name.end -= 1;
-        if (name.end[0] != ']') {
-            compile_err(token, "closing ']' expected(stmt)\n");
-        }
-        if (!isupper(name.data[0])) {
-            compile_err(token, "name of stack objects must start with uppercase\n");
-        }
-        
-        tok(context);
-        bool one_liner = context->cur_token.end[0] != '\n';
-        context->reg.reg_type = SCRATCH;
-        reg_t stack_reg = {.reg_type = STACK};
-        dtype_wrap(&stack_reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
-        reg_t *reg = overwrite_id(*local_ids.cur, name, &stack_reg);
-
-        if (one_liner) {
-            target *targ = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
-            tok(context);
-            if (expr_line(context)) { }
-            else {
-                symbol_t *fn = fn_call(context);
-                if (fn) {
-                    if (fn->ret_airity != 1) {
-                        compile_err(&context->cur_token, "this function does not return exactly one value\n");
-                    }
-                    context->reg.offset += 1;
-                }
-            }
-            
-            if (!targ->target_assigned) {
-                tok(context);
-                regable src = {.tag = REG, .reg = context->reg};
-                if (streq(context->cur_token.id.data, "=[")) {
-                    do_store(&src, context);
-                } else {
-                    compile_err(&context->cur_token, "store statement '=[]' expected\n");
-                }
-            }
-            
-            arr_target_pop(&context->targets);
-        } else {
-            target *t = arr_target_push(&context->targets, (target){.reg = reg, .name = name});
-            parse_block(context);
-            if (!t->target_assigned) {
-                compile_err(&context->cur_token, "this block must store\n");
             }
             arr_target_pop(&context->targets);
         }
@@ -2537,7 +2571,7 @@ void parse(parser_context *context) {
 
     } else if (expr_line(context)) {
 
-    } else if (streq(token->id.data, "=[")) {
+    } else if (at_store(token)) {
         regable src = {.tag = REG, .reg = context->reg};
         do_store(&src, context);
     } else if (stmt_reg_assign(context)) {
