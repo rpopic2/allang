@@ -618,7 +618,7 @@ bool checkop_err(parser_context *context, reg_t *reg) {
 
 void checkop_bounds(parser_context *context, reg_t index_reg, regable against, enum inclusive inclusive) {
     const token_t cur_token = context->cur_token;
-    const str *cur_str = &context->cur_token.id;
+    str *cur_str = &context->cur_token.id;
 
     reg_t stash = context->reg;
     tok(context);
@@ -629,11 +629,14 @@ void checkop_bounds(parser_context *context, reg_t index_reg, regable against, e
 
     cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
     tok(context);
+    if (cur_str->end[-1] == ']')
+        cur_str->end -= 1;
+
     if (stmt_ret_cond(context, cond, index_reg, against)) {
 
     } else if (stmt_eret_cond(context, cond, index_reg, against)) {
 
-    } else  if (streq(cur_str->end -2, "->")) {
+    } else if (streq(cur_str->end - 2, "->")) {
         expr_cmp(&index_reg, &against, cond);
         named_bcond(context, cond);
     } else {

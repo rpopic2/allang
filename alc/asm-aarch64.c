@@ -743,7 +743,7 @@ void emit_fn_prologue_epilogue(const parser_context *parser_context) {
 
     int regs_to_save = parser_context->max_nreg_count;
     if (regs_to_save + CALLEE_START >= 28) {
-        compile_err(&parser_context->cur_token, "used up all callee-saved registers. found %d (expected less than %d", parser_context->max_nreg_count, 28 - CALLEE_START);
+        compile_err(&parser_context->cur_token, "used up all callee-saved registers. found %d (expected less than %d)\n", parser_context->max_nreg_count, 28 - CALLEE_START);
         return;
     }
     bool calls_fn = parser_context->calls_fn;
