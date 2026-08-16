@@ -2041,6 +2041,7 @@ bool expr(parser_context *context) {
     if (explicit_type) {
         bool unknown = false;
         parse_dtype(context, &dtype);
+        context->reg.dtype = dtype;
 
         tok(context);
         expect(context, STR("{"));
