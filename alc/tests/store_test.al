@@ -6,7 +6,9 @@
 // path; these checks verify each source form lands the right value:
 // untyped-immediate (emit_str_imm + comptime rsize), typed-immediate,
 // binary-op-led, and load-led stores. The chained case verifies a single
-// source value lands in every target of `v =[A] =[B]`.
+// source value lands in every target of `v =[A] =[B]`. The register-source
+// case stores through a pointer parameter, whose base register must keep its
+// full width in the memory operand.
 
 R0 :: imm_untyped =>
 R0 isnt 7 -> _Exit 110 =>
@@ -23,6 +25,10 @@ R3 isnt 7 -> _Exit 113 =>
 [S] :: pair{.. 0} =[]
 R4 :: chained S =>
 R4 isnt 7 -> _Exit 114 =>
+
+[T] :: pair{.. 0} =[]
+R5 :: reg_through_addr T =>
+R5 isnt 9 -> _Exit 115 =>
 
 printf "all store tests passed\n" =>
 ret 0
@@ -50,3 +56,8 @@ pair:
 chained: P addr pair => R i32
     7 =[P.A] =[P.B]
     ret [P.B]
+
+reg_through_addr: P addr pair => R i32
+    V :: i32{9}
+    V =[P.A]
+    ret [P.A]
