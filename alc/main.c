@@ -928,6 +928,7 @@ void stmt_label(parser_context *context) {
 
     if (!symbol->is_fn && context->symbol && !str_empty(&symbol->name)) {
         emit_label(context->symbol->name, symbol->name, 0);
+        return;
     }
 
     context->symbol = symbol;
