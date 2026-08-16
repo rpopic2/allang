@@ -590,7 +590,7 @@ reg_size get_rsize(const reg_t *reg) {
     return (reg_size)next_pow2((u32)size);
 }
 
-void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
+void checkop_err(parser_context *context, const reg_t *reg, declarator_t decl) {
     if (decl.tag != DK_CHECK)
         return;
 
@@ -611,7 +611,7 @@ void check_err(parser_context *context, const reg_t *reg, declarator_t decl) {
     }
 }
 
-void check_bounds(parser_context *context, reg_t index, regable against, enum inclusive inclusive) {
+void checkop_bounds(parser_context *context, reg_t index, regable against, enum inclusive inclusive) {
     const token_t cur_token = context->cur_token;
 
     reg_t stash = context->reg;
@@ -1149,11 +1149,11 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
         const cond_t cond = COND_HI;
         emit_cmp_reg(begin->reg, end->reg, cond);
         emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
-        check_bounds(context, end->reg, length, EXCL);
+        checkop_bounds(context, end->reg, length, EXCL);
     } else if (begin->tag != NONE) {
-        check_bounds(context, begin->reg, length, INCL);
+        checkop_bounds(context, begin->reg, length, INCL);
     } else if (end->tag != NONE) {
-        check_bounds(context, end->reg, length, EXCL);
+        checkop_bounds(context, end->reg, length, EXCL);
     } else {
         unreachable;
     }
@@ -1551,7 +1551,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             reg_t count_reg = reg;
             count_reg.offset += 1;
             count_reg.rsize = sizeof (void *);
-            check_bounds(context, count_reg, (regable){.tag = VALUE, .value = slice}, INCL);
+            checkop_bounds(context, count_reg, (regable){.tag = VALUE, .value = slice}, INCL);
         }
 
         size_t stride;
@@ -1583,9 +1583,9 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             } else if (decl.tag == DK_SLICE) {
                 reg_t count_reg = reg;
                 count_reg.offset += 1;
-                check_bounds(context, offset_regable.reg, (regable){.tag = REG, .reg = count_reg}, EXCL);
+                checkop_bounds(context, offset_regable.reg, (regable){.tag = REG, .reg = count_reg}, EXCL);
             } else {
-                check_bounds(context, offset_regable.reg, (regable){.tag = VALUE, .value = decl.amount}, INCL);
+                checkop_bounds(context, offset_regable.reg, (regable){.tag = VALUE, .value = decl.amount}, INCL);
             }
         }
     } else unreachable;
@@ -2281,7 +2281,7 @@ symbol_t *fn_call(parser_context *context) {
 
     declarator_t top = dtype_top(&context->reg.dtype);
     if (top.tag == DK_CHECK) {
-        check_err(context, &context->reg, top);
+        checkop_err(context, &context->reg, top);
     }
 
     context->calls_fn = true;
