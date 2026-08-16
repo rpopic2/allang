@@ -33,6 +33,8 @@ void compare_branch(parser_context *context, cond_t cond, const regable *restric
                     const regable *restrict rhs, const token_t *lhs_token, const token_t *rhs_token);
 void skip_function(src_t *src);
 bool directives(parser_context *context);
+void expr_cmp(const reg_t *lhs, const regable* rhs, cond_t cond_optimize);
+void named_bcond(parser_context *context, cond_t cond);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -611,8 +613,9 @@ void checkop_err(parser_context *context, const reg_t *reg, declarator_t decl) {
     }
 }
 
-void checkop_bounds(parser_context *context, reg_t index, regable against, enum inclusive inclusive) {
+void checkop_bounds(parser_context *context, reg_t index_reg, regable against, enum inclusive inclusive) {
     const token_t cur_token = context->cur_token;
+    const str *cur_str = &context->cur_token.id;
 
     reg_t stash = context->reg;
     tok(context);
@@ -623,12 +626,15 @@ void checkop_bounds(parser_context *context, reg_t index, regable against, enum 
 
     cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
     tok(context);
-    if (stmt_ret_cond(context, cond, index, against)) {
+    if (stmt_ret_cond(context, cond, index_reg, against)) {
 
-    } else if (stmt_eret_cond(context, cond, index, against)) {
+    } else if (stmt_eret_cond(context, cond, index_reg, against)) {
 
+    } else if (streq(cur_str->end -2, "->")) {
+        expr_cmp(&index_reg, &against, cond);
+        named_bcond(context, cond);
     } else {
-        compile_err(&cur_token, "expected to handle check operator\n");
+            compile_err(&cur_token, "expected to handle check operator\n");
     }
     context->reg = stash;
 }
@@ -1584,6 +1590,7 @@ bool read_load_store_offset(parser_context *context, str s, reg_t *out_reg, rega
             } else if (decl.tag == DK_SLICE) {
                 reg_t count_reg = reg;
                 count_reg.offset += 1;
+                count_reg.rsize = sizeof (usize);
                 checkop_bounds(context, offset_regable.reg, (regable){.tag = REG, .reg = count_reg}, EXCL);
             } else {
                 checkop_bounds(context, offset_regable.reg, (regable){.tag = VALUE, .value = decl.amount}, INCL);
@@ -2152,6 +2159,14 @@ void read_and_check_types(parser_context *context, list_reg_t *rets) {
     }
 }
 
+void expr_cmp(const reg_t *lhs, const regable* rhs, cond_t cond_optimize) {
+    if (rhs->tag == REG) {
+        emit_cmp_reg(*lhs, rhs->reg, cond_optimize);
+    } else {
+        emit_cmp(*lhs, rhs->value);
+    }
+}
+
 bool stmt_ret_pre(parser_context *context) {
     const token_t *token = &context->cur_token;
 
@@ -2187,11 +2202,9 @@ bool stmt_ret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable 
         return false;
     if (!stmt_ret_pre(context))
         return false;
-    if (against.tag == REG) {
-        emit_cmp_reg(cmp_reg, against.reg, cond);
-    } else {
-        emit_cmp(cmp_reg, against.value);
-    }
+
+    expr_cmp(&cmp_reg, &against, cond);
+    
     context->has_branched_ret = true;
     emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
     return true;
@@ -2225,15 +2238,13 @@ bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable
     ret.offset = 0;
     declarator_t decl = dtype_bottom(&ret.dtype);
     if (decl.tag != DK_CHECK) {
-        compile_err(&context->cur_token, "check(!) type is expected when using eret statement.\n");
+        compile_err(&context->cur_token, "expected to return check(!) type when using eret statement.\n");
     }
     
     emit_mov(ret, decl.amount);
-    if (against.tag == REG) {
-        emit_cmp_reg(cmp_reg, against.reg, cond);
-    } else {
-        emit_cmp(cmp_reg, against.value);
-    }
+
+    expr_cmp(&cmp_reg, &against, cond);
+
     context->has_branched_ret = true;
     emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
     return true;
