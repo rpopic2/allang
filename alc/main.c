@@ -522,7 +522,6 @@ bool resolve_comptime_to(reg_t *const src, const reg_t *const target) {
 }
 
 bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
-    bool break_out = false;
     const token_t *cur_token = &context->cur_token;
     *out = (dtype_t){0};
 
@@ -549,9 +548,6 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
 
         dtype_append(out, (declarator_t){(unsigned)dk, .amount = amount});
         tok(context);
-        if (cur_token->end[0] == ')') {
-            break_out = true;
-        }
     }
 
     str iter = cur_token->id;
@@ -562,15 +558,12 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
         iter.data = end_ptr + 1;
     }
 
-    if (cur_token->end[0] == ')') {
-        break_out = true;
-    }
-
     str typename = iter;
     type_t *type = hashmap_type_t_tryfind(types, typename);
     if (!type) {
         compile_err(cur_token, "unknown type "), str_printerr(typename);
         type = error_type;
+        return false;
     }
     out->base = type;
 
@@ -580,7 +573,7 @@ bool parse_dtype(parser_context *restrict context, dtype_t *restrict out) {
         dtype_append(out, (declarator_t){.tag = DK_ARRAY, .amount = (i32)len});
     }
 
-    return break_out;
+    return true;
 }
 
 reg_size get_rsize(const reg_t *reg) {
@@ -2170,9 +2163,7 @@ void read_and_check_types(parser_context *context, list_reg_t *rets) {
         context->reg.rsize = get_rsize(&context->reg);
         if (rets_it < rets->cur) {
             resolve_comptime_to(&context->reg, rets_it);
-            pdtype(&context->reg.dtype)
             reg_typecheck(&context->cur_token, rets_it, &context->reg);
-            pd(actual)
         }
         rets_it += 1;
         actual += 1;
