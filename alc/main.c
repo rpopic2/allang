@@ -34,7 +34,6 @@ void compare_branch(parser_context *context, cond_t cond, const regable *restric
 void skip_function(src_t *src);
 bool directives(parser_context *context);
 void expr_cmp(const reg_t *lhs, const regable* rhs, cond_t cond_optimize);
-void named_bcond(parser_context *context, cond_t cond);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -630,11 +629,13 @@ void checkop_bounds(parser_context *context, reg_t index_reg, regable against, e
 
     } else if (stmt_eret_cond(context, cond, index_reg, against)) {
 
-    } else if (streq(cur_str->end -2, "->")) {
+    } else  if (streq(cur_str->end -2, "->")) {
         expr_cmp(&index_reg, &against, cond);
-        named_bcond(context, cond);
+        str target = *cur_str;
+        target.end -= 2;
+        emit_branch_cond(cond, context->symbol->name, target, 0);
     } else {
-            compile_err(&cur_token, "expected to handle check operator\n");
+        compile_err(&cur_token, "expected to handle check operator\n");
     }
     context->reg = stash;
 }
