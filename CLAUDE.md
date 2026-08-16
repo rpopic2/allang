@@ -1,6 +1,6 @@
 ## Build & Run
 
-Run from `alc-v2/`.
+Run from `alc/`.
 
 The emit backend files for your architecture and OS must be passed explicitly:
 
@@ -28,7 +28,7 @@ The emit backend files for your architecture and OS must be passed explicitly:
 
 ## Architecture
 
-The compiler is a single-pass compiler entirely in `alc-v2/`:
+The compiler is a single-pass compiler entirely in `alc/`:
 
 - **`main.c`** — Tokenizer (`tok()`), parser (`parse_block()`), type checker, and driver.
 - **`typesys.h`** — Type system: fundamental types, composite types, declarators, member layout.
@@ -52,4 +52,4 @@ allang uses indentation-sensitive scoping. Key syntax elements:
 - `->` — branch/jump
 - `@` — macros, `#` — directives
 - `=` — assignment operator. note that this operator assigns from left to right.
-See `specs-v4/` for the full language spec.
+See `specs/` for the full language spec.
