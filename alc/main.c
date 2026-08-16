@@ -34,6 +34,7 @@ void compare_branch(parser_context *context, cond_t cond, const regable *restric
 void skip_function(src_t *src);
 bool directives(parser_context *context);
 void expr_cmp(const reg_t *lhs, const regable* rhs, cond_t cond_optimize);
+void named_bcond(parser_context *context, cond_t cond);
 
 static const reg_t FP = (reg_t){ .reg_type = FRAME, .rsize = sizeof (void *) };
 
@@ -631,9 +632,7 @@ void checkop_bounds(parser_context *context, reg_t index_reg, regable against, e
 
     } else  if (streq(cur_str->end -2, "->")) {
         expr_cmp(&index_reg, &against, cond);
-        str target = *cur_str;
-        target.end -= 2;
-        emit_branch_cond(cond, context->symbol->name, target, 0);
+        named_bcond(context, cond);
     } else {
         compile_err(&cur_token, "expected to handle check operator\n");
     }
@@ -2759,7 +2758,6 @@ bool cond_eval(cond_t cond, i64 lhs, i64 rhs) {
 
 void named_bcond(parser_context *context, cond_t cond) {
     // TODO considering removing named branch other that break-> and loop->
-    tok(context);
     token_t jump_target = context->cur_token;
     if (!streq(jump_target.end - 2, "->")) {
         compile_err(&jump_target, "-> expected at the end of a conditional branch");
@@ -2826,6 +2824,7 @@ void compare_branch(parser_context *context, cond_t cond, const regable *restric
         switch (fold) {
         case FOLD_NONE:
             cond = cond_flip(cond);
+            tok(context);
             named_bcond(context, cond);
             break;
         case FOLD_TAKEN:
