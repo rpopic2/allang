@@ -961,14 +961,18 @@ void stmt_label(parser_context *context) {
             .rsize = rsize,
             .dtype = param->dtype,
         };
+
         context_add_nreg(context, &param->dtype);
+
         emit_mov_reg(r, arg_reg);
         if (is_fat) {
             arg_reg.offset += 1;
-            reg_t r_len = r;
-            r_len.offset += 1;
-            emit_mov_reg(r_len, arg_reg);
+            reg_t r2 = r;
+            r2.offset += 1;
+            emit_mov_reg(r2, arg_reg);
+            regoff += 1;
         }
+
         str param_name = params.data[i];
         if (!add_id(*local_ids.cur, param_name, &r)) {
             compile_err(&context->cur_token, "parameter ids should be unique\n");
