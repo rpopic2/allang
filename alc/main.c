@@ -298,6 +298,31 @@ bool at_block_end(parser_context *context, bool start_of_line) {
 
 // [ Literals ]
 
+char char_escape(str s, const token_t *diagnostic)
+{
+    char c = s.data[0];
+    if (c != '\\')
+        return c;
+
+    c = s.data[1];
+    switch (c) {
+    case 'n':
+        return '\n';
+    case 't':
+        return '\t';
+    case '\\':
+        return '\\';
+    default:;
+        i64 number = strtoll(s.data, NULL, 0);
+        if (number > (signed)sizeof (char)) {
+            compile_err(diagnostic, "%"PRId64" is too large for a char literal", number);
+        } else {
+            return (char)number;
+        }
+    }
+    return '\0';
+}
+
 void literal_string(parser_context *restrict context, const token_t *restrict token) {
     bool escape = emit_need_escaping();
     if (token->end[-1] != '"') {
@@ -318,36 +343,7 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
     iter unescaped = iter_init(raw, len);
 
     for (size_t i = 0; i < len; ++i) {
-        char c = token->data[i];
-        if (c != '\\')
-            *unescaped.cur++ = c;
-        else {
-            c = token->data[++i];
-            char result = ' ';
-            switch (c) {
-            case 'n':
-                result = '\n';
-                break;
-            case 't':
-                result = '\t';
-                break;
-            case '0':
-                result = '\0';
-                break;
-            case '\\':
-                result = '\\';
-                break;
-            default:;
-                i64 number = strtoll(token->data, NULL, 0);
-                if (number > (signed)sizeof (char)) {
-                    compile_err(token, "%"PRId64" is too large for a string literal", number);
-                } else {
-                    result = (char)number;
-                }
-                break;
-            }
-            *unescaped.cur++ = result;
-        }
+        *unescaped.cur++ = char_escape(token->id, token);
     }
 
     str unescaped_s = str_from_iter(&unescaped);
@@ -360,11 +356,12 @@ opt_i64 lit_numeric(const token_t *token) {
     if (isdigit(token->data[0]) || token->data[0] == '-') {
         value = strtoll(token->data, NULL, 0);
     } else if (token->data[0] == '\'') {
-        char c = token->data[1];
         if (token->end[-1] != '\'') {
             compile_err(token, "expected closing \'\n");
         }
-        value = c;
+        str lit = token->id;
+        lit.data += 1;
+        value = char_escape(lit, token);
     } else if (str_eq_lit(token->id, "true")) {
         value = 1;
     } else if (str_eq_lit(token->id, "false")) {
