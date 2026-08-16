@@ -935,8 +935,8 @@ void stmt_label(parser_context *context) {
     if (dead_fn_elim && !symbol->is_called)
         return;
 
-    if (list_reg_t_len(&symbol->params) != symbol->airity) {
-        printf("expected %td, but %d\n", list_reg_t_len(&symbol->params), symbol->airity);
+    if (list_len(&symbol->params) != symbol->airity) {
+        printf("expected %td, but %d\n", list_len(&symbol->params), symbol->airity);
         unreachable;
     }
 
@@ -2123,6 +2123,7 @@ int expr_line(parser_context *context) {
 void read_and_check_types(parser_context *context, list_reg_t *rets) {
     const token_t *token = &context->cur_token;
     reg_t *rets_it = rets->begin;
+    int actual = 0;
 
     do {
         tok(context);
@@ -2135,9 +2136,15 @@ void read_and_check_types(parser_context *context, list_reg_t *rets) {
             reg_typecheck(&context->cur_token, *rets_it, context->reg);
         }
         rets_it += 1;
+        actual += 1;
 
-        context->reg.offset++;
+        context->reg.offset += dtype_reg_count(&context->reg.dtype);
     } while (token->end[0] == ',' && isspace(token->end[1]));
+
+    if (rets_it != rets->end) {
+        isize expected = list_len(rets);
+        compile_err(token, "expected %zd register(s), but found %d\n", expected, actual);
+    }
 }
 
 bool stmt_ret_pre(parser_context *context) {
@@ -2151,25 +2158,10 @@ bool stmt_ret_pre(parser_context *context) {
     context->reg.offset = 0;
 
 
-    int arg_count = 0;
     if (context->cur_token.end[0] != '\n') {
         read_and_check_types(context, &context->symbol->rets);
-        arg_count = context->reg.offset;
     }
-    int expected = context->symbol->ret_airity;
 
-    if (do_airity_check && arg_count != expected) {
-        // if (islower(token->id.data[0])) {
-        //     symbol_t *fn = fn_call(context);
-        //     arg_count = fn->ret_airity;
-        //     if (arg_count != context->symbol->ret_airity) {
-        //         compile_err(token, "redirected function: expected to return %d values, but found %d\n",
-        //                 context->symbol->ret_airity, arg_count);
-        //     }
-        // } else {
-            compile_err(token, "expected to return %d values (found %d)\n", expected, arg_count);
-        // }
-    }
     at_block_end(context, start_of_line);
     return true;
 }
@@ -2261,18 +2253,11 @@ symbol_t *fn_call(parser_context *context) {
     context->reg.offset = 0;
     read_and_check_types(context, params);
 
-    printd("found %d args\n", context->reg.offset);
-
     if (context->reg.offset > 0)
         tok(context);
 
     str fn_name = symbol->name;
 
-    int arg_counts = context->reg.offset;
-    if (do_airity_check && arg_counts != symbol->airity) {
-        compile_err(token, "expected argument count %d, but found %d: function ", symbol->airity, arg_counts);
-        str_printerr(fn_name);
-    }
     emit_fn_call(&fn_name);
 
     context->reg.offset = 0;
@@ -2612,9 +2597,13 @@ void function(src_t *src) {
             .name = STR("main"),
             .is_called = true,
         };
-        context->symbol = hashmap_symbol_t_overwrite(fn_ids, tmp.name, &tmp);
-        list_reg_t_init(&context->symbol->params, &symbol_arena, 0);
-        list_reg_t_init(&context->symbol->rets, &symbol_arena, 0);
+        symbol_t *symbol = hashmap_symbol_t_overwrite(fn_ids, tmp.name, &tmp);
+        context->symbol = symbol;
+
+        list_reg_t_init(&symbol->params, &symbol_arena, symbol->airity);
+        list_reg_t_init(&symbol->rets, &symbol_arena, symbol->ret_airity);
+        list_reg_t_push(&symbol->rets, &(reg_t){.dtype = (dtype_t){.base = type_i32}});
+
         context->name = context->symbol->name;
         emit_fn(context->name);
     }

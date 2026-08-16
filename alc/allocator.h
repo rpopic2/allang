@@ -64,7 +64,7 @@ inline static void list_##T##_push(list_##T *self, const T *elem) { \
     } \
     *(self->cur++) = *elem; \
 } \
- \
-inline static ptrdiff_t list_##T##_len(const list_##T *self) { \
-    return self->cur - self->begin; \
-} \
+
+
+#define list_len(list) \
+    ((list)->cur - (list)->begin)

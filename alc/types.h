@@ -56,7 +56,7 @@ typedef enum cond {
 #define CSI_YELLOW "\x1b[33m"
 #define CSI_RESET "\x1b[0m"
 
-u32 next_pow2(u32 n) {
+static inline u32 next_pow2(u32 n) {
     if (n <= 1)
         return 1;
     return 1 << (32 - __builtin_clz(n - 1));
