@@ -1818,13 +1818,14 @@ bool expr_load(parser_context *context) {
     }
 
     dst->rsize = (reg_size)load_size;
+    src.rsize = (reg_size)load_size;
     dst->dtype.base = src.dtype.base;
     if (offset.tag == VALUE) {
         emit_ldr(*dst, src, (int)offset.value);
     } else {
         emit_ldr_reg(*dst, src, offset.reg);
     }
-    printd(__func__);
+    printd("%s\n", __func__);
     return true;
 }
 
@@ -2823,7 +2824,6 @@ void compare_branch(parser_context *context, cond_t cond, const regable *restric
     if (is_id(rhs_token->end[1])) {
         switch (fold) {
         case FOLD_NONE:
-            cond = cond_flip(cond);
             tok(context);
             named_bcond(context, cond);
             break;
