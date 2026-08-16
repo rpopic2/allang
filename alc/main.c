@@ -453,15 +453,15 @@ bool typecheck_regable(const token_t *token, const type_t *ltype, const regable 
     return true;
 }
 
-void reg_typecheck(const token_t *token, reg_t lhs, reg_t rhs) {
-    if (dtype_eq(&lhs.dtype, &rhs.dtype))
+void reg_typecheck(const token_t *token, const reg_t *lhs, const reg_t *rhs) {
+    if (dtype_eq(&lhs->dtype, &rhs->dtype))
         return;
-    if (dtype_check(&rhs.dtype, &lhs.dtype))
+    if (dtype_check(&rhs->dtype, &lhs->dtype))
         return;
 
     ALLOCATOR_MAKE(alloc, 1024);
-    str lname = dtype_to_str(&lhs.dtype, &alloc);
-    str rname = dtype_to_str(&rhs.dtype, &alloc);
+    str lname = dtype_to_str(&lhs->dtype, &alloc);
+    str rname = dtype_to_str(&rhs->dtype, &alloc);
     compile_err(token, "expected type '");
     str_printerrnl(lname);
     fprintf(stderr, "', but found type '");
@@ -2041,9 +2041,10 @@ bool expr_chain(parser_context *context, regable acc) {
 
 bool expr(parser_context *context) {
     bool explicit_type = context->cur_token.end[0] == '{';
+    dtype_t dtype = {0};
     if (explicit_type) {
         bool unknown = false;
-        parse_dtype(context, &context->reg.dtype);
+        parse_dtype(context, &dtype);
 
         tok(context);
         expect(context, STR("{"));
@@ -2056,18 +2057,17 @@ bool expr(parser_context *context) {
             return true;
         }
 
-        dtype_t *decl = &context->reg.dtype;
-        type_t *type = decl->base;
-        i32 len = dtype_tryget_arr(decl);
+        const type_t *type = dtype.base;
+        i32 len = dtype_tryget_arr(&dtype);
 
         context->reg.rsize = (reg_size)type->size;
         if (len) {
             unsigned long long arr_size = context->reg.rsize * (unsigned long long)len;
             context->reg.rsize = arr_size > 8 ? 8 : (reg_size)arr_size;
-            expr_struct(context, context->reg, decl);
+            expr_struct(context, context->reg, &dtype);
             return true;
         } else if (type->tag == TK_STRUCT) {
-            expr_struct(context, context->reg, decl);
+            expr_struct(context, context->reg, &dtype);
             return true;
         }
         tok(context);
@@ -2112,6 +2112,7 @@ bool expr(parser_context *context) {
     if (explicit_type) {
         tok(context);
         expect(context, STR("}"));
+        context->reg.dtype = dtype;
     }
     if (token->end[1] == '!') {
         reg_t *reg = NULL;
@@ -2169,7 +2170,9 @@ void read_and_check_types(parser_context *context, list_reg_t *rets) {
         context->reg.rsize = get_rsize(&context->reg);
         if (rets_it < rets->cur) {
             resolve_comptime_to(&context->reg, rets_it);
-            reg_typecheck(&context->cur_token, *rets_it, context->reg);
+            pdtype(&context->reg.dtype)
+            reg_typecheck(&context->cur_token, rets_it, &context->reg);
+            pd(actual)
         }
         rets_it += 1;
         actual += 1;
@@ -2523,7 +2526,7 @@ bool stmt_reg_assign(parser_context *context) {
     } else {
         resolve_comptime_to(&src_reg, target_reg);
     }
-    reg_typecheck(token, *target_reg, src_reg);
+    reg_typecheck(token, target_reg, &src_reg);
     emit_mov_reg(*target_reg, src_reg);
     printd("stmt:reg_assign, size %d\n", target_reg->rsize);
     cur_target->target_assigned = true;

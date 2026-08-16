@@ -74,7 +74,9 @@ str dtype_to_str(const dtype_t *self, allocator *alloc) {
         *head = ' ';
     }
 
-    str name = self->base->name;
+    str name = str_null;
+    if (self->base)
+        name = self->base->name;
     head = allocator_alloc_undefined(alloc, str_len(name));
     memcpy(head, name.data, str_len(name));
     head = allocator_alloc_undefined(alloc, 1);
