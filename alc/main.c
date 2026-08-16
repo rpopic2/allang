@@ -102,6 +102,14 @@ retry:;
             src_advance(src);
             break;
         }
+        if (c == '\'') {
+            do {
+                c = *(++src->cur);
+            } while (c != '\'' && c != '\n');
+            cur_token->end = ++src->cur;
+            src_advance(src);
+            break;
+        }
 
         if (streq(src->cur, "//")) {
             do {
@@ -310,6 +318,8 @@ char char_escape(str s, const token_t *diagnostic)
         return '\n';
     case 't':
         return '\t';
+    case 'r':
+        return '\r';
     case '\\':
         return '\\';
     default:;
