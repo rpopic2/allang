@@ -303,30 +303,40 @@ boolean. Constant `is`/`isnt` comparisons are folded at compile time.
 ### 6.3 Loads and stores
 
 ```
-load            ::= "[" load_target offset? unchecked? "]"
-load_target     ::= reg_ref | "This" | «empty (current target)»
-offset          ::= "*" regable                // dynamic element offset
-unchecked       ::= "unchecked"                // skip the bounds check
-
-store           ::= store_src "=[" store_target? "]"
+load            ::= "[" bracket_access "]"
+store           ::= store_src "=[" bracket_access? "]"
 store_src       ::= expr
-store_target    ::= reg_ref | "This" | «empty (current declaration target)»
+
+bracket_access  ::= access_target offset? bracket_check?
+access_target   ::= reg_ref | "This" | «empty (current target / declaration target)»
+offset          ::= "*" regable                // dynamic element offset
+bracket_check   ::= "unchecked"                // skip the bounds check
+                  | check_op                   // bounds check on offset/slice access; see §7.3
 
 reg_assign      ::= expr "=" assign_target
 assign_target   ::= "^"* upper_name | "This" | «empty (current target)»
 ```
 
 `[X]` loads; `X =[Dst]` / `X =[]` store; `X =Name` / `X =This` / `X =^J` assign
-to a named register. `=` moves **left to right** (source on the left). Examples:
+to a named register. `=` moves **left to right** (source on the left).
+
+A `bracket_check` guards any access that can go out of range at runtime: a
+dynamic offset (`*Index`) into an array or slice, or a static field access
+(`.N`) into a slice (a slice's length is only known at runtime, unlike an
+array's). Exactly one of `unchecked` or a `check_op` must follow such an
+access; see §7.3 for the check actions. Examples:
 
 ```
-[Arr.0]                 // static load
-[Arr * Index]           // dynamic load (bounds checked)
-[Arr * Index unchecked] // dynamic load, no check
-0 =[B]                  // store 0 through pointer B
-7 =[J]                  // store 7 to stack object J
-3 =I                    // assign 3 to register I
-5 =^J                   // assign 5 to J in the outer scope
+[Arr.0]                       // static load, array — no runtime check needed
+[Arr * Index ! ret 99]        // dynamic load, checked, return 99 on failure
+[Arr * Index unchecked]       // dynamic load, no check
+[S.3 ! ret]                   // slice static-field load, checked (bare ret)
+[S * I ! loop.break->]        // dynamic load, checked, branch to a label on failure
+i32{7} =[Buf * Index ! ret]   // dynamic store, checked
+0 =[B]                        // store 0 through pointer B
+7 =[J]                        // store 7 to stack object J
+3 =I                          // assign 3 to register I
+5 =^J                         // assign 5 to J in the outer scope
 ```
 
 ### 6.4 Aggregate literals
@@ -424,19 +434,36 @@ done->                  // unconditional jump to label 'done'
 ### 7.3 Bounds / error check
 
 ```
-checked_stmt    ::= checkable "!" ret_stmt
-checkable       ::= load | dyn_range_expr | fn_call    // produces a DK_CHECK value
+checked_stmt    ::= checkable check_op
+checkable       ::= reg_ref | dyn_range_expr | fn_call   // any DK_CHECK-typed value
+check_op        ::= "!" check_action
+check_action    ::= ret_stmt                              // return (bare, or with a fallback value) on failure
+                  | "eret"                                 // forward the failing tag through this fn's own check-typed return, see §5
+                  | lower_name "->"                         // branch to a label on failure
 ```
 
-The `!` operator consumes a check result and requires a following `ret` that
-fires when the check fails (out of bounds, or an error tag from a checked
-return type).
+`!` consumes a check result and requires exactly one `check_action`: a
+following `ret` (bare, or with a fallback value) fires when the check fails;
+`eret` re-raises the failure as this function's own return value (only valid
+when the enclosing function's return type itself carries a `check`, §5);
+`label->` branches to a label instead of returning.
+
+The same `check_op` also appears **inside** a load or store's `[ … ]`
+(§6.3), where it guards a dynamic offset or a slice's static field access —
+`unchecked` opts out there instead. Outside `[ … ]`, `check_op` guards a
+dynamic range (`Arr * Begin..`) or any `checkable` value, such as a call
+result whose declared return type carries a `check` (§5).
 
 ```
-[Arr * Index] ! ret           // bounds-checked load, return on failure
-Arr * Begin.. ! ret           // bounds-checked slice
-Arr * Index ! ret 3           // return value 3 on failure
+Arr * Begin.. ! ret            // bounds-checked slice (not a load: no brackets)
+Arr * Begin.. ! ret 99         // return value 99 on failure
+V :: get_checked =>
+V ! ret 55                     // statement-level check of a check-typed value
+V ! eret                       // forward V's failing tag through this fn's own check-typed return
+V ! done->                     // branch to label 'done' on failure
 ```
+
+See §6.3 for the `[ … ]`-internal forms (`[Arr * Index ! ret 99]`, etc.).
 
 ### 7.4 Function calls
 
@@ -498,7 +525,7 @@ ret 0
 
 ## 9. Reserved words and symbol glossary
 
-Keywords recognized by `main.c`: `ret`, `struct`, `is`, `isnt`, `shl`,
+Keywords recognized by `main.c`: `ret`, `eret`, `struct`, `is`, `isnt`, `shl`,
 `addr`, `slice`, `true`, `false`, `unchecked`, `This`, plus the fundamental
 type names (`u8`…`usize`, `i8`…`isize`) and the directive words after `#`
 (`declare`, `no_import_all_self`, `compile_all`).
@@ -540,8 +567,9 @@ full design intent.
   macro expansion `name args @`, partial inlining).
 - **Aggregates**: angle-bracket views `<…>` and array literals `*i32<…>`,
   heredoc strings (`""EOF … EOF`), unions / enum-unions, the `.is`/`memcpy`/
-  `memeq` struct helpers, ternary select `cond ? a : b`, and the `? eret`
-  error-on-failure form (the implementation uses `! ret` instead).
+  `memeq` struct helpers, and ternary select `cond ? a : b`. (The prose specs'
+  `? eret` error-on-failure form is not implemented as written, but `main.c`
+  does implement `eret` as a `check_op` action — see §7.3.)
 - **Booleans on conditions**: `and` / `or` combinators on `cond_expr`,
   `is pointing`, and condition-to-bool promotion as a call argument.
 - **Extra data-processing operators**: `/`, `SHR`, `ROR`, `ROL`, `ADC`,
