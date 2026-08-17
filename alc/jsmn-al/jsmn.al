@@ -285,16 +285,60 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
             0
         0
     dummy_loop:
+        I :: [^Parser.Toknext] - 1
+        I < 0 break->
 
+        Tmp :: ^Tokens * I unchecked
+        [Tmp.Type] isnt JSMN_ARRAY ->
+            [^Tmp.Type] isnt JSMN_OBJECT dummy_loop->
+
+        [Tmp.Start] isnt -1 ->
+            [^Tmp.End] is -1 ->
+                ^^I =[^^^Parser.Toksuper]
+                dummy_loop.break->
+            0
+
+        I - 1 =I
+        dummy_loop->
     dummy_loop.break:
 
+    default:
+    R :: jsmn_parse_primitive Parser, Js, Tokens =>
+    R < 0 ->
+        ret ^R
+
+    [Count] + 1 =[Count]
+
+        Toksuper :: [^Parser.Toksuper]
+        Toksuper isnt -1 ->
+            ^^Tokens.Length isnt 0 ->
+                Tmp :: ^^^Tokens * ^^Toksuper unchecked
+                [Tmp.Size] + 1 =[Tmp.Size]
+            0
+        0
+
     switch.break:
+
 
     [Parser.Pos] + 1 =[Parser.Pos]
     loop->
     loop.break:
 
-    ret 0
+    Tokens.Length isnt 0 ->
+        last_loop:
+        I :: [^Parser.Toknext] - 1
+        Ptr :: ^Tokens * I ! last_loop.break->
+        [Ptr.Start] isnt -1 ->
+            [^Ptr.End] is -1 ->
+                ret JSMN_ERROR_PART
+            0
+        0
+
+        last_loop->
+        last_loop.break->
+
+    CountTmp :: [Count]
+    ret i32{CountTmp}
 
 jsmn_init: Parser addr jsmn_parser =>
     0 =[Parser.Pos]

@@ -807,7 +807,7 @@ regable read_regable(str s, const token_t *diagnostic) {
         } else {
             member = find_member(&type->struct_t.members, mem_name);
             if (member == NULL) {
-                compile_err(diagnostic, "member not found: "), str_printerr(mem_name);
+                compile_err(diagnostic, "member "), str_printerrnl(mem_name), str_printerrnl(STR(" not found in type ")), str_printerr(type->name);
                 result.tag = NONE;
                 break;
             }
@@ -1053,13 +1053,18 @@ dyn_agg_member *read_aggregate(allocator *alloc, parser_context *context, dtype_
 
         int index = find_member_index(&members, member_name);
         if (index == -1) {
-            compile_err(token, "member not found: "), str_printerr(member_name);
-            if (!tok(context)) break;
+            char _allocbuf[(1024)];
+            allocator _alloc;
+            allocator_init(&_alloc, _allocbuf, 1024);
+            compile_err(token, "member not found: "), str_printerrnl(member_name), str_printerrnl(STR("in type ")), str_printerr(dtype_to_str((dtype), &_alloc));
+            if (!tok(context))
+                break;
             continue;
         }
         if (is_arr && index >= member_count) {
             compile_err(token, "array initializer index out of bounds\n");
-            if (!tok(context)) break;
+            if (!tok(context))
+                break;
             continue;
         }
 
