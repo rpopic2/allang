@@ -615,7 +615,6 @@ bool checkop_err(parser_context *context, reg_t *reg) {
 
     i32 against = decl.amount;
 
-    str_printerr(cur_token->id);
     if (stmt_ret_cond(context, COND_EQ, *reg, (regable){.tag = VALUE, .value = against})) {
 
     } else {
