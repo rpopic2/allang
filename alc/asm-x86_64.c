@@ -283,6 +283,7 @@ void emit_str_reg(reg_t dst, reg_t src, int offset) {
     buf_puts(fn_buf, STR("\tmov "));
     int index = rsize_log2(src.rsize);
     buf_snprintf(fn_buf, "%s ptr [", ptr_names[index]);
+    dst.rsize = sizeof (void *);
     buf_putreg(fn_buf, dst);
     buf_snprintf(fn_buf, " + %d], ", offset);
     buf_putreg(fn_buf, src);
@@ -295,6 +296,7 @@ const reg_t rbp = {.rsize = sizeof (void *), .reg_type = FRAME, .dtype = {.decl 
 static void emit_mem_imm(int index, reg_t dst, int offset, i64 value) {
     buf_puts(fn_buf, STR("\tmov "));
     buf_snprintf(fn_buf, "%s ptr [", ptr_names[index]);
+    dst.rsize = sizeof (void *);
     buf_putreg(fn_buf, dst);
     buf_snprintf(fn_buf, " + %d], %"PRId64"\n", offset, value);
 }
