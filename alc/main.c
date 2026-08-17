@@ -290,20 +290,6 @@ inline static bool at_store(const token_t *token) {
     return is_char_token(token, '=') && token->end[0] == '[';
 }
 
-inline static bool store_follows(const token_t *token) {
-    return streq(token->end + 1, "=[");
-}
-
-// bracketed constructs never span a line, so the closing ']' of the '[' the
-// lexer just produced is reachable without consuming any token
-inline static const char *close_bracket(const char *cur) {
-    while (*cur != ']' && *cur != '\n' && *cur != '\0')
-        ++cur;
-    if (*cur != ']')
-        return NULL;
-    return cur;
-}
-
 str dot_iter(str *s, char c) {
     const char *begin = s->data;
     if (s->data < s->end && *begin == c)
@@ -1727,7 +1713,7 @@ bool do_store(const regable *restrict lhs, parser_context *restrict context) {
             emit_str_reg(dst, src, (int)offset.value);
         }
 
-        if (!store_follows(token))
+        if (!streq(token->end + 1, "=["))
             break;
         tok(context);
         tok(context);
@@ -1737,7 +1723,7 @@ bool do_store(const regable *restrict lhs, parser_context *restrict context) {
 
 bool binary_op_store(const regable *restrict lhs, parser_context *restrict context) {
     const token_t *token = &context->cur_token;
-    if (!store_follows(token))
+    if (!streq(token->end + 1, "=["))
         return false;
     tok(context);
     return do_store(lhs, context);
@@ -2368,8 +2354,12 @@ bool decl_vars(parser_context *context) {
     }
 
     if (is_char_token(token, '[')) {
-        const char *const close = close_bracket(token->end);
-        if (close == NULL || !streq(close + 1, " ::"))
+        // a bracketed construct never spans a line, so its ']' is reachable
+        // without consuming any token
+        const char *close = token->end;
+        while (*close != ']' && *close != '\n' && *close != '\0')
+            ++close;
+        if (*close != ']' || !streq(close + 1, " ::"))
             return false;
 
         tok(context);
