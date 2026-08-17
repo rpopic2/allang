@@ -624,7 +624,8 @@ bool checkop(parser_context *restrict context, const reg_t *restrict index_reg, 
     } else if (streq(cur_str->end - 2, "->")) {
         expr_cmp(index_reg, against, cond);
         named_bcond(context, cond);
-        tok(context);
+        if(cur_str->end[0] == ']')
+            tok(context);
     } else {
         compile_err(cur_token, "expected to handle check operator\n");
     }
@@ -1568,7 +1569,6 @@ bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *o
             count_reg.offset += 1;
             count_reg.rsize = sizeof (void *);
             checkop_bounds(context, &count_reg, &(regable){.tag = VALUE, .value = slice}, INCL);
-            tok(context);
         }
 
         size_t stride;
@@ -2218,7 +2218,6 @@ bool stmt_ret_pre(parser_context *context) {
     context->reg.reg_type = RET;
     context->reg.offset = 0;
 
-
     if (context->cur_token.end[0] == ' ') {
         read_and_check_types(context, &context->symbol->rets);
     }
@@ -2241,6 +2240,7 @@ bool stmt_ret(parser_context *context) {
 bool stmt_ret_cond(parser_context *restrict context, cond_t cond, const reg_t *restrict cmp_reg, const regable *restrict against) {
     if (!str_eq_lit(context->cur_token.id, "ret"))
         return false;
+
     if (!stmt_ret_pre(context))
         return false;
 
