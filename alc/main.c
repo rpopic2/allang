@@ -624,8 +624,6 @@ bool checkop(parser_context *restrict context, const reg_t *restrict index_reg, 
     } else if (streq(cur_str->end - 2, "->")) {
         expr_cmp(index_reg, against, cond);
         named_bcond(context, cond);
-        if(cur_str->end[0] == ']')
-            tok(context);
     } else {
         compile_err(cur_token, "expected to handle check operator\n");
     }
@@ -1569,6 +1567,7 @@ bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *o
             count_reg.offset += 1;
             count_reg.rsize = sizeof (void *);
             checkop_bounds(context, &count_reg, &(regable){.tag = VALUE, .value = slice}, INCL);
+            tok(context);
         }
 
         size_t stride;
@@ -1601,6 +1600,7 @@ bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *o
             tok(context);
             checkop_bounds(context, &offset_regable.reg, &(regable){.tag = REG, .reg = count_reg},
                            EXCL);
+            tok(context);
         } else {
             tok(context);
             checkop_bounds(context, &offset_regable.reg,
