@@ -627,7 +627,7 @@ bool checkop_err(parser_context *context, reg_t *reg) {
 
 void checkop_bounds(parser_context *context, reg_t index_reg, regable against, enum inclusive inclusive) {
     const token_t cur_token = context->cur_token;
-    const str *const cur_str = &context->cur_token.id;
+    const str *cur_str = &context->cur_token.id;
 
     reg_t stash = context->reg;
     tok(context);
@@ -1493,7 +1493,6 @@ void resolve_stack_store_target(parser_context *context, target *cur_target,
     cur_target->target_assigned = true;
 }
 
-// enters on '[', leaves on the matching ']'
 bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *out_reg, regable *out_offset) {
     const token_t *cur_token = &context->cur_token;
     regable offset_regable = {.tag = VALUE, .value = 0};
@@ -2354,8 +2353,6 @@ bool decl_vars(parser_context *context) {
     }
 
     if (is_char_token(token, '[')) {
-        // a bracketed construct never spans a line, so its ']' is reachable
-        // without consuming any token
         const char *close = token->end;
         while (*close != ']' && *close != '\n' && *close != '\0')
             ++close;
