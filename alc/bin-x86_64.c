@@ -745,8 +745,11 @@ void emit_ldr(reg_t dst, reg_t src, int offset) {
 }
 
 void emit_str_regoff(reg_t dst, reg_t src, reg_t offset) {
-    encode_mem(OP_LEA, 8, RAX, reg_no(dst), true, reg_no(offset), 1, 0);
-    emit_str_reg(rax, src, 0);
+    reg_t addr = rax;
+    if (reg_no(src) == RAX)
+        addr.offset += 1; /* the address must not overwrite the value */
+    encode_mem(OP_LEA, 8, reg_no(addr), reg_no(dst), true, reg_no(offset), 1, 0);
+    emit_str_reg(addr, src, 0);
 }
 
 void emit_str_imm_regoff(reg_t dst, i64 value, reg_t offset) {
@@ -757,7 +760,8 @@ void emit_str_imm_regoff(reg_t dst, i64 value, reg_t offset) {
 }
 
 void emit_ldr_reg(reg_t dst, reg_t src, reg_t offset) {
-    encode_mem(OP_LEA, rsz(dst), reg_no(dst), reg_no(src), true, reg_no(offset), 1, 0);
+    /* an address is 64-bit even when the element is not */
+    encode_mem(OP_LEA, 8, reg_no(dst), reg_no(src), true, reg_no(offset), 1, 0);
     emit_ldr(dst, dst, 0);
 }
 
@@ -1056,17 +1060,19 @@ void emit_make_array(reg_t dst, type_t *type, u32 len, dyn_regable *args) { (voi
 void emit_store_array(reg_t dst, i64 offset, type_t *type, u32 len, dyn_regable *args) { (void)dst; (void)offset; (void)type; (void)len; (void)args; }
 
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store) {
-    dtype_t *dtype = &src.dtype;
+    reg_t mem = is_store ? dst : src;
+    const reg_t value = is_store ? src : dst;
+    dtype_t *dtype = &mem.dtype;
     size_t elem_size = dtype->base->size;
 
-    if (src.reg_type == STACK && src.offset) {
-        reg_t tmp_src = src;
-        tmp_src.reg_type = SCRATCH;
-        tmp_src.offset = 2;
-        tmp_src.rsize = 8;
+    if (mem.reg_type == STACK && mem.offset) {
+        reg_t tmp_mem = mem;
+        tmp_mem.reg_type = SCRATCH;
+        tmp_mem.offset = 2;
+        tmp_mem.rsize = 8;
         const reg_t frame = { .reg_type = FRAME, .rsize = 8 };
-        emit_sub(tmp_src, frame, src.offset);
-        src = tmp_src;
+        emit_sub(tmp_mem, frame, mem.offset);
+        mem = tmp_mem;
     }
 
     if (elem_size == 0) {
@@ -1081,13 +1087,13 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         offset = wide;
     }
     offset.rsize = 8;
-    src.rsize = 8;
+    mem.rsize = 8;
 
     if (elem_size == 1) {
         if (is_store)
-            emit_str_regoff(src, dst, offset);
+            emit_str_regoff(mem, value, offset);
         else
-            emit_ldr_reg(dst, src, offset);
+            emit_ldr_reg(value, mem, offset);
         return;
     }
 
@@ -1095,10 +1101,10 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         int exp = power_of_two_exponent(elem_size);
         if (exp) {
             if (is_store)
-                encode_mem(OP_MOV_RM_R, rsz(dst), reg_no(dst), reg_no(src), true,
+                encode_mem(OP_MOV_RM_R, rsz(value), reg_no(value), reg_no(mem), true,
                            reg_no(offset), (uint32_t)elem_size, 0);
             else
-                encode_mem(OP_MOV_R_RM, rsz(dst), reg_no(dst), reg_no(src), true,
+                encode_mem(OP_MOV_R_RM, rsz(value), reg_no(value), reg_no(mem), true,
                            reg_no(offset), (uint32_t)elem_size, 0);
             return;
         }
@@ -1117,12 +1123,12 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
         put8((uint8_t)(0xc0u | ((reg_no(idx) & 7u) << 3) | (reg_no(idx) & 7u)));
         put32((uint32_t)elem_size);
     }
-    emit_add_reg(idx, src, idx);
+    emit_add_reg(idx, mem, idx);
 
     if (is_store)
-        emit_str_reg(idx, dst, 0);
+        emit_str_reg(idx, value, 0);
     else
-        emit_ldr(dst, idx, 0);
+        emit_ldr(value, idx, 0);
 }
 
 void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {
