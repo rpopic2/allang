@@ -72,13 +72,16 @@ jsmn_fill_token: Token addr jsmntok, Type i32, Start i32, End i32 =>
     End =[Token.End]
     0 =[Token.Size]
 
+tmp: I !u8 =>
+    I ! ret
+    ret
+
 jsmn_parse_primitive: Parser addr jsmn_parser, Js slice !u8, Tokens slice jsmntok => i32
     Start :: [Parser.Pos]
 
     loop:
         Pos :: [^Parser.Pos]
-        C :: [^Js * Pos ! loop.break->]
-        C is 0 loop.break->
+        C :: [^Js * Pos ! loop.break->] ! loop.break->
         C is ':' found->
         C is '\t' found->
         C is '\r' found->
@@ -121,8 +124,7 @@ jsmn_parse_string: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok 
 
     loop:
     Pos :: [Parser.Pos]
-    [C] :: [Js * Pos ! loop.break->] =[]
-    [C] is 0 loop.break->
+    [C] :: [Js * Pos ! loop.break->] ! loop.break =[]
     [C] is '"' ->
         ^Tokens ! ret 0
 

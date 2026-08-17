@@ -54,6 +54,9 @@ void struct_expr_report(dyn_agg_member *args, type_t *type, int depth);
     #define pc(i) fprintf(stderr, #i": '%c'\n", i);
     #define pcs(s) fprintf(sderr, #s": '%s'\n", s);
     #define ps(s) fprintf(stderr, #s": "), str_printerr(s);
+    #define pso(s, o) fprintf(stderr, #s" + "#o": ");\
+                str __s = { .data = s.data, .end = s.data + o }; \
+                str_printerr(__s);
     #define bt report_backtrace("\n");
     #define pdtype(dtype) ALLOCATOR_MAKE(_alloc, 1024); ps(dtype_to_str((dtype), &_alloc));
 #endif
