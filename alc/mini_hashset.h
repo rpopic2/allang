@@ -76,7 +76,7 @@ inline static reg_t *add_id(mini_hashset self, str id, const reg_t *value) {
 
 // arr mini hashset
 
-#define MAX_DEPTH 5
+#define MAX_DEPTH 7
 
 typedef struct {
     mini_hashset data[MAX_DEPTH];
@@ -90,7 +90,7 @@ static inline void arr_mini_hashset_init(arr_mini_hashset *arr) {
 }
 static inline mini_hashset *arr_mini_hashset_push(arr_mini_hashset *arr) {
     if (arr->cur + 1 == arr->data + MAX_DEPTH) {
-        fputs("arr was full\n", stderr);
+        fputs("arr mini hashset was full\n", stderr);
         abort();
     }
     arr->cur++;

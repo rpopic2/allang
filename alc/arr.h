@@ -13,7 +13,7 @@ static inline void arr_##T##_init(arr_##T *arr) { \
  \
 static inline T *arr_##T##_push(arr_##T *arr, const T value) { \
     if (arr->cur == arr->end) { \
-        fputs("arr was full", stderr); \
+        fputs("arr "#T" was full", stderr); \
         abort(); \
     } \
     *arr->cur++ = value; \
@@ -67,7 +67,7 @@ static inline void arr_##T##p_new(arr_##T##p *arr) { \
  \
 static inline void arr_##T##p_push(arr_##T##p *restrict arr, T *restrict value) { \
     if (arr->cur == arr->end) { \
-        fputs("arr was full", stderr); \
+        fputs("arr "#T" was full", stderr); \
         abort(); \
     } \
     *arr->cur++ = value; \
