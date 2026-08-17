@@ -126,6 +126,8 @@ range_ret_value_both: =>
     A isnt Two -> _Exit 114 =>
     B :: range_both_len 1, 10 =>
     B isnt 99 -> _Exit 115 =>
+    C :: range_both_len 3, 1 =>
+    C isnt 99 -> _Exit 116 =>
 
 range_begin_len: I usize => usize
     [Buf] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
@@ -145,16 +147,16 @@ range_both_len: I usize, J usize => usize
 range_ret_bare: =>
     [Flag] :: 0 =[]
     range_reached Flag, 1 =>
-    [Flag] isnt 1 -> _Exit 116 =>
+    [Flag] isnt 1 -> _Exit 117 =>
     0 =[Flag]
     range_reached Flag, 10 =>
-    [Flag] isnt 0 -> _Exit 117 =>
+    [Flag] isnt 0 -> _Exit 118 =>
     0 =[Flag]
     range_order_reached Flag, 1, 3 =>
-    [Flag] isnt 1 -> _Exit 118 =>
+    [Flag] isnt 1 -> _Exit 119 =>
     0 =[Flag]
     range_order_reached Flag, 3, 1 =>
-    [Flag] isnt 0 -> _Exit 119 =>
+    [Flag] isnt 0 -> _Exit 120 =>
 
 range_reached: F addr i32, I usize =>
     [Buf] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
@@ -169,6 +171,9 @@ range_order_reached: F addr i32, I usize, J usize =>
 range_branch: =>
     range_branch_at 1, 1 =>
     range_branch_at 10, 0 =>
+    range_order_branch_at 1, 3, 1 =>
+    range_order_branch_at 3, 1, 0 =>
+    range_order_branch_at 1, 10, 0 =>
 
 range_branch_at: I usize, Expected i32 =>
     [Buf] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
@@ -178,13 +183,37 @@ range_branch_at: I usize, Expected i32 =>
     i32{1} =[Flag]
     loop.break:
 
-    [Flag] isnt Expected -> _Exit 120 =>
+    [Flag] isnt Expected -> _Exit 121 =>
+
+range_order_branch_at: I usize, J usize, Expected i32 =>
+    [Buf] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
+    [Flag] :: 0 =[]
+    loop:
+    Buf * I..J ! loop.break->
+    i32{1} =[Flag]
+    loop.break:
+
+    [Flag] isnt Expected -> _Exit 122 =>
 
 range_eret: =>
     A :: range_eret_caller 1 =>
-    A isnt 3 -> _Exit 121 =>
+    A isnt 3 -> _Exit 123 =>
     B :: range_eret_caller 10 =>
-    B isnt 55 -> _Exit 122 =>
+    B isnt 55 -> _Exit 124 =>
+    C :: range_order_eret_caller 1, 3 =>
+    C isnt 3 -> _Exit 125 =>
+    D :: range_order_eret_caller 3, 1 =>
+    D isnt 55 -> _Exit 126 =>
+
+range_order_eret_caller: I usize, J usize => i32
+    V :: range_order_eret_at I, J =>
+    V ! ret 55
+    ret V
+
+range_order_eret_at: I usize, J usize => !9 i32
+    [Buf] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
+    Buf * I..J ! eret
+    ret 3
 
 range_eret_caller: I usize => i32
     V :: range_eret_at I =>
@@ -199,20 +228,35 @@ range_eret_at: I usize => !9 i32
 // --- dynamic range over a slice parameter ---
 
 slice_range: S slice i32 =>
-    Four :: usize{4}
-    A :: slice_range_len S, 1 =>
-    A isnt Four -> _Exit 123 =>
-    B :: slice_range_len S, 10 =>
-    B isnt 99 -> _Exit 124 =>
+    slice_range_ret S =>
+    slice_range_order S =>
 
     slice_range_branch_at S, 1, 1 =>
     slice_range_branch_at S, 10, 0 =>
 
     C :: slice_range_eret_caller S, 10 =>
-    C isnt 55 -> _Exit 125 =>
+    C isnt 55 -> _Exit 127 =>
+
+slice_range_ret: S slice i32 =>
+    Four :: usize{4}
+    A :: slice_range_len S, 1 =>
+    A isnt Four -> _Exit 128 =>
+    B :: slice_range_len S, 10 =>
+    B isnt 99 -> _Exit 129 =>
+
+slice_range_order: S slice i32 =>
+    Two :: usize{2}
+    A :: slice_range_both_len S, 1, 3 =>
+    A isnt Two -> _Exit 130 =>
+    B :: slice_range_both_len S, 3, 1 =>
+    B isnt 99 -> _Exit 131 =>
 
 slice_range_len: S slice i32, I usize => usize
     Sub :: S * I.. ! ret 99
+    ret Sub.Length
+
+slice_range_both_len: S slice i32, I usize, J usize => usize
+    Sub :: S * I..J ! ret 99
     ret Sub.Length
 
 slice_range_branch_at: S slice i32, I usize, Expected i32 =>
@@ -222,7 +266,7 @@ slice_range_branch_at: S slice i32, I usize, Expected i32 =>
     i32{1} =[Flag]
     loop.break:
 
-    [Flag] isnt Expected -> _Exit 126 =>
+    [Flag] isnt Expected -> _Exit 132 =>
 
 slice_range_eret_caller: S slice i32, I usize => i32
     V :: slice_range_eret_at S, I =>
@@ -237,9 +281,9 @@ slice_range_eret_at: S slice i32, I usize => !9 i32
 
 value_ret_value: =>
     A :: value_ret_value_at 3 =>
-    A isnt 3 -> _Exit 127 =>
+    A isnt 3 -> _Exit 133 =>
     B :: value_ret_value_at 9 =>
-    B isnt 55 -> _Exit 128 =>
+    B isnt 55 -> _Exit 134 =>
 
 value_ret_value_at: I i32 => i32
     V :: tagged I =>
@@ -249,10 +293,10 @@ value_ret_value_at: I i32 => i32
 value_ret_bare: =>
     [Flag] :: 0 =[]
     value_reached Flag, 3 =>
-    [Flag] isnt 1 -> _Exit 129 =>
+    [Flag] isnt 1 -> _Exit 135 =>
     0 =[Flag]
     value_reached Flag, 9 =>
-    [Flag] isnt 0 -> _Exit 130 =>
+    [Flag] isnt 0 -> _Exit 136 =>
 
 value_reached: F addr i32, I i32 =>
     V :: tagged I =>
@@ -271,13 +315,13 @@ value_branch_at: I i32, Expected i32 =>
     i32{1} =[Flag]
     loop.break:
 
-    [Flag] isnt Expected -> _Exit 131 =>
+    [Flag] isnt Expected -> _Exit 137 =>
 
 value_eret: =>
     A :: value_eret_caller 3 =>
-    A isnt 3 -> _Exit 132 =>
+    A isnt 3 -> _Exit 138 =>
     B :: value_eret_caller 9 =>
-    B isnt 55 -> _Exit 133 =>
+    B isnt 55 -> _Exit 139 =>
 
 value_eret_caller: I i32 => i32
     V :: value_eret_at I =>
@@ -306,11 +350,11 @@ slice_elem: S slice i32 =>
 
 slice_elem_static: S slice i32 =>
     A :: slice_static_first S =>
-    A isnt 10 -> _Exit 134 =>
+    A isnt 10 -> _Exit 140 =>
     B :: slice_static_third S =>
-    B isnt 13 -> _Exit 135 =>
+    B isnt 13 -> _Exit 141 =>
     C :: slice_static_past_end S =>
-    C isnt 99 -> _Exit 136 =>
+    C isnt 99 -> _Exit 142 =>
 
 slice_static_first: S slice i32 => i32
     V :: [S.0 ! ret 99]
@@ -328,13 +372,13 @@ slice_static_past_end: S slice i32 => i32
 
 slice_elem_dynamic: S slice i32 =>
     A :: slice_dyn_at S, 2 =>
-    A isnt 12 -> _Exit 137 =>
+    A isnt 12 -> _Exit 143 =>
     B :: slice_dyn_at S, 4 =>
-    B isnt 14 -> _Exit 138 =>
+    B isnt 14 -> _Exit 144 =>
     C :: slice_dyn_at S, 5 =>
-    C isnt 99 -> _Exit 139 =>
+    C isnt 99 -> _Exit 145 =>
     D :: slice_dyn_at S, 10 =>
-    D isnt 99 -> _Exit 140 =>
+    D isnt 99 -> _Exit 146 =>
 
 slice_dyn_at: S slice i32, I usize => i32
     V :: [S * I ! ret 99]
@@ -343,10 +387,10 @@ slice_dyn_at: S slice i32, I usize => i32
 slice_elem_ret_bare: S slice i32 =>
     [Flag] :: 0 =[]
     slice_elem_reached Flag, S, 2 =>
-    [Flag] isnt 1 -> _Exit 141 =>
+    [Flag] isnt 1 -> _Exit 147 =>
     0 =[Flag]
     slice_elem_reached Flag, S, 10 =>
-    [Flag] isnt 0 -> _Exit 142 =>
+    [Flag] isnt 0 -> _Exit 148 =>
 
 slice_elem_reached: F addr i32, S slice i32, I usize =>
     [S * I ! ret]
@@ -363,13 +407,13 @@ slice_elem_branch_at: S slice i32, I usize, Expected i32 =>
     i32{1} =[Flag]
     loop.break:
 
-    [Flag] isnt Expected -> _Exit 143 =>
+    [Flag] isnt Expected -> _Exit 149 =>
 
 slice_elem_eret: S slice i32 =>
     A :: slice_elem_eret_caller S, 2 =>
-    A isnt 12 -> _Exit 144 =>
+    A isnt 12 -> _Exit 150 =>
     B :: slice_elem_eret_caller S, 10 =>
-    B isnt 55 -> _Exit 145 =>
+    B isnt 55 -> _Exit 151 =>
 
 slice_elem_eret_caller: S slice i32, I usize => i32
     V :: slice_elem_eret_at S, I =>
@@ -383,9 +427,9 @@ slice_elem_eret_at: S slice i32, I usize => !9 i32
 slice_elem_unchecked: S slice i32 =>
     I :: usize{2}
     A :: [S * I unchecked]
-    A isnt 12 -> _Exit 146 =>
+    A isnt 12 -> _Exit 152 =>
     B :: [S.4 unchecked]
-    B isnt 14 -> _Exit 147 =>
+    B isnt 14 -> _Exit 153 =>
 
 // --- static-index store through a slice ---
 
@@ -394,7 +438,7 @@ slice_elem_store: =>
     S :: Buf..
     i32{7} =[S.3 ! ret]
     V :: [S.3 ! ret]
-    V isnt 7 -> _Exit 148 =>
+    V isnt 7 -> _Exit 154 =>
 
 slice_elem_store_dynamic: =>
     [Buf] :: 5*i32{.. 0} =[]
@@ -402,9 +446,9 @@ slice_elem_store_dynamic: =>
     I :: usize{2}
     i32{7} =[S * I ! ret]
     V :: [S * I ! ret]
-    V isnt 7 -> _Exit 149 =>
+    V isnt 7 -> _Exit 155 =>
     W :: [S.4 unchecked]
-    W isnt 0 -> _Exit 150 =>
+    W isnt 0 -> _Exit 156 =>
 
 // --- store through a checked index ---
 
@@ -418,11 +462,11 @@ store_elem: =>
 
 store_elem_ret_value: =>
     A :: store_at 2 =>
-    A isnt 7 -> _Exit 151 =>
+    A isnt 7 -> _Exit 157 =>
     B :: store_at 5 =>
-    B isnt 99 -> _Exit 152 =>
+    B isnt 99 -> _Exit 158 =>
     C :: store_at 10 =>
-    C isnt 99 -> _Exit 153 =>
+    C isnt 99 -> _Exit 159 =>
 
 store_at: I usize => i32
     [Buf] :: 5*i32{.. 0} =[]
@@ -433,10 +477,10 @@ store_at: I usize => i32
 store_elem_ret_bare: =>
     [Flag] :: 0 =[]
     store_reached Flag, 2 =>
-    [Flag] isnt 1 -> _Exit 154 =>
+    [Flag] isnt 1 -> _Exit 160 =>
     0 =[Flag]
     store_reached Flag, 10 =>
-    [Flag] isnt 0 -> _Exit 155 =>
+    [Flag] isnt 0 -> _Exit 161 =>
 
 store_reached: F addr i32, I usize =>
     [Buf] :: 5*i32{.. 0} =[]
@@ -455,13 +499,13 @@ store_branch_at: I usize, Expected i32 =>
     i32{1} =[Flag]
     loop.break:
 
-    [Flag] isnt Expected -> _Exit 156 =>
+    [Flag] isnt Expected -> _Exit 162 =>
 
 store_elem_eret: =>
     A :: store_eret_caller 2 =>
-    A isnt 3 -> _Exit 157 =>
+    A isnt 3 -> _Exit 163 =>
     B :: store_eret_caller 10 =>
-    B isnt 55 -> _Exit 158 =>
+    B isnt 55 -> _Exit 164 =>
 
 store_eret_caller: I usize => i32
     V :: store_eret_at I =>
@@ -478,15 +522,15 @@ store_elem_unchecked: =>
     I :: usize{3}
     i32{7} =[Buf * I unchecked]
     A :: [Buf * I unchecked]
-    A isnt 7 -> _Exit 159 =>
+    A isnt 7 -> _Exit 165 =>
     B :: [Buf.4]
-    B isnt 0 -> _Exit 160 =>
+    B isnt 0 -> _Exit 166 =>
 
 store_elem_narrow: =>
     [Buf] :: 5*u8{.. 0} =[]
     I :: usize{2}
     u8{7} =[Buf * I ! ret]
     A :: [Buf * I ! ret]
-    A isnt 7 -> _Exit 161 =>
+    A isnt 7 -> _Exit 167 =>
     B :: [Buf.1]
-    B isnt 0 -> _Exit 162 =>
+    B isnt 0 -> _Exit 168 =>
