@@ -351,6 +351,7 @@ void literal_string(parser_context *restrict context, const token_t *restrict to
     context->reg.rsize = sizeof (char *);
     context->reg.dtype = (dtype_t){.base = hashmap_type_t_tryfind(types, STR("u8"))};
     dtype_wrap(&context->reg.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+    pdtype(&context->reg.dtype)
     if (!escape) {
         emit_string_lit(context->reg, (str *)token);
         return;
@@ -807,7 +808,11 @@ regable read_regable(str s, const token_t *diagnostic) {
         } else {
             member = find_member(&type->struct_t.members, mem_name);
             if (member == NULL) {
-                compile_err(diagnostic, "member "), str_printerrnl(mem_name), str_printerrnl(STR(" not found in type ")), str_printerr(type->name);
+                char _allocbuf[(1024)];
+                allocator _alloc;
+                allocator_init(&_alloc, _allocbuf, 1024);
+                    
+                compile_err(diagnostic, "member '"), str_printerrnl(mem_name), str_printerrnl(STR("' not found in type ")), str_printerr(dtype_to_str((&reg->dtype), &_alloc));
                 result.tag = NONE;
                 break;
             }

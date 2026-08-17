@@ -23,6 +23,8 @@
 // SOFTWARE.
 // 
 
+#declare malloc: Size usize => addr u8
+
 JSMN_UNDEFINED: 0
 JSMN_OBJECT: 1
 JSMN_ARRAY: 2
@@ -33,7 +35,15 @@ JSMN_ERROR_NOMEM: -1
 JSMN_ERROR_INVAL: -2
 JSMN_ERROR_PART: -3
 
-ret 0
+[Parser] :: jsmn_parser{.. 0} =[]
+jsmn_init Parser =>
+
+[Js] :: 1*u8{.. 0} =[]
+[Tokens] :: 1*jsmntok{.. 0} =[]
+
+Rv :: jsmn_parse Parser, Js.., Tokens.. =>
+
+ret Rv
 
 // TODO make enum, flag enum, allow lsl constant-folding
 jsmntype:
@@ -188,9 +198,8 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
     [C] ::
         Pos :: [^Parser.Pos]
         [^Js * Pos ! loop.break->] ! loop.break-> =[]
-    [C] is '{' brackets->
-    [C] is '[' brackets->
-    brackets:
+    [C] isnt '{' brackets->
+    [C] isnt '[' brackets->
         [^Count] + 1 =[^Count]
         ^Tokens ! switch.break->
         Token :: jsmn_alloc_token ^Parser, ^Tokens =>
@@ -210,8 +219,9 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
         [^Parser.Toknext] - 1 =[^Parser.Toksuper]
         switch.break->
 
-    [C] is '}' bracket_close->
-    [C] is ']' bracket_close->
+    brackets:
+    [C] isnt '}' bracket_close->
+    [C] isnt ']' bracket_close->
         ^Tokens.Length is 0 switch.break->
         Type ::
             JSMN_ARRAY =This
@@ -250,7 +260,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
 
         0
         switch.break->
-
+    bracket_close:
     [C] is '"' ->
         R :: jsmn_parse_string ^Parser, ^Js, ^Tokens =>
         R < 0 ->
@@ -286,7 +296,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
         0
     dummy_loop:
         I :: [^Parser.Toknext] - 1
-        I < 0 break->
+        I < 0 dummy_loop.break->
 
         Tmp :: ^Tokens * I unchecked
         [Tmp.Type] isnt JSMN_ARRAY ->
@@ -335,7 +345,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
         0
 
         last_loop->
-        last_loop.break->
+        last_loop.break:
 
     CountTmp :: [Count]
     ret i32{CountTmp}
