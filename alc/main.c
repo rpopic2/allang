@@ -2232,7 +2232,11 @@ bool stmt_ret_pre(parser_context *context) {
         read_and_check_types(context, &context->symbol->rets);
     }
 
-    at_block_end(context, start_of_line);
+    // an indented body ends by dedent, which the tokenizer already reports;
+    // the top level has no dedent to end it, so a ret has to
+    if (context->indent == 0)
+        at_block_end(context, start_of_line);
+
     return true;
 }
 
