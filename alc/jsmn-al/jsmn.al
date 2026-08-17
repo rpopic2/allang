@@ -121,7 +121,7 @@ jsmn_parse_string: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok 
 
     loop:
     Pos :: [Parser.Pos]
-    [C] :: [Js * Pos] ! loop.break-> =[]
+    [C] :: [Js * Pos ! loop.break->] =[]
     [C] is 0 loop.break->
     [C] is '"' ->
         ^Tokens ! ret 0
@@ -139,7 +139,7 @@ jsmn_parse_string: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok 
     backslash:
     [C] is '\\' ->
         [^Parser.Pos] + 1 =^Pos
-        D :: [^Js * ^Pos] ! backslash.break->
+        D :: [^Js * ^Pos ! backslash.break->]
         ^Pos =[^Parser.Pos]
 
         D is '"' loop.break->
@@ -157,7 +157,7 @@ jsmn_parse_string: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok 
 
             [I] :: 0 =[]
             uloop:
-            E :: [^^Js * ^^Pos] ! uloop.break->
+            E :: [^^Js * ^^Pos ! uloop.break->]
             E is 0 uloop.break->
             [I] >= 4 uloop.break->
             

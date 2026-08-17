@@ -647,6 +647,7 @@ void checkop_bounds(parser_context *context, reg_t index_reg, regable against, e
     } else if (streq(cur_str->end - 2, "->")) {
         expr_cmp(&index_reg, &against, cond);
         named_bcond(context, cond);
+        tok(context);
     } else {
         compile_err(&cur_token, "expected to handle check operator\n");
     }
