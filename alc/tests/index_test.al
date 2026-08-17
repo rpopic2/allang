@@ -339,63 +339,63 @@ dyn_usize: =>
 checked_i8: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: i8{2}
-    [Arr * Index] ! ret
+    [Arr * Index ! ret]
     V :: [Arr * Index unchecked]
     V isnt 12 -> _Exit 30 =>
 
 checked_i16: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: i16{2}
-    [Arr * Index] ! ret
+    [Arr * Index ! ret]
     V :: [Arr * Index unchecked]
     V isnt 12 -> _Exit 31 =>
 
 checked_i32: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: i32{2}
-    [Arr * Index] ! ret
+    [Arr * Index ! ret]
     V :: [Arr * Index unchecked]
     V isnt 12 -> _Exit 32 =>
 
 checked_i64: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: i64{2}
-    [Arr * Index] ! ret
+    [Arr * Index ! ret]
     V :: [Arr * Index unchecked]
     V isnt 12 -> _Exit 33 =>
 
 checked_u8: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: u8{2}
-    [Arr * Index] ! ret
+    [Arr * Index ! ret]
     V :: [Arr * Index unchecked]
     V isnt 12 -> _Exit 34 =>
 
 checked_u16: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: u16{2}
-    [Arr * Index] ! ret
+    [Arr * Index ! ret]
     V :: [Arr * Index unchecked]
     V isnt 12 -> _Exit 35 =>
 
 checked_u32: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: u32{2}
-    [Arr * Index] ! ret
+    [Arr * Index ! ret]
     V :: [Arr * Index unchecked]
     V isnt 12 -> _Exit 36 =>
 
 checked_u64: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: u64{2}
-    [Arr * Index] ! ret
+    [Arr * Index ! ret]
     V :: [Arr * Index unchecked]
     V isnt 12 -> _Exit 37 =>
 
 checked_usize: =>
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: usize{2}
-    [Arr * Index] ! ret
+    [Arr * Index ! ret]
     V :: [Arr * Index unchecked]
     V isnt 12 -> _Exit 38 =>
 

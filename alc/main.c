@@ -628,13 +628,15 @@ void checkop_bounds(parser_context *context, reg_t index_reg, regable against, e
     const token_t cur_token = context->cur_token;
     const str *cur_str = &context->cur_token.id;
 
-    reg_t stash = context->reg;
-    tok(context);
-    if (!str_eq(context->cur_token.id, STR("!"))) {
-        compile_err(&cur_token, "expected to check bounds with operator !\n");
+    if (str_eq_lit(*cur_str, "unchecked"))
+        return;
+
+    if (!str_eq(*cur_str, STR("!"))) {
+        compile_err(&cur_token, "expected to check bounds with operator !, but found "), str_printerr(*cur_str);
         return;
     }
 
+    reg_t stash = context->reg;
     cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
     tok(context);
 
@@ -1164,6 +1166,7 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
         : (regable){.tag = VALUE, .value = len};
 
     reg_t dst = context->reg;
+    tok(context);
     if (begin->tag != NONE && end->tag != NONE) {
         const cond_t cond = COND_HI;
         emit_cmp_reg(begin->reg, end->reg, cond);
@@ -1495,27 +1498,15 @@ void resolve_stack_store_target(parser_context *context, target *cur_target,
 bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *out_reg, regable *out_offset) {
     const token_t *cur_token = &context->cur_token;
     regable offset_regable = {.tag = VALUE, .value = 0};
-    bool unchecked = false;
 
     tok(context);
     str s = cur_token->id;
-    if (is_char_token(cur_token, ']')) {
-        s = str_null;
-    } else {
+
+    tok(context);
+    if (is_char_token(cur_token, '*')) {
         tok(context);
-        if (is_char_token(cur_token, '*')) {
-            tok(context);
-            offset_regable = read_regable(cur_token->id, cur_token);
-            diagnostic_dyn_elem_access(context, &offset_regable);
-            tok(context);
-            if (str_eq_lit(cur_token->id, "unchecked")) {
-                unchecked = true;
-                tok(context);
-            }
-        }
-        if (!is_char_token(cur_token, ']')) {
-            compile_err(cur_token, "closing ']' expected\n");
-        }
+        offset_regable = read_regable(cur_token->id, cur_token);
+        diagnostic_dyn_elem_access(context, &offset_regable);
     }
 
     regable regable_target;
@@ -1578,6 +1569,7 @@ bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *o
             count_reg.offset += 1;
             count_reg.rsize = sizeof (void *);
             checkop_bounds(context, count_reg, (regable){.tag = VALUE, .value = slice}, INCL);
+            tok(context);
         }
 
         size_t stride;
@@ -1600,20 +1592,28 @@ bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *o
         }
         offset_regable.value += reg.displacement;
     } else if (offset_regable.tag == REG) {
-        if (!unchecked) {
-            declarator_t decl = dtype_outer(&reg.dtype);
-            if (decl.tag != DK_ARRAY && decl.tag != DK_SLICE) {
-                compile_err(cur_token, "register was not an array\n");
-            } else if (decl.tag == DK_SLICE) {
-                reg_t count_reg = reg;
-                count_reg.offset += 1;
-                count_reg.rsize = sizeof (usize);
-                checkop_bounds(context, offset_regable.reg, (regable){.tag = REG, .reg = count_reg}, EXCL);
-            } else {
-                checkop_bounds(context, offset_regable.reg, (regable){.tag = VALUE, .value = decl.amount}, INCL);
-            }
+        declarator_t decl = dtype_outer(&reg.dtype);
+        if (decl.tag != DK_ARRAY && decl.tag != DK_SLICE) {
+            compile_err(cur_token, "register was not an array\n");
+        } else if (decl.tag == DK_SLICE) {
+            reg_t count_reg = reg;
+            count_reg.offset += 1;
+            count_reg.rsize = sizeof(usize);
+            tok(context);
+            checkop_bounds(context, offset_regable.reg, (regable){.tag = REG, .reg = count_reg},
+                           EXCL);
+        } else {
+            tok(context);
+            checkop_bounds(context, offset_regable.reg,
+                           (regable){.tag = VALUE, .value = decl.amount}, INCL);
+            tok(context);
         }
-    } else unreachable;
+    } else
+        unreachable;
+
+    if (!is_char_token(cur_token, ']')) {
+        compile_err(cur_token, "closing ']' expected, but found "), str_printerr(cur_token->id);
+    }
 
     *out_offset = offset_regable;
     *out_reg = reg;
@@ -2212,7 +2212,7 @@ bool stmt_ret_pre(parser_context *context) {
     context->reg.offset = 0;
 
 
-    if (context->cur_token.end[0] != '\n') {
+    if (context->cur_token.end[0] == ' ') {
         read_and_check_types(context, &context->symbol->rets);
     }
 

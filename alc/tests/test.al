@@ -78,7 +78,6 @@ reg_off: =>
     [X] ::
         3 + 2, 4 =[]
     Y :: X
-    [Y * O unchecked]
     3 =[Y]
 
 copy: =>
@@ -453,7 +452,7 @@ array: => I i32
     [Arr2] :: 8*i32{.0 1 .1 2 .. 0} =[]
     I :: 2
 
-    [Arr * I] ! ret 0
+    [Arr * I ! ret 0]
     ret 1
 
 slice: =>

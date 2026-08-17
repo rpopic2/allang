@@ -29,28 +29,28 @@ ret 0
 load_inbounds: => R i32
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: usize{2}
-    [Arr * Index] ! ret 99
+    [Arr * Index ! ret 99]
     V :: [Arr * Index unchecked]
     ret V
 
 load_oob: => R i32
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: usize{10}
-    [Arr * Index] ! ret 99
+    [Arr * Index ! ret 99]
     V :: [Arr * Index unchecked]
     ret V
 
 load_at_len: => R i32
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: usize{5}
-    [Arr * Index] ! ret 99
+    [Arr * Index ! ret 99]
     V :: [Arr * Index unchecked]
     ret V
 
 load_last_valid: => R i32
     [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
     Index :: usize{4}
-    [Arr * Index] ! ret 99
+    [Arr * Index ! ret 99]
     V :: [Arr * Index unchecked]
     ret V
 

@@ -35,21 +35,26 @@ void struct_expr_report(dyn_agg_member *args, type_t *type, int depth);
     #define print(...) ((void)0)
     #define str_printd(...) ((void)0)
     #define str_printdnl(S) ((void)0)
-    // p* series are intended to be compiler error here, as they are only for inspection
 
 #else
     #define printd(...) printf(__VA_ARGS__)
     #define print(category, ...) if (category) printf(__VA_ARGS__)
     #define str_printd(...) str_print(__VA_ARGS__)
     #define str_printdnl(S) str_fprintnl(S, stdout)
-    #define pf(...) printf(__VA_ARGS__), putc('\n', stdout);
-    #define p(s) printf(#s), putc('\n', stdout);
-    #define pd(i) printf(#i": %lld\n", (long long)(i));
-    #define pp(i) printf(#i": %p\n", (void *)(i));
-    #define pc(i) printf(#i": '%c'\n", i);
-    #define pcs(s) printf(#s": '%s'\n", s);
-    #define ps(s) printf(#s": "), str_print(s);
-    #define bt(s) report_backtrace("\n");
+#endif
+
+#ifndef NDEBUG
+    // p* series are intended to be compiler error when NDEBUG, as they are only for inspection
+    #define pf(...) fprintf(stderr __VA_ARGS__), putc('\n', stderr);
+    #define p(s) fprintf(stderr, #s), putc('\n', stderr);
+    #define pe(s) fputs(#s, stderr), putc('\n', stderr);
+    #define pd(i) fprintf(stderr, #i": %lld\n", (long long)(i));
+    #define px(i) fprintf(stderr, #i": %llx\n", (long long)(i));
+    #define pp(i) fprintf(stderr, #i": %p\n", (void *)(i));
+    #define pc(i) fprintf(stderr, #i": '%c'\n", i);
+    #define pcs(s) fprintf(sderr, #s": '%s'\n", s);
+    #define ps(s) fprintf(stderr, #s": "), str_printerr(s);
+    #define bt report_backtrace("\n");
     #define pdtype(dtype) ALLOCATOR_MAKE(_alloc, 1024); ps(dtype_to_str((dtype), &_alloc));
 #endif
 

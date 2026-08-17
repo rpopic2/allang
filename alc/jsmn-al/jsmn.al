@@ -77,7 +77,7 @@ jsmn_parse_primitive: Parser addr jsmn_parser, Js slice !u8, Tokens slice jsmnto
 
     loop:
         Pos :: [^Parser.Pos]
-        C :: [^Js * Pos] ! loop.break->
+        C :: [^Js * Pos ! loop.break->]
         C is 0 loop.break->
         C is ':' found->
         C is '\t' found->
@@ -125,6 +125,13 @@ jsmn_parse_string: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok 
     [C] is 0 loop.break->
     [C] is '"' ->
         ^Tokens ! ret 0
+
+        Token ::
+            jsmn_alloc_token ^^Parser, ^^Tokens => =
+            ^Token ! ret JSMN_ERROR_NOMEM
+
+        Start2 :: [^Start] + 1
+        jsmn_fill_token Token, JSMN_STRING, i32{Start2}, i32{^Pos} =>
 
         ret 0
 

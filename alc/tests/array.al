@@ -23,7 +23,7 @@ Arr.2
 Arr.3
 Arr.4
 
-[Arr * Index] ! ret 1
+[Arr * Index ! ret 1]
 
 Arr * Index ! ret 2
 
