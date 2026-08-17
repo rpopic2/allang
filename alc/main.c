@@ -618,9 +618,11 @@ bool checkop(parser_context *restrict context, const reg_t *restrict index_reg, 
     tok(context);
 
     if (stmt_ret_cond(context, cond, index_reg, against)) {
-
+        context->check_fail_fn = context->symbol->name;
+        context->check_fail_label = STR("ret");
     } else if (stmt_eret_cond(context, cond, *index_reg, *against)) {
-
+        context->check_fail_fn = context->symbol->name;
+        context->check_fail_label = STR("ret");
     } else if (streq(cur_str->end - 2, "->")) {
         expr_cmp(index_reg, against, cond);
         named_bcond(context, cond);
@@ -646,9 +648,9 @@ bool checkop_err(parser_context *restrict context, reg_t *restrict reg) {
     return ok;
 }
 
-void checkop_bounds(parser_context *restrict context, const reg_t *restrict index_reg, const regable *restrict against, enum inclusive inclusive) {
+bool checkop_bounds(parser_context *restrict context, const reg_t *restrict index_reg, const regable *restrict against, enum inclusive inclusive) {
     cond_t cond = inclusive == INCL ? COND_HS : COND_HI;
-    checkop(context, index_reg, against, cond);
+    return checkop(context, index_reg, against, cond);
 }
 
 // [ Name Binding & Aggregates ]
@@ -1168,10 +1170,13 @@ void dyn_slice_access(parser_context *context, const reg_t *lhs, i32 len) {
     reg_t dst = context->reg;
     tok(context);
     if (begin->tag != NONE && end->tag != NONE) {
+        // the action is emitted by the bounds check, so the ordering check
+        // branches to it rather than emitting an action of its own
         const cond_t cond = COND_HI;
-        emit_cmp_reg(begin->reg, end->reg, cond);
-        emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
-        checkop_bounds(context, &end->reg, &length, EXCL);
+        if (checkop_bounds(context, &end->reg, &length, EXCL)) {
+            emit_cmp_reg(begin->reg, end->reg, cond);
+            emit_branch_cond(cond, context->check_fail_fn, context->check_fail_label, 0);
+        }
     } else if (begin->tag != NONE) {
         checkop_bounds(context, &begin->reg, &length, INCL);
     } else if (end->tag != NONE) {
@@ -2805,6 +2810,8 @@ void named_bcond(parser_context *context, cond_t cond) {
         compile_err(&jump_target, "-> expected at the end of a conditional branch");
     }
     jump_target.end -= 2;
+    context->check_fail_fn = context->name;
+    context->check_fail_label = jump_target.id;
     emit_branch_cond(cond, context->name, jump_target.id, 0);
 }
 

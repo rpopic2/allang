@@ -345,6 +345,10 @@ typedef struct parser_context {
     bool start_of_line;
     symbol_t *last_fn_call;
     str name;
+    // where the check operator's action branches on failure, so that a second
+    // condition can be attached to the same action
+    str check_fail_fn;
+    str check_fail_label;
     token_t cur_token;
     arr_target targets;
     arr_u16 deferred_unnamed_br;
