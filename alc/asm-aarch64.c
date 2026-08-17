@@ -602,19 +602,21 @@ void ldr_lsl(reg_t dst, reg_t src, reg_t offset, int lsl) {
 }
 
 void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store) {
-    dtype_t *dtype = &src.dtype;
+    reg_t mem = is_store ? dst : src;
+    const reg_t value = is_store ? src : dst;
+    dtype_t *dtype = &mem.dtype;
     size_t array_size = dtype_size(dtype);
     size_t elem_size = dtype->base->size;
 
-    if (src.reg_type == STACK) {
-        if (src.offset) {
-            reg_t tmp_src = src;
-            tmp_src.reg_type = SCRATCH;
-            tmp_src.offset = 3;
-            tmp_src.rsize = 8;
-            dtype_wrap(&tmp_src.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
-            emit_sub(tmp_src, FP, src.offset);
-            src = tmp_src;
+    if (mem.reg_type == STACK) {
+        if (mem.offset) {
+            reg_t tmp_mem = mem;
+            tmp_mem.reg_type = SCRATCH;
+            tmp_mem.offset = 3;
+            tmp_mem.rsize = 8;
+            dtype_wrap(&tmp_mem.dtype, (declarator_t){.tag = DK_ADDR, .amount = 1});
+            emit_sub(tmp_mem, FP, mem.offset);
+            mem = tmp_mem;
         }
     }
 
@@ -624,18 +626,18 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     }
     if (elem_size == 1) {
         if (is_store)
-            emit_str_regoff(dst, src, offset);
+            emit_str_regoff(mem, value, offset);
         else
-            emit_ldr_reg(dst, src, offset);
+            emit_ldr_reg(value, mem, offset);
         return;
     }
     if (elem_size <= 8) {
         int exp = power_of_two_exponent(elem_size);
         if (exp) {
             if (is_store)
-                str_lsl(dst, src, offset, exp);
+                str_lsl(mem, value, offset, exp);
             else
-                ldr_lsl(dst, src, offset, exp);
+                ldr_lsl(value, mem, offset, exp);
             return;
         }
     }
@@ -656,9 +658,9 @@ void emit_array_access(reg_t dst, reg_t src, reg_t offset, load_store_t is_store
     buf_snprintf(fn_buf, "\n");
 
     if (is_store)
-        emit_str_regoff(dst, src, offset);
+        emit_str_regoff(mem, value, offset);
     else
-        emit_ldr_reg(dst, src, offset);
+        emit_ldr_reg(value, mem, offset);
 }
 
 void emit_elem_addr(reg_t dst, reg_t object, reg_t index) {

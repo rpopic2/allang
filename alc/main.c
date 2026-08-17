@@ -1698,7 +1698,7 @@ bool do_store(const regable *restrict lhs, parser_context *restrict context) {
                 dtype_unwrap(&dst.dtype);
                 outer = dtype_outer(&dst.dtype);
             }
-            if (outer.tag == DK_ARRAY) {
+            if (outer.tag == DK_ARRAY || outer.tag == DK_SLICE) {
                 if (src_is_imm)
                     emit_mov(src, lhs->value);
                 emit_array_access(dst, src, offset.reg, STORE);

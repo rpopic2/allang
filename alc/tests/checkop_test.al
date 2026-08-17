@@ -23,6 +23,7 @@ range_eret =>
 
 slice_range Slice =>
 slice_elem Slice =>
+store_elem =>
 
 value_ret_value =>
 value_ret_bare =>
@@ -301,6 +302,7 @@ slice_elem: S slice i32 =>
     slice_elem_eret S =>
     slice_elem_unchecked S =>
     slice_elem_store =>
+    slice_elem_store_dynamic =>
 
 slice_elem_static: S slice i32 =>
     A :: slice_static_first S =>
@@ -394,12 +396,97 @@ slice_elem_store: =>
     V :: [S.3 ! ret]
     V isnt 7 -> _Exit 148 =>
 
-// --- parse-only coverage ---
-// A dynamic store target writes to the wrong address, for arrays and slices
-// alike, so these forms are compiled but not run.
-
-store_check_forms: S slice i32 =>
+slice_elem_store_dynamic: =>
     [Buf] :: 5*i32{.. 0} =[]
+    S :: Buf..
     I :: usize{2}
-    i32{7} =[Buf * I ! ret]
     i32{7} =[S * I ! ret]
+    V :: [S * I ! ret]
+    V isnt 7 -> _Exit 149 =>
+    W :: [S.4 unchecked]
+    W isnt 0 -> _Exit 150 =>
+
+// --- store through a checked index ---
+
+store_elem: =>
+    store_elem_ret_value =>
+    store_elem_ret_bare =>
+    store_elem_branch =>
+    store_elem_eret =>
+    store_elem_unchecked =>
+    store_elem_narrow =>
+
+store_elem_ret_value: =>
+    A :: store_at 2 =>
+    A isnt 7 -> _Exit 151 =>
+    B :: store_at 5 =>
+    B isnt 99 -> _Exit 152 =>
+    C :: store_at 10 =>
+    C isnt 99 -> _Exit 153 =>
+
+store_at: I usize => i32
+    [Buf] :: 5*i32{.. 0} =[]
+    i32{7} =[Buf * I ! ret 99]
+    V :: [Buf * I ! ret 98]
+    ret V
+
+store_elem_ret_bare: =>
+    [Flag] :: 0 =[]
+    store_reached Flag, 2 =>
+    [Flag] isnt 1 -> _Exit 154 =>
+    0 =[Flag]
+    store_reached Flag, 10 =>
+    [Flag] isnt 0 -> _Exit 155 =>
+
+store_reached: F addr i32, I usize =>
+    [Buf] :: 5*i32{.. 0} =[]
+    i32{7} =[Buf * I ! ret]
+    i32{1} =[F]
+
+store_elem_branch: =>
+    store_branch_at 2, 1 =>
+    store_branch_at 10, 0 =>
+
+store_branch_at: I usize, Expected i32 =>
+    [Buf] :: 5*i32{.. 0} =[]
+    [Flag] :: 0 =[]
+    loop:
+    i32{7} =[Buf * I ! loop.break->]
+    i32{1} =[Flag]
+    loop.break:
+
+    [Flag] isnt Expected -> _Exit 156 =>
+
+store_elem_eret: =>
+    A :: store_eret_caller 2 =>
+    A isnt 3 -> _Exit 157 =>
+    B :: store_eret_caller 10 =>
+    B isnt 55 -> _Exit 158 =>
+
+store_eret_caller: I usize => i32
+    V :: store_eret_at I =>
+    V ! ret 55
+    ret V
+
+store_eret_at: I usize => !9 i32
+    [Buf] :: 5*i32{.. 0} =[]
+    i32{7} =[Buf * I ! eret]
+    ret 3
+
+store_elem_unchecked: =>
+    [Buf] :: 5*i32{.. 0} =[]
+    I :: usize{3}
+    i32{7} =[Buf * I unchecked]
+    A :: [Buf * I unchecked]
+    A isnt 7 -> _Exit 159 =>
+    B :: [Buf.4]
+    B isnt 0 -> _Exit 160 =>
+
+store_elem_narrow: =>
+    [Buf] :: 5*u8{.. 0} =[]
+    I :: usize{2}
+    u8{7} =[Buf * I ! ret]
+    A :: [Buf * I ! ret]
+    A isnt 7 -> _Exit 161 =>
+    B :: [Buf.1]
+    B isnt 0 -> _Exit 162 =>
