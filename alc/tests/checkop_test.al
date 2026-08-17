@@ -3,9 +3,9 @@
 
 // Exercises every form of the check operator `!`. The action after `!` is one
 // of `ret`, `ret <value>`, `eret` or `<label>->`, and `unchecked` opts out.
-// Each action is paired with every context that parses one: a dynamic index
-// inside `[]`, a dynamic range, and a statement-level check of a check-typed
-// value. Both outcomes (check taken and not taken) are covered.
+// Each action is paired with every context that parses one: a static or
+// dynamic index inside `[]`, a dynamic range, and a statement-level check of a
+// check-typed value. Both outcomes (check taken and not taken) are covered.
 
 [Arr] :: 5*i32{.0 10 .1 11 .2 12 .3 13 .4 14} =[]
 Slice :: Arr..
@@ -22,6 +22,7 @@ range_branch =>
 range_eret =>
 
 slice_range Slice =>
+slice_elem Slice =>
 
 value_ret_value =>
 value_ret_bare =>
@@ -290,43 +291,115 @@ value_eret_at: I i32 => !9 i32
 tagged: I i32 => !9 i32
     ret I
 
-// --- parse-only coverage ---
-// These forms compile but are not run: slice element access through `[]` is
-// miscompiled (a static index is dropped from the address, a dynamic index is
-// not scaled by the element size), and a dynamic store target faults.
+// --- element access on a slice, static and dynamic index ---
 
-slice_elem_ret_forms: S slice i32 => i32
-    I :: usize{2}
-    A :: [S.3 ! ret 1]
-    B :: [S * I ! ret 2]
-    ret 0
+slice_elem: S slice i32 =>
+    slice_elem_static S =>
+    slice_elem_dynamic S =>
+    slice_elem_ret_bare S =>
+    slice_elem_branch S =>
+    slice_elem_eret S =>
+    slice_elem_unchecked S =>
+    slice_elem_store =>
 
-slice_elem_eret_forms: S slice i32 => !9 i32
-    I :: usize{2}
-    A :: [S.3 ! eret]
-    B :: [S * I ! eret]
-    ret 0
+slice_elem_static: S slice i32 =>
+    A :: slice_static_first S =>
+    A isnt 10 -> _Exit 134 =>
+    B :: slice_static_third S =>
+    B isnt 13 -> _Exit 135 =>
+    C :: slice_static_past_end S =>
+    C isnt 99 -> _Exit 136 =>
 
-slice_elem_unchecked_forms: S slice i32 =>
-    I :: usize{2}
-    A :: [S.3 unchecked]
-    B :: [S * I unchecked]
+slice_static_first: S slice i32 => i32
+    V :: [S.0 ! ret 99]
+    ret V
 
-slice_elem_bare_forms: S slice i32 =>
-    I :: usize{2}
-    [S.3 ! ret]
+slice_static_third: S slice i32 => i32
+    V :: [S.3 ! ret 99]
+    ret V
+
+slice_static_past_end: S slice i32 => i32
+    End :: usize{2}
+    Sub :: S * ..End ! ret 98
+    V :: [Sub.3 ! ret 99]
+    ret V
+
+slice_elem_dynamic: S slice i32 =>
+    A :: slice_dyn_at S, 2 =>
+    A isnt 12 -> _Exit 137 =>
+    B :: slice_dyn_at S, 4 =>
+    B isnt 14 -> _Exit 138 =>
+    C :: slice_dyn_at S, 5 =>
+    C isnt 99 -> _Exit 139 =>
+    D :: slice_dyn_at S, 10 =>
+    D isnt 99 -> _Exit 140 =>
+
+slice_dyn_at: S slice i32, I usize => i32
+    V :: [S * I ! ret 99]
+    ret V
+
+slice_elem_ret_bare: S slice i32 =>
+    [Flag] :: 0 =[]
+    slice_elem_reached Flag, S, 2 =>
+    [Flag] isnt 1 -> _Exit 141 =>
+    0 =[Flag]
+    slice_elem_reached Flag, S, 10 =>
+    [Flag] isnt 0 -> _Exit 142 =>
+
+slice_elem_reached: F addr i32, S slice i32, I usize =>
     [S * I ! ret]
+    i32{1} =[F]
 
-slice_elem_branch_forms: S slice i32 =>
-    I :: usize{2}
+slice_elem_branch: S slice i32 =>
+    slice_elem_branch_at S, 2, 1 =>
+    slice_elem_branch_at S, 10, 0 =>
+
+slice_elem_branch_at: S slice i32, I usize, Expected i32 =>
+    [Flag] :: 0 =[]
     loop:
-    [S.3 ! loop.break->]
     [S * I ! loop.break->]
+    i32{1} =[Flag]
     loop.break:
+
+    [Flag] isnt Expected -> _Exit 143 =>
+
+slice_elem_eret: S slice i32 =>
+    A :: slice_elem_eret_caller S, 2 =>
+    A isnt 12 -> _Exit 144 =>
+    B :: slice_elem_eret_caller S, 10 =>
+    B isnt 55 -> _Exit 145 =>
+
+slice_elem_eret_caller: S slice i32, I usize => i32
+    V :: slice_elem_eret_at S, I =>
+    V ! ret 55
+    ret V
+
+slice_elem_eret_at: S slice i32, I usize => !9 i32
+    V :: [S * I ! eret]
+    ret V
+
+slice_elem_unchecked: S slice i32 =>
+    I :: usize{2}
+    A :: [S * I unchecked]
+    A isnt 12 -> _Exit 146 =>
+    B :: [S.4 unchecked]
+    B isnt 14 -> _Exit 147 =>
+
+// --- static-index store through a slice ---
+
+slice_elem_store: =>
+    [Buf] :: 5*i32{.. 0} =[]
+    S :: Buf..
+    i32{7} =[S.3 ! ret]
+    V :: [S.3 ! ret]
+    V isnt 7 -> _Exit 148 =>
+
+// --- parse-only coverage ---
+// A dynamic store target writes to the wrong address, for arrays and slices
+// alike, so these forms are compiled but not run.
 
 store_check_forms: S slice i32 =>
     [Buf] :: 5*i32{.. 0} =[]
     I :: usize{2}
     i32{7} =[Buf * I ! ret]
     i32{7} =[S * I ! ret]
-    i32{7} =[S.3 ! ret]

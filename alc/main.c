@@ -798,6 +798,8 @@ regable read_regable(str s, const token_t *diagnostic) {
             member = &member_storage;
             if (slice) {
                 dtype_wrap(&member->dtype, (declarator_t){.tag = DK_SLICE, .amount = (i32)index});
+                if (result.reg.reg_type != STACK)
+                    result.reg.displacement += (i32)member_storage.offset;
             }
             begin_index = (i32)index;
         } else {
@@ -1553,7 +1555,7 @@ bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *o
             reg.dtype = first->dtype;
             reg.offset -= (i32)first->offset;
             reg.rsize = (reg_size)dtype_size(&first->dtype);
-        } else if (dtype_tryget(dtype, DK_SLICE)) {
+        } else if (dtype_outer(dtype).tag == DK_SLICE) {
             reg.rsize = (reg_size)dtype_size(dtype);
         } else {
             compile_err(cur_token, "a register containing addr is expected\n");
@@ -1561,12 +1563,13 @@ bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *o
     }
 
     if (offset_regable.tag == VALUE) {
-        i32 slice = dtype_tryget(&reg.dtype, DK_SLICE);
-        if (slice) {
+        const declarator_t decl = dtype_outer(&reg.dtype);
+        if (decl.tag == DK_SLICE) {
             reg_t count_reg = reg;
             count_reg.offset += 1;
             count_reg.rsize = sizeof (void *);
-            checkop_bounds(context, &count_reg, &(regable){.tag = VALUE, .value = slice}, INCL);
+            // operands are (length, index), so the failing condition is inverted
+            checkop(context, &count_reg, &(regable){.tag = VALUE, .value = decl.amount}, COND_LS);
             tok(context);
         }
 
@@ -1599,7 +1602,7 @@ bool read_load_store_offset(parser_context *context, load_store_t kind, reg_t *o
             count_reg.rsize = sizeof(usize);
             tok(context);
             checkop_bounds(context, &offset_regable.reg, &(regable){.tag = REG, .reg = count_reg},
-                           EXCL);
+                           INCL);
             tok(context);
         } else {
             tok(context);
@@ -1769,7 +1772,7 @@ bool get_store_offset(parser_context *context, reg_t *src, int *out_offset) {
     return true;
 }
 
-void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable offset) {
+void expr_load_elem(parser_context *context, reg_t *dst, reg_t src, regable offset) {
     printd("%s\n", __func__);
     dtype_t *dtype = &src.dtype;
 
@@ -1778,9 +1781,9 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
         dtype_unwrap(dtype);
     }
 
-    i32 len = dtype_tryget_arr(dtype);
-    if (!len) {
-        compile_err(&context->cur_token, "this is not an array\n");
+    const declarator_t decl = dtype_outer(dtype);
+    if (decl.tag != DK_ARRAY && decl.tag != DK_SLICE) {
+        compile_err(&context->cur_token, "this is not an array or a slice\n");
     }
 
     type_t *elem_type = dtype->base;
@@ -1789,12 +1792,13 @@ void expr_load_array(parser_context *context, reg_t *dst, reg_t src, regable off
         return;
     }
 
-    if (len <= 0) {
+    if (decl.tag == DK_ARRAY && decl.amount <= 0) {
         compile_err(&context->cur_token, "array access out of bounds\n");
     }
 
     reg_t off = offset.reg;
     dst->rsize = (reg_size)elem_type->size;
+    src.rsize = (reg_size)elem_type->size;
     dst->dtype = dtype_unwrap_dup(dtype);
     emit_array_access(*dst, src, off, LOAD);
 }
@@ -1816,8 +1820,9 @@ bool expr_load(parser_context *context) {
         return true;
     }
 
-    if (dtype_tryget_arr(&src.dtype)) {
-        expr_load_array(context, dst, src, offset);
+    if (dtype_tryget_arr(&src.dtype)
+            || (offset.tag == REG && dtype_outer(&src.dtype).tag == DK_SLICE)) {
+        expr_load_elem(context, dst, src, offset);
         return true;
     }
 
