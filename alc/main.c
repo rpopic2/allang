@@ -2125,16 +2125,18 @@ bool expr(parser_context *context) {
     if (!explicit_type) {
         context->reg.rsize = 0;
         context->reg.dtype = (dtype_t){.base = type_comptime_int};
-    } else {
-        tok(context);
-        expect(context, STR("}"));
-        context->reg.dtype = dtype;
     }
 
     if (binary_op_store(&lhs, context)) {
 
     } else if (expr_chain(context, lhs)) {
 
+    }
+
+    if (explicit_type) {
+        tok(context);
+        expect(context, STR("}"));
+        context->reg.dtype = dtype;
     }
 
     if (context->cur_token.end[1] == '!') {
