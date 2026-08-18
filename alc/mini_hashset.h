@@ -116,7 +116,6 @@ static inline mini_hashset *arr_mini_hashset_top(arr_mini_hashset *arr) {
     return arr->cur - 1;
 }
 
-// searches the current scope first, then bubbles up to the enclosing ones
 inline static bool find_id(arr_mini_hashset *arr, str id, reg_t **out) {
     for (mini_hashset *scope = arr->cur; scope >= arr->data; --scope) {
         hash_entry *entry = find_entry(*scope, id);
