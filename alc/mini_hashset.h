@@ -85,8 +85,14 @@ typedef struct {
 
 arr_mini_hashset local_ids;
 
+static inline void mini_hashset_clear(mini_hashset self) {
+    for (int i = 0; i < array_len; ++i) {
+        entry_invalidate(&self[i].key);
+    }
+}
 static inline void arr_mini_hashset_init(arr_mini_hashset *arr) {
     arr->cur = arr->data;
+    mini_hashset_clear(*arr->cur);
 }
 static inline mini_hashset *arr_mini_hashset_push(arr_mini_hashset *arr) {
     if (arr->cur + 1 == arr->data + MAX_DEPTH) {
@@ -94,16 +100,13 @@ static inline mini_hashset *arr_mini_hashset_push(arr_mini_hashset *arr) {
         abort();
     }
     arr->cur++;
+    mini_hashset_clear(*arr->cur);
     printd("array is now %zd\n", arr->cur - arr->data);
     return arr->cur - 1;
 }
 static inline void arr_mini_hashset_pop(arr_mini_hashset *arr) {
     if (arr->cur == arr->data)
         return;
-    for (int i = 0; i < array_len; ++i) {
-        // arr->cur[0][i].key = str_null;
-        entry_invalidate(&(arr->cur[0] + i)->key);
-    }
     arr->cur--;
     printd("array is now %zd\n", arr->cur - arr->data);
 }
@@ -113,18 +116,16 @@ static inline mini_hashset *arr_mini_hashset_top(arr_mini_hashset *arr) {
     return arr->cur - 1;
 }
 
-inline static bool find_id(arr_mini_hashset *arr, str id, const token_t *diagnostic, reg_t **out, int up) {
-    mini_hashset *target = (arr->cur - up);
-    if (target < arr->data || target >= arr->data + MAX_DEPTH) {
-        compile_err(diagnostic, "invalid access to local id scope\n");
-        return false;
+inline static bool find_id(arr_mini_hashset *arr, str id, reg_t **out) {
+    for (mini_hashset *scope = arr->cur; scope >= arr->data; --scope) {
+        hash_entry *entry = find_entry(*scope, id);
+        if (entry_valid(&entry->key)) {
+            *out = &entry->value;
+            return true;
+        }
     }
-    hash_entry *entry = find_entry(*target, id);
-    *out = &entry->value;
-    if (!entry_valid(&entry->key)) {
-        return false;
-    }
-    return true;
+    *out = &find_entry(*arr->cur, id)->value;
+    return false;
 }
 
 // constant entry
