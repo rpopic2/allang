@@ -656,15 +656,6 @@ bool checkop_bounds(parser_context *restrict context, const reg_t *restrict inde
 
 // [ Name Binding & Aggregates ]
 
-int extract_scope_up(str *s) {
-    int scope_up = 0;
-    while (s->data[0] == '^') {
-        scope_up += 1;
-        ++s->data;
-    }
-    return scope_up;
-}
-
 #define UPDATE_IF_GREATER(dst, cmp) (dst) = (cmp) > (dst) ? (cmp) : (dst)
 
 void context_add_nreg(parser_context *context, const dtype_t *dtype) {
@@ -711,10 +702,12 @@ regable read_regable(str s, const token_t *diagnostic) {
         return (regable){.tag = VALUE, .value = value};
     }
 
-    if (!isupper(s.data[0]) && s.data[0] != '^')
+    if (s.data[0] == '^') {
+        compile_err(diagnostic, "'^' was removed; ids resolve to the innermost enclosing scope\n");
         return (regable){.tag = NONE};
-        
-    const int scope_up = extract_scope_up(&s);
+    }
+    if (!isupper(s.data[0]))
+        return (regable){.tag = NONE};
 
     const str name = dot_iter(&s, '.');
 
@@ -724,7 +717,7 @@ regable read_regable(str s, const token_t *diagnostic) {
     }
 
     reg_t *reg = NULL;
-    if (!find_id(&local_ids, name, diagnostic, &reg, scope_up)
+    if (!find_id(&local_ids, name, &reg)
         || reg->reg_type == RD_NONE) {
         compile_err(diagnostic, "unknown id "), str_printerr(name);
         return result;
@@ -2151,8 +2144,7 @@ bool expr(parser_context *context) {
 
     if (context->cur_token.end[1] == '!') {
         reg_t *reg = NULL;
-        const int scope_up = extract_scope_up(&lhs_name);
-        if (!find_id(&local_ids, lhs_name, token, &reg, scope_up)
+        if (!find_id(&local_ids, lhs_name, &reg)
             || reg->reg_type == RD_NONE) {
             compile_err(token, "unknown id "), str_printerr(lhs_name);
         }
@@ -2537,7 +2529,7 @@ bool stmt_reg_assign(parser_context *context) {
     const str *token_str = &token->id;
 
     char next = token_str->data[1];
-    if (!streq(token_str->data, "=") || !(isupper(next) || isspace(next) || next == '^')) {
+    if (!streq(token_str->data, "=") || !(isupper(next) || isspace(next))) {
         return false;
     }
     target *cur_target;
@@ -2547,8 +2539,7 @@ bool stmt_reg_assign(parser_context *context) {
         str name = *token_str;
         name.data += 1;
         reg_t *t;
-        int scope_up = extract_scope_up(&name);
-        if (!find_id(&local_ids, name, token, &t, scope_up)) {
+        if (!find_id(&local_ids, name, &t)) {
             compile_err(token, "could not find identifier "), str_printerr(name);
             return true;
         }

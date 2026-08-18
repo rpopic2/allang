@@ -38,7 +38,6 @@
 '%' : move to matching %
 ';' : end of line
 '|' : parallel
-'^' : outer scope
 '\' : escaping | cast
 
 

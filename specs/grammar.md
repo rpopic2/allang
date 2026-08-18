@@ -279,13 +279,14 @@ There is **no operator precedence**; a chain is evaluated left to right, and
 ```
 regable         ::= literal
                   | reg_ref
-reg_ref         ::= "^"* upper_name access*
+reg_ref         ::= upper_name access*
 access          ::= "." member_name        // struct field or static index
                   | slice_suffix           // see §6.5
 ```
 
-`^` prefixes select an outer scope (`^I`, `^^I`). `Reg.Field`, `Arr.0` (static
-index), and `Slice.Length` are all `access` forms.
+A name resolves in the innermost scope that declares it, then bubbles up
+through the enclosing scopes; it is an error if no scope declares it.
+`Reg.Field`, `Arr.0` (static index), and `Slice.Length` are all `access` forms.
 
 ### 6.2 Operators
 
@@ -314,10 +315,10 @@ bracket_check   ::= "unchecked"                // skip the bounds check
                   | check_op                   // bounds check on offset/slice access; see §7.3
 
 reg_assign      ::= expr "=" assign_target
-assign_target   ::= "^"* upper_name | "This" | «empty (current target)»
+assign_target   ::= upper_name | "This" | «empty (current target)»
 ```
 
-`[X]` loads; `X =[Dst]` / `X =[]` store; `X =Name` / `X =This` / `X =^J` assign
+`[X]` loads; `X =[Dst]` / `X =[]` store; `X =Name` / `X =This` assign
 to a named register. `=` moves **left to right** (source on the left).
 
 A `bracket_check` guards any access that can go out of range at runtime: a
@@ -336,7 +337,7 @@ i32{7} =[Buf * Index ! ret]   // dynamic store, checked
 0 =[B]                        // store 0 through pointer B
 7 =[J]                        // store 7 to stack object J
 3 =I                          // assign 3 to register I
-5 =^J                         // assign 5 to J in the outer scope
+5 =J                          // assign 5 to J, resolved in an enclosing scope
 ```
 
 ### 6.4 Aggregate literals
@@ -547,7 +548,6 @@ Operator/sigil summary:
 | `..` | range (slice) |
 | `*` | multiply; array length prefix; dynamic index/slice offset |
 | `!` | bounds/error check operator |
-| `^` | outer scope reference |
 | `#` | directive |
 | `@` | macro (see §10) |
 | `,` | next register (also a dependency break) |
