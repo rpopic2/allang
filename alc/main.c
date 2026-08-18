@@ -702,10 +702,6 @@ regable read_regable(str s, const token_t *diagnostic) {
         return (regable){.tag = VALUE, .value = value};
     }
 
-    if (s.data[0] == '^') {
-        compile_err(diagnostic, "'^' was removed; ids resolve to the innermost enclosing scope\n");
-        return (regable){.tag = NONE};
-    }
     if (!isupper(s.data[0]))
         return (regable){.tag = NONE};
 
