@@ -2492,25 +2492,6 @@ bool stmt(parser_context *context) {
         return true;
     } else if (stmt_eret(context)) {
         return true;
-    } else if (streq(token->data, ">>")) {
-        u16 index = context->unnamed_labels++;
-        arr_u16 *stack = &context->deferred_unnamed_br;
-        if (arr_u16_is_empty(stack)) {
-            arr_u16_push(stack, index);
-        } else {
-            *(stack->cur - 1) = index;
-        }
-        emit_branch(context->name, STR("unnamed"), index);
-        return true;
-    } else if (streq(token->data, "<<")) {
-        u16 *top = arr_u16_top(&context->deferred_unnamed_br);
-        int index = top ? *top : DEFERRED_NONE;
-        if (index == DEFERRED_NONE) {
-            compile_err(token, "unmatched branch merger. expected >> before <<\n");
-            return true;
-        }
-        emit_label(context->name, STR("unnamed"), index);
-        return true;
     } else if ((islower(token->data[0]) || token->data[0] == '_') && streq(token->end - 1, ":")) {
         stmt_label(context);
         return true;
@@ -2591,13 +2572,11 @@ void parse(parser_context *context) {
 void start_of_block(parser_context *context) {
     printd("\nstart of a block\n");
     arr_mini_hashset_push(&local_ids);
-    arr_u16_push(&context->deferred_unnamed_br, DEFERRED_NONE);
     arr_u8_push(&context->nreg_mark, context->nreg_count);
 }
 
 void end_of_block(parser_context *context) {
     arr_mini_hashset_pop(&local_ids);
-    arr_u16_pop(&context->deferred_unnamed_br);
     u8 *top = arr_u8_top(&context->nreg_mark);
     if (top) {
         context->nreg_count = *top;
@@ -2646,7 +2625,6 @@ void function(src_t *src) {
         .symbol = NULL,
         .unnamed_labels = 1,
     };
-    arr_u16_init(&context->deferred_unnamed_br);
     arr_u8_init(&context->nreg_mark);
 
     bool is_main = src->cur == src->start;

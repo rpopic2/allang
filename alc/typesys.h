@@ -286,8 +286,6 @@ typedef struct token {
 inline str str_from_token(const token_t *token) {
     return (str){ token->data, token->end };
 }
-#define DEFERRED_NONE 0
-
 #define PARAMS_MAX 16
 ARR_GENERIC(str, PARAMS_MAX)
 typedef struct {
@@ -311,7 +309,6 @@ typedef struct symbol {
 
 #define MAX_BLOCK_DEPTH 10
 ARR_GENERIC(target, MAX_BLOCK_DEPTH)
-ARR_GENERIC(u16, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u8, MAX_BLOCK_DEPTH)
 
 typedef struct {
@@ -351,7 +348,6 @@ typedef struct parser_context {
     str check_fail_label;
     token_t cur_token;
     arr_target targets;
-    arr_u16 deferred_unnamed_br;
     arr_u8 nreg_mark;
     symbol_t *symbol;
     stack_slot_t stack_slots[MAX_STACK_SLOTS];

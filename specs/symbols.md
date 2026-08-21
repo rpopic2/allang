@@ -16,7 +16,6 @@
 '[]' : memory operation. load and store to memory.
 '=>' : call. branch to function.
 '->' : jump. branch to location.
-'>>' : jump to matching << in scope. may be depricated in future.
 ',' : next register. also implies dependency break, as these comma separated expressions cannot refer to each other.
 '.' : offset. X.Y.Z means hierarchy, and is never interpreted as multiple expression.
 ':' : right to left. inverts assignment directions. when used solo, binds static location to a name.

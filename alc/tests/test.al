@@ -43,7 +43,6 @@ Hi :: get_hi =>
 [Hi_Stack] :: get_hi => =[]
 
 test_arith_op =>
-test_fwd_branch =>
 test_addr_param =>
 test_arr_stride =>
 
@@ -491,9 +490,7 @@ control_flow: (X i32 =>)
         Y :: 99
     done:
     X is 2 ->
-        >>
         Z :: 1
-        <<
     ret
 
 addr_fns: (P addr u32 => R u32)
@@ -526,12 +523,6 @@ cast_chain: (=>)
 test_arith_op: =>
     R :: arith_reg_val 3, 5 =>
     R isnt 7 -> _Exit 1 =>
-
-// >> jumps forward past _Exit 2 to ret; exercises >> push-when-empty fix
-test_fwd_branch: =>
-    >>
-    _Exit 2 =>
-    <<
 
 // loads from an addr u32 parameter; exercises PARAM rsize propagation fix
 test_addr_param: =>
