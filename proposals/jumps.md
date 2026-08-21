@@ -14,24 +14,102 @@ where "you are in the label" means the previous label declared.
 
 ---
 
-### 0. what the rules have to buy
+### 0. what the rules have to buy — and why the obvious property is not enough
 
-C's `goto` is unsafe because it can **enter** a scope past the code that
-establishes it. Leaving a scope early is always fine — objects die, nothing is
-left half-built. So the property to enforce is exactly:
+The tempting formulation is:
 
 > a jump may leave scopes, but may never enter one.
 
-Formally: the target's chain of enclosing scopes must be an ancestor-or-self of
-the jump site's chain.
+**That is necessary but not sufficient**, and C is the proof. C's own goto
+constraint (C11 §6.8.6.1) is exactly this rule, narrowed to one case: a goto
+may not jump from outside the scope of an identifier of variably modified type
+to inside it. C stops there and leaves the rest as undefined behaviour. Three
+things escape the rule.
 
-Measured against that, the two rules get the *shape* right. Rule 1 is
+**0.1 Scope must mean the scope of a *name*, not the scope of a *block*.**
+
+```c
+{
+    goto skip;
+    int x = 5;
+skip:
+    printf("%d", x);   // same block throughout; no block was entered
+}
+```
+
+Read block-granularly the jump is legal — one block, start to finish, nothing
+entered. Read name-granularly it is not: `x`'s scope begins at its declarator,
+the label sits inside that scope, and the jump enters it from outside. Note
+this is precisely how C words its own VM-type rule — "the scope of an
+identifier", not "a block". The block reading is the one that lets a goto skip
+a declaration and land where the name is still live.
+
+For allang the name-granular reading is worth a lot more than it is worth in C,
+because `X :: value` fuses declaration and initialization. A name's scope opens
+exactly where its value is established, so "never enter a name's scope" and
+"never skip an initialization" collapse into the same rule. **This gives a
+second, cheaper way to close Hole 2**: either make the region a scope so the
+skipped name is dead at `x.break:`, or read scope name-granularly so the jump
+past `B :: 2` is illegal in the first place. The first is more permissive and
+probably the better choice — it keeps the jump legal — but either closes it.
+
+**0.2 In C the rule cannot close the hole at all, because declaration is
+separate from initialization.**
+
+```c
+{
+    int x;             // in scope, no value
+    goto skip;
+    x = 5;
+skip:
+    printf("%d", x);   // indeterminate — no scope entered, name-granular or not
+}
+```
+
+`x`'s scope begins at `int x;`, and the jump neither enters nor leaves it.
+Nothing about scopes can see this; it needs definite-assignment analysis, a
+dataflow problem, which is what Java and C# do and what C declined to do. So
+for C the answer is a flat no. allang escapes this only because it has no
+declaration-without-value form — which is a reason to keep it that way. **If
+allang ever adds one, the scope rule stops being sufficient and this design
+needs dataflow.**
+
+**0.3 "Leaving a scope" is free in C only because C has no destructors.**
+
+C leaves a scope by adjusting a stack pointer, so branching out of three scopes
+costs nothing. `toc.md` commits allang to "tying lifetime of a resource to
+scope" and reference-counted pointers. The moment a scope exit has a *action* —
+a refcount decrement, a release — "may leave scopes" stops being a permission
+and becomes an **obligation**: the jump has to run every scope exit between the
+site and the target, not branch over them. A `->` that leaves three scopes must
+unwind three, in order. This is invisible in the rules as written, and it is the
+part most likely to be discovered late, because it only breaks once resources
+are attached to scopes.
+
+C's remaining loose ends are worth knowing but do not carry over: a backward
+jump past a VLA declaration re-executes it without leaving the scope, so the
+storage is not reclaimed; and `switch` gets to jump into the middle of a block
+by construction, which is what Duff's device exploits.
+
+**What the rules must actually enforce**, then:
+
+> a jump may leave scopes and must unwind each one it leaves; it may never
+> enter the scope of a name, where a name's scope begins at its declaration.
+
+Measured against *that*, the two rules get the shape right. Rule 1 is
 especially strong: it gives each loop region **exactly one backward target, at
-the region's head**, which is the single most important restriction — it makes
-back edges re-run the region from the top rather than landing mid-region. That
-part is sound.
+the region's head**, which is the single most important restriction — back
+edges re-run the region from the top rather than landing mid-region.
 
-The holes are all in what the rules leave unsaid.
+Restricting targets to region endpoints also buys something the scope rule
+alone does not: **flow-sensitive facts survive.** A `!` check establishes a
+fact about a value that later code depends on, and a fact is not a scope, so
+scope rules cannot protect it. Because the only landing points are `x:` and
+`x.break:`, no jump can land *between* a check and the use it guards. That is a
+real and somewhat lucky benefit of the design, and a reason not to loosen the
+target restriction later.
+
+The holes below are all in what the rules leave unsaid.
 
 ---
 
@@ -273,7 +351,13 @@ Rules 1 and 2, plus what is missing:
 - **R3** the target label's block must enclose or equal the jump's block; `x:`
   and `x.break:` must sit in the same block *(Hole 1)*
 - **R4** names declared between `x:` and `x.break:` are dead at `x.break:`
-  *(Hole 2 — this is the paragraph-scope rule; R2 is unsound without it)*
+  *(Hole 2 — this is the paragraph-scope rule; R2 is unsound without it)*. The
+  alternative is §0.1's name-granular reading, which forbids the jump instead
+  of killing the name; R4 is the better of the two because it keeps the jump
+  legal.
+- **R8** a jump must run every scope exit between the site and the target, in
+  order, not branch over them *(§0.3 — only bites once scopes own resources,
+  but it is a codegen obligation, not a check)*
 - **R5** R0–R3 apply to every construct that names a target — jumps, named
   conditionals, and `!` check actions — checked at the point the branch is
   emitted *(Hole 4)*
@@ -282,8 +366,14 @@ Rules 1 and 2, plus what is missing:
 - **R7** `x.break` exists, is unique, follows `x:`; labels unique per function;
   rules applied post-macro-expansion *(Hole 7)*
 
-With R0–R7 no jump can enter a scope, and since leaving scopes is always safe,
-program state stays defined. R3, R4 and R5 are the load-bearing additions: R3
-because scopes are delimited by indentation and the rules never mention it, R4
-because a forward jump can otherwise skip an initialization, and R5 because the
-check operator is a second goto the rules do not currently see.
+With R0–R8 no jump can enter the scope of a name, and every scope a jump leaves
+is unwound rather than skipped, so program state stays defined. R3, R4 and R5
+are the load-bearing additions: R3 because scopes are delimited by indentation
+and the rules never mention it, R4 because a forward jump can otherwise skip an
+initialization, and R5 because the check operator is a second goto the rules do
+not currently see.
+
+The reason this can work in allang and cannot work in C is §0.2: allang has no
+declaration-without-value form, so a name's scope and its initialization begin
+at the same point. That single property is what makes a scope rule sufficient
+here. It is worth treating as load-bearing rather than incidental.
