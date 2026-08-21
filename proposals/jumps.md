@@ -268,8 +268,9 @@ expressiveness hole rather than a safety hole, but it is the kind that
 manufactures unsafety: people work around it with flag variables and duplicated
 exit tests, which is where real bugs live.
 
-**Fix, and it costs nothing.** Define "you are in x" as **x is one of the
-enclosing open regions** (a stack), not "the textually previous label". Once
+**Fix, and it costs nothing — worked through in full in §A below.** Define
+"you are in x" as **x is one of the enclosing open regions** (a stack), not
+"the textually previous label". Once
 regions are required to nest (Hole 1's fix), the enclosing set is well defined,
 and jumping to an enclosing region's head or break still only *leaves* scopes —
 so soundness is unchanged while nested loops become expressible:
@@ -340,14 +341,182 @@ inside it, and re-initialization on a back edge is not a modification.**
 
 ---
 
+### A. the region stack, in full
+
+Hole 5's fix deserves its own treatment, because it turns out to pay for more
+than nested loops.
+
+#### A.1 the two definitions
+
+*"You are in x"* can be read two ways.
+
+**Definition A (as proposed): x is the textually previous label declared.**
+This is a single variable, clobbered by every label the parser passes —
+including break labels.
+
+**Definition B: x is one of the currently open regions.** This is a stack:
+
+```
+at  x:          push x
+at  x.break:    require top == x, then pop
+```
+
+and *"in x"* means x is somewhere on that stack.
+
+The difference is one word: **A never restores.** Walk both through a nested
+loop:
+
+| after… | A says you are in | B's stack |
+| --- | --- | --- |
+| `loop:` | `loop` | `[loop]` |
+| `inner:` | `inner` | `[loop, inner]` |
+| `inner.break:` | `inner.break` | `[loop]` ← restored |
+
+Under A, closing the inner loop leaves you "in `inner.break`". The outer loop
+is gone for good; nothing can ever put you back in it.
+
+#### A.2 what A costs
+
+The pattern that breaks is any search that must abandon two loops at once:
+
+```
+loop_row:
+    Row >= Height loop_row.break->
+    loop_col:
+        Col >= Width loop_col.break->
+        Found is 1 loop_row.break->     // leave BOTH loops
+        loop_col->
+    loop_col.break:
+    loop_row->
+loop_row.break:
+```
+
+Under A the marked line is illegal — the previous declared label is `loop_col`,
+not `loop_row`. So is `loop_row->` on the next line, which is the outer
+`continue`. Under B both are fine: `loop_row` is on the stack.
+
+There is no clean workaround. You add a flag, break the inner loop, then re-test
+the flag after `loop_col.break:` to break the outer one. That re-test is
+exactly the line people forget, and forgetting it is silent. **A rule meant to
+prevent unsafe control flow should not push people toward the error-prone
+encoding of the safe thing.**
+
+#### A.3 soundness is unchanged
+
+The claim is that jumping to the head or break of *any* enclosing region only
+leaves scopes. Given R3 (`x:` and `x.break:` in the same block), region x is a
+contiguous span inside one block, and being "in x" means the jump site is
+somewhere inside that span — possibly several blocks deeper.
+
+- **To `x:` (a back edge).** The target sits at the top of x's block, and the
+  jump site is inside x, hence in that block or deeper. The jump exits zero or
+  more blocks and lands in one it was already inside. No block is entered. No
+  name's scope is entered either: every name live *at* `x:` is still live at the
+  jump site, since the site is after `x:`; and no name declared inside x is live
+  at `x:` yet.
+- **To `x.break:` (an exit).** Same geometry, other end. Names declared inside x
+  are dead at `x.break:` by R4, so skipping their initializations changes
+  nothing.
+
+Neither argument used "x is the innermost region" — only "the jump site is
+inside x". That is precisely what stack membership means, so extending from the
+innermost region to every enclosing region costs nothing in the proof. **A is
+not safer than B; it is the same safety with an arbitrary extra restriction.**
+
+#### A.4 what B still rejects, and should
+
+B is not "anything goes". Sibling regions are out:
+
+```
+loop_a:
+...
+loop_a.break:        // popped here
+loop_b:
+    loop_a->         // rejected: loop_a is not on the stack
+```
+
+Worth noting this jump is arguably safe for *names* — nothing from `loop_a` is
+live at `loop_a:`. B rejects it anyway, and that is the right call: it would
+give two regions that jump into each other, an irreducible control-flow graph,
+with no static answer to "which scopes does this leave". Keeping the CFG
+reducible is worth more than that jump.
+
+B also fixes **Hole 6** for free. `loop.break` is never *pushed* — it is a
+terminator, not a head — so it can never be a backward target, no matter what
+its name starts with. The prefix test stops being load-bearing for that case.
+
+#### A.5 the direction test becomes redundant
+
+This is the part I did not expect. Under B, with labels unique per function
+(R7):
+
+- If x is on the stack, `x:` has already been passed → a jump to it **is**
+  backward.
+- If x is on the stack, `x.break:` has not been reached yet → a jump to it
+  **is** forward.
+
+So "backward" and "forward" stop being conditions you check; they are
+consequences of stack membership. The two rules collapse into one:
+
+> **A jump target must be either the head of an enclosing *loop* region, or the
+> break of any enclosing region.**
+
+That is one rule, checkable with a stack scan, with no notion of textual
+direction anywhere in it.
+
+#### A.6 the same stack does three other jobs
+
+- **It enforces region nesting.** R3 alone does not stop regions from crossing:
+  `x:` `y:` `x.break:` `y.break:` all sit in one block and R3 is satisfied. The
+  pop's `require top == x` rejects it, so the nesting check is not extra work —
+  it is the same line that maintains the stack.
+- **It computes the unwind set for R8.** Jumping to region x's endpoint means
+  leaving exactly the stack slice above x. The structure that authorizes the
+  jump also tells codegen what to unwind, in order. Definition A cannot do this
+  at all — a scalar does not know how many scopes you are leaving.
+- **It detects unterminated regions.** Tag each entry with its block depth; at a
+  DEDENT, any region still open at that depth never got its `x.break:`. That is
+  R7's mandatory-terminator check, for free.
+
+#### A.7 cost, and single-pass
+
+The compiler already keeps a scope stack pushed and popped at INDENT/DEDENT.
+The region stack is the same shape: an array of `{name, block_depth, is_loop}`,
+push at a label, pop at its break, scanned linearly at a jump. Depths are
+small — two or three. Against Definition A's single variable, the delta is one
+array.
+
+It also needs **no lookahead**. At `loop.break->`, the question is "is `loop` an
+open region?", answerable from the stack right then; you do not need to have
+seen `loop.break:`. Its eventual existence is a deferred obligation discharged
+at the region's close, which R7 requires anyway. This matters because it is the
+opposite of the problem in `scopes.md` §4.3, where the parser could not tell at
+`foo:` whether a paragraph was opening. Here the *opener* is what pushes, and
+the opener is what you see first.
+
+#### A.8 the consequence worth deciding on purpose
+
+Under these rules a label is jumpable only as a loop head (backward) or as an
+`x.break` (forward). A plain label that is neither — `skip:`, `done:` — cannot
+be the target of any legal jump. It is unreachable syntax.
+
+So the rules quietly reduce labels to **exactly two kinds**. That is a
+simplification worth taking deliberately: declare the two kinds rather than
+inferring them from spelling, which also retires the `loop`-prefix convention
+(Hole 6) and the question of what a bare label means.
+
+---
+
 ### Summary — the rule set that actually closes the property
 
 Rules 1 and 2, plus what is missing:
 
 - **R0** targets are non-function labels in the current function *(Hole 3)*
 - **R1** backward: target is the head of an enclosing loop region — one backward
-  target per region *(as proposed, with Hole 5's definition of "enclosing")*
-- **R2** forward: target is `x.break` for an enclosing region x *(as proposed)*
+  target per region *(as proposed, with §A's definition of "enclosing")*
+- **R2** forward: target is `x.break` for an enclosing region x *(as proposed)*.
+  Under §A.5, R1 and R2 merge into a single rule and the backward/forward test
+  disappears.
 - **R3** the target label's block must enclose or equal the jump's block; `x:`
   and `x.break:` must sit in the same block *(Hole 1)*
 - **R4** names declared between `x:` and `x.break:` are dead at `x.break:`
