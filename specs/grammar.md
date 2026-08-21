@@ -411,13 +411,11 @@ function's declared return arity.
 ### 7.2 Branches and control flow
 
 ```
-branch_stmt     ::= cond_branch | jump | merge_branch
+branch_stmt     ::= cond_branch | jump
 cond_branch     ::= cond_expr "->" ( NEWLINE block | line )   // anonymous conditional
                   | cond_expr lower_name "->"                  // named conditional
 cond_expr       ::= regable ( ("is"|"isnt") | ("<"|">"|"<="|">=") ) regable
 jump            ::= lower_name "->"                            // unconditional jump to label
-merge_branch    ::= ">>"                                       // forward branch marker
-                  | "<<"                                       // matching merge point
 label_stmt      ::= lower_name ":"                             // local label (no signature)
 control_flow    ::= jump | fn_call
 ```
@@ -427,9 +425,6 @@ I is 0 ->
     "zero" print =>
 I is 5 -> ret 0         // one-liner conditional
 done->                  // unconditional jump to label 'done'
->>                      // jump forward to the matching '<<'
-    Z :: 1
-<<
 ```
 
 ### 7.3 Bounds / error check
@@ -539,7 +534,6 @@ Operator/sigil summary:
 | `:` | constant decl (upper), or label/signature (lower); right-to-left bind |
 | `=>` | function call (postfix) / param-return separator in a signature |
 | `->` | branch / jump to a label |
-| `>>` `<<` | forward branch marker / matching merge point |
 | `=` | assignment, **left to right** (source on the left) |
 | `=[ … ]` | store to memory |
 | `[ … ]` | load from memory |
