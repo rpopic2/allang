@@ -28,7 +28,6 @@ bool nullary_op(parser_context *context, regable lhs);
 bool stmt_ret_cond(parser_context *restrict context, cond_t cond, const reg_t *restrict cmp_reg, const regable *restrict against);
 bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against);
 void parse_block(parser_context *context);
-void parse_block_from(parser_context *context, int start_indent);
 bool control_flow(parser_context *context);
 void compare_branch(parser_context *context, cond_t cond, const regable *restrict lhs,
                     const regable *restrict rhs, const token_t *lhs_token, const token_t *rhs_token);
@@ -865,9 +864,6 @@ symbol_t *label_meta(parser_context *context, arr_str *out_param_names) {
 
     bool has_signature = !context->end_of_line;
     if (has_signature) {
-        indent += 4;
-        arr_mini_hashset_push(&local_ids);
-
         bool parsing_arg = true;
         while (true) {
             tok(context);
@@ -2586,29 +2582,30 @@ void end_of_block(parser_context *context) {
     printd("end of a block\n\n");
 }
 
-void parse_block_from(parser_context *context, int start_indent) {
+void parse_block(parser_context *context) {
     const token_t *cur_token = &context->cur_token;
     const src_t *const src = context->src;
-    bool check_start = true;
+    if (cur_token->data != NULL && cur_token->eob != SOB) {
+        compile_err(cur_token, "indented block expected\n");
+    }
+
+    int block_indent = -1;
     while (src->cur < src->end) {
         if (cur_token->eob == SOB) {
             start_of_block(context);
         }
 
         tok(context);
-        if (check_start) {
-            check_start = false;
-            if (cur_token->indent != start_indent + 4) {
-                compile_err(cur_token, "indented block expected\n");
-            }
-        }
         if (str_len(cur_token->id) == 0) {
             return;
+        }
+        if (block_indent < 0) {
+            block_indent = cur_token->indent;
         }
         parse(context);
 
         if (cur_token->eob == EOB) {
-            if (cur_token->indent == start_indent + 4) {
+            if (cur_token->indent == block_indent) {
                 printd("end of a block ret\n\n");
                 return;
             }
@@ -2620,10 +2617,6 @@ void parse_block_from(parser_context *context, int start_indent) {
             return;
         }
     }
-}
-
-void parse_block(parser_context *context) {
-    parse_block_from(context, context->cur_token.indent);
 }
 
 void function(src_t *src) {
@@ -2688,7 +2681,7 @@ void function(src_t *src) {
     TIMER_LABEL_STR(context->name);
 
     TIMER_START(parse_while);
-    parse_block_from(context, context->indent - 4);
+    parse_block(context);
     TIMER_END(parse_while);
 
     TIMER_START(parse_emit);
@@ -2884,12 +2877,8 @@ void import_label(parser_context* context) {
         return;
 
     if (streq(t->end - 1, ":")) {
-        bool has_signature = !context->end_of_line;
         symbol_t *symbol = label_meta(context, NULL);
         context->symbol = symbol;
-        if (has_signature) {
-            arr_mini_hashset_pop(&local_ids);
-        }
     } else if (t->end[0] == ' ') {
         symbol_t *entry = hashmap_symbol_t_tryfind(fn_ids, t->id);
         if (entry) {
@@ -3018,7 +3007,6 @@ bool directives(parser_context *context) {
     if (str_eq_lit(token_str, "declare")) {
         tok(context);
         symbol_t *symbol = label_meta(context, NULL);
-        arr_mini_hashset_pop(&local_ids);
         if (symbol == NULL)
             return true;
     } else if (str_eq_lit(token_str, NO_IMPORT_ALL_SELF)) {
