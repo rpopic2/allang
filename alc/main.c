@@ -28,6 +28,7 @@ bool nullary_op(parser_context *context, regable lhs);
 bool stmt_ret_cond(parser_context *restrict context, cond_t cond, const reg_t *restrict cmp_reg, const regable *restrict against);
 bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable against);
 void parse_block(parser_context *context);
+void parse_block_from(parser_context *context, int start_indent);
 bool control_flow(parser_context *context);
 void compare_branch(parser_context *context, cond_t cond, const regable *restrict lhs,
                     const regable *restrict rhs, const token_t *lhs_token, const token_t *rhs_token);
@@ -2585,11 +2586,11 @@ void end_of_block(parser_context *context) {
     printd("end of a block\n\n");
 }
 
-void parse_block(parser_context *context) {
+void parse_block_from(parser_context *context, int start_indent) {
     const token_t *cur_token = &context->cur_token;
-    int start_indent = cur_token->indent;
+    const src_t *const src = context->src;
     bool check_start = true;
-    while (true) {
+    while (src->cur < src->end) {
         if (cur_token->eob == SOB) {
             start_of_block(context);
         }
@@ -2613,7 +2614,16 @@ void parse_block(parser_context *context) {
             }
             end_of_block(context);
         }
+
+        if (context->ended) {
+            printd("end of a block ret\n\n");
+            return;
+        }
     }
+}
+
+void parse_block(parser_context *context) {
+    parse_block_from(context, context->cur_token.indent);
 }
 
 void function(src_t *src) {
@@ -2678,25 +2688,7 @@ void function(src_t *src) {
     TIMER_LABEL_STR(context->name);
 
     TIMER_START(parse_while);
-    while (src->cur < src->end) {
-        tok(context);
-        token_t *cur_token = &context->cur_token;
-        if (str_len(cur_token->id) == 0) {
-            continue;
-        }
-        parse(context);
-
-        if (cur_token->eob == SOB) {
-            start_of_block(context);
-        } else if (cur_token->eob == EOB) {
-            end_of_block(context);
-        }
-
-        if (context->ended) {
-            printd("end of fn\n");
-            break;
-        }
-    }
+    parse_block_from(context, context->indent - 4);
     TIMER_END(parse_while);
 
     TIMER_START(parse_emit);
