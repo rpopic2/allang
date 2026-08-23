@@ -1,51 +1,73 @@
 # comptime string?
 
 should we introduce a concept of comptime string?
-it means a string literal can be provied as a function argument that expects any of the following types:
 
-1. addr 12*u8
+`grammar.md` 1 already says numeric literals have the internal type *comptime
+int* until assigned or cast. the string rule is the same rule:
 
-X :: "Hello World"
+> a string literal of N characters has type *comptime N*u8* until assigned or
+> cast.
 
-2. 12*u8
+everything else people expect from "a string literal can be passed where a
+pointer is expected" is the array->pointer conversion in `pointers.md`, which
+is needed for `5*i32{.. 0}` anyway. it is not string-specific and is not
+repeated here.
 
-[Y] :: "Hello World" =[]
+## the two rules that are string-specific
 
-3. slice u8
+1. a string literal of N characters has type comptime `N*u8`. it is emitted
+   NUL terminated. **the NUL is part of neither the type nor the length.**
 
+2. a string literal is read only. it never coerces to a mutable (`&`) form.
+   `&String :: "Hello"` is a compile error, per `slices.md`.
+
+that is the whole proposal. the rest of this document is consequences.
+
+## consequences
+
+```
+X :: "Hello World"          // addr 11*u8
+[Y] :: "Hello World" =[]    // 11*u8, a stack copy. rule 2 does not apply
+                            //   to the copy; it is ordinary memory.
 Z :: slice u8{"Hello World"}
-assert.that Z.Length is 12 @
+assert.that Z.Length is 11 @
 
-4. raw_ptr !u8 (c string)
+strcmp "Hello World", "Bye World" =>   // raw_ptr u8, valid c string
+```
 
-strcmp "Hello World", "Bye World" =>
+`"Hello World"` is 11 characters. an earlier draft of this proposal said 12
+in every case, which is 11 + NUL, and also asserted `Z.Length is 12`. that
+put the terminator inside the logical content: `print` would emit a stray
+zero byte, `Z is "Hello World"` would compare 12 bytes against 11, and
+concatenation would embed NULs. the terminator is storage, not content.
 
+## the c string rule
 
-### to other types
+only a whole literal is NUL terminated. a sub-range is not.
 
-X2 :: X.. // now slice u8 with Length of 12
+```
+"Hello World" .puts =>      // ok
+X.1..5 .puts =>             // NOT a c string. no terminator at index 5.
+```
 
-Y2 :: Y // now Y2 is a type of addr 12*u8
-Y3 :: Y.. // now y3 is a type of slice u8 with length of 12
+so coercion to `raw_ptr u8` / `addr u8` is only a valid c string for an
+un-sliced literal. either the compiler rejects the sub-range case, or the
+cast is made explicit so the footgun is requested rather than inferred.
 
+## which decayed forms exist
 
-# types of pointers
+`tests/hello.al` declares `printf: Format addr u8` and passes a literal
+directly. so `addr u8` -- pointer to first element, no length -- is already
+the working form, and it must stay in the list; `raw_ptr u8` is the same
+coercion with unchecked subscripting on top. they are one question, separated
+only by mutability, not by anything about strings.
 
-1. addr
+## open questions
 
-equivalant to const *const in C.
-it cannot be subscripted, unless it points to an array of known length
-cannot change where it's pointing to.
-
-2. slice
-
-an addr and a length.
-can be subscripted
-cannot change where it's pointing to.
-
-3. raw_ptr
-
-equivalant to raw pointers in c.
-can be subscripted
-can change where it's pointing to.
-
+* element type: is `slice i8` or `slice u16` ever a valid target, or `u8`
+  only?
+* are identical literals deduplicated? that decides what `is` means on two
+  string pointers.
+* escapes and the `n` suffix (`"Hello World!"n` in the README) change N.
+  is N counted before or after unescaping? after, presumably -- say it.
+* heredoc strings (`""EOF`, `grammar.md` 10) presumably get the same rule.
