@@ -21,10 +21,12 @@ assert.that Z.Length is 12 @
 strcmp "Hello World", "Bye World" =>
 
 
-### array to other types
+### to other types
+
+X2 :: X.. // now slice u8 with Length of 12
 
 Y2 :: Y // now Y2 is a type of addr 12*u8
-Y3 :: Y.. // now y3 is a type of slice u8
+Y3 :: Y.. // now y3 is a type of slice u8 with length of 12
 
 
 # types of pointers
