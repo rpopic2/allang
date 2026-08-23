@@ -311,7 +311,7 @@ store_src       ::= expr
 bracket_access  ::= access_target offset? bracket_check?
 access_target   ::= reg_ref | "This" | «empty (current target / declaration target)»
 offset          ::= "*" regable                // dynamic element offset
-bracket_check   ::= "unchecked"                // skip the bounds check
+bracket_check   ::= "UNCHECKED"                // skip the bounds check
                   | check_op                   // bounds check on offset/slice access; see §7.3
 
 reg_assign      ::= expr "=" assign_target
@@ -324,13 +324,13 @@ to a named register. `=` moves **left to right** (source on the left).
 A `bracket_check` guards any access that can go out of range at runtime: a
 dynamic offset (`*Index`) into an array or slice, or a static field access
 (`.N`) into a slice (a slice's length is only known at runtime, unlike an
-array's). Exactly one of `unchecked` or a `check_op` must follow such an
+array's). Exactly one of `UNCHECKED` or a `check_op` must follow such an
 access; see §7.3 for the check actions. Examples:
 
 ```
 [Arr.0]                       // static load, array — no runtime check needed
 [Arr * Index ! ret 99]        // dynamic load, checked, return 99 on failure
-[Arr * Index unchecked]       // dynamic load, no check
+[Arr * Index UNCHECKED]       // dynamic load, no check
 [S.3 ! ret]                   // slice static-field load, checked (bare ret)
 [S * I ! loop.break->]        // dynamic load, checked, branch to a label on failure
 i32{7} =[Buf * Index ! ret]   // dynamic store, checked
@@ -446,7 +446,7 @@ when the enclosing function's return type itself carries a `check`, §5);
 
 The same `check_op` also appears **inside** a load or store's `[ … ]`
 (§6.3), where it guards a dynamic offset or a slice's static field access —
-`unchecked` opts out there instead. Outside `[ … ]`, `check_op` guards a
+`UNCHECKED` opts out there instead. Outside `[ … ]`, `check_op` guards a
 dynamic range (`Arr * Begin..`) or any `checkable` value, such as a call
 result whose declared return type carries a `check` (§5).
 
@@ -522,7 +522,7 @@ ret 0
 ## 9. Reserved words and symbol glossary
 
 Keywords recognized by `main.c`: `ret`, `eret`, `struct`, `is`, `isnt`, `shl`,
-`addr`, `slice`, `true`, `false`, `unchecked`, `This`, plus the fundamental
+`addr`, `slice`, `true`, `false`, `UNCHECKED`, `This`, plus the fundamental
 type names (`u8`…`usize`, `i8`…`isize`) and the directive words after `#`
 (`declare`, `no_import_all_self`, `compile_all`).
 

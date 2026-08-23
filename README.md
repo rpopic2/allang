@@ -13,7 +13,7 @@
 - performance tuning means reading the assembly anyway and hoping the compiler emits what you want; allang lets you write it directly.
 - languages like c++ and rust are so complex that learning how computers actually work is simpler, and pays off more.
 - it targets only x86_64, aarch64, linux, macos and windows, which makes abstracting real hardware far easier. (no ancient systems like 10-bit machines.)
-- footguns are allowed, but must be requested explicitly. (use `unchecked` to remove bounds checking, `undefined` to use an uninitialized value.)
+- footguns are allowed, but must be requested explicitly. (use `UNCHECKED` to remove bounds checking, `undefined` to use an uninitialized value.)
 - the c compilation model reflects the hardware and constraints of decades ago; we need a language that respects modern hardware.
 - writing a simple program is easy, like python. spin up a shell script in seconds.
 - ergonomic design: type less, type easy.

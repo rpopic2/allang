@@ -157,7 +157,7 @@ contract, so the case-3 decision moves from finalization to emit time.
   rewrite. if the body then introduces a call, a named register, or a local, that is a
   compile error -- a `leaf` fn that needs a frame is rejected. this also makes it a useful
   explicit perf guarantee for hot code, matching the explicit-marker ethos
-  (`undefined` / `unreachable` / `unchecked`).
+  (`undefined` / `unreachable` / `UNCHECKED`).
 * **un-annotated functions are unaffected.** they keep case 1 (or the optional
   finalize-time inference above). the keyword only opts a function into guaranteed,
   emit-time case 3.

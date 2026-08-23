@@ -607,7 +607,7 @@ bool checkop(parser_context *restrict context, const reg_t *restrict index_reg, 
         const token_t *cur_token = &context->cur_token;
     const str *cur_str = &context->cur_token.id;
 
-    if (str_eq_lit(*cur_str, "unchecked"))
+    if (str_eq_lit(*cur_str, "UNCHECKED"))
         return false;
 
     if (!str_eq(*cur_str, STR("!"))) {

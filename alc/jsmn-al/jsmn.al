@@ -207,7 +207,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
 
         Toksuper :: [Parser.Toksuper]
         Toksuper isnt -1 ->
-            T :: Tokens * Toksuper unchecked
+            T :: Tokens * Toksuper UNCHECKED
             [T.Size] + 1 =[T.Size]
 
         [C] is '{' ->
@@ -234,7 +234,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
         I :: [Parser.Toknext] - 1
         I < 0 loop2.break->
 
-        Token :: Tokens * I unchecked
+        Token :: Tokens * I UNCHECKED
         [Token.Start] is -1 ->
             [Token.End] is -1 ->
                 [Token.Type] is Type ->
@@ -253,7 +253,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
         I - 1 =I
         loop3->
         loop3.break:
-            Tokens * I unchecked =Token
+            Tokens * I UNCHECKED =Token
         I - 1 =I
         loop2->
         loop2.break:
@@ -269,7 +269,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
         Toksuper :: [Parser.Toksuper]
         Toksuper isnt -1 ->
             Tokens.Length isnt 0 ->
-                Tmp :: Tokens * Toksuper unchecked
+                Tmp :: Tokens * Toksuper UNCHECKED
                 [Tmp.Size] + 1 =[Tmp.Size]
             0
         switch.break->
@@ -288,7 +288,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
         Tokens.Length is 0 ->
             Toksuper :: [Parser.Toksuper]
             Toksuper isnt -1 ->
-                Tmp :: Tokens * Toksuper unchecked
+                Tmp :: Tokens * Toksuper UNCHECKED
                 [Tmp.Type] isnt JSMN_ARRAY ->
                     [Tmp.Type] isnt JSMN_OBJECT dummy_loop->
                 0
@@ -298,7 +298,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
         I :: [Parser.Toknext] - 1
         I < 0 dummy_loop.break->
 
-        Tmp :: Tokens * I unchecked
+        Tmp :: Tokens * I UNCHECKED
         [Tmp.Type] isnt JSMN_ARRAY ->
             [Tmp.Type] isnt JSMN_OBJECT dummy_loop->
 
@@ -322,7 +322,7 @@ jsmn_parse: Parser addr jsmn_parser, Js slice !u8, Tokens !slice jsmntok => i32
         Toksuper :: [Parser.Toksuper]
         Toksuper isnt -1 ->
             Tokens.Length isnt 0 ->
-                Tmp :: Tokens * Toksuper unchecked
+                Tmp :: Tokens * Toksuper UNCHECKED
                 [Tmp.Size] + 1 =[Tmp.Size]
             0
         0
