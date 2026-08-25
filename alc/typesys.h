@@ -311,6 +311,19 @@ typedef struct symbol {
 ARR_GENERIC(target, MAX_BLOCK_DEPTH)
 ARR_GENERIC(u8, MAX_BLOCK_DEPTH)
 
+// a lexical block that a `<name>.break->` branch can target. the outermost
+// scope of a function is the function itself, so `ret` is a break out of it
+typedef struct block_scope {
+    str name;
+    // the label as passed to emit_label(): "break" for a function, "loop.break"
+    // for a named block, "block.<n>.break" for an anonymous one
+    str break_label;
+    u8 body_indent;
+    bool break_used;
+    bool break_emitted;
+} block_scope;
+ARR_GENERIC(block_scope, MAX_BLOCK_DEPTH)
+
 typedef struct {
     str name;
     str type_name;
@@ -333,7 +346,6 @@ typedef struct parser_context {
     u16 unnamed_labels;
     bool calls_fn;
     bool ended;
-    bool has_branched_ret;
     bool returns_on_exit;
     u8 indent;
     u8 nreg_count;
@@ -348,6 +360,7 @@ typedef struct parser_context {
     str check_fail_label;
     token_t cur_token;
     arr_target targets;
+    arr_block_scope blocks;
     arr_u8 nreg_mark;
     symbol_t *symbol;
     stack_slot_t stack_slots[MAX_STACK_SLOTS];

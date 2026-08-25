@@ -406,7 +406,9 @@ ret_stmt        ::= "ret" expr_sequence?
 ```
 
 `ret` jumps to the function's return block. Its operand count must match the
-function's declared return arity.
+function's declared return arity. A function is itself a block, so `ret` is
+exactly `<fn_name>.break->` (see §7.2); both land on the function's `break`
+label, just before the epilogue.
 
 ### 7.2 Branches and control flow
 
@@ -426,6 +428,32 @@ I is 0 ->
 I is 5 -> ret 0         // one-liner conditional
 done->                  // unconditional jump to label 'done'
 ```
+
+#### Break labels
+
+Every block ends at a **break label**, which a branch reaches with
+`<block>.break->`. The label is generated where the block ends, and only when
+some branch targets it.
+
+A block is named by the label that opens it. A label followed by an indented
+block owns that block; a label with no indented block after it is a plain jump
+target and owns nothing, so its `.break` must be written by hand. Writing the
+label explicitly is always allowed and suppresses the generated one.
+
+```
+loop:
+    [Count] + 1 =[Count]
+    [Count] >= 3 loop.break->     // branches out of the block called 'loop'
+    loop->
+                                  // <- 'loop.break' is generated here
+ret [Count]
+```
+
+`<block>.break` resolves to the innermost enclosing block of that name, so an
+inner block can break out of an outer one. A block with no name of its own —
+the body of an anonymous conditional — breaks to `block.<n>.break`, where `n`
+counts anonymous blocks within the function; the conditional's own skip branch
+is what targets it.
 
 ### 7.3 Bounds / error check
 

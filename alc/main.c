@@ -66,6 +66,10 @@ const_hashmap_t const_ids;
 static char symbol_arena_buf[256 * 1024];
 static allocator symbol_arena;
 
+// generated label names are unaligned bytes, so they get an arena of their own
+static char label_arena_buf[256 * 1024];
+static allocator label_arena;
+
 // [ Lexer ]
 
 inline static bool is_id(char c) {
@@ -400,6 +404,105 @@ bool is_label_name(str t) {
     return true;
 }
 
+// [ Block Scopes ]
+
+#define BREAK_SUFFIX ".break"
+#define BREAK_SUFFIX_LEN (sizeof BREAK_SUFFIX - 1)
+
+static str label_arena_str(const char *data, size_t len) {
+    char *const buf = allocator_alloc_undefined(&label_arena, len);
+    memcpy(buf, data, len);
+    return (str){ .data = buf, .end = buf + len };
+}
+
+static str named_break_label(str block_name) {
+    const size_t len = str_len(block_name);
+    char *const buf = allocator_alloc_undefined(&label_arena, len + BREAK_SUFFIX_LEN);
+    memcpy(buf, block_name.data, len);
+    memcpy(buf + len, BREAK_SUFFIX, BREAK_SUFFIX_LEN);
+    return (str){ .data = buf, .end = buf + len + BREAK_SUFFIX_LEN };
+}
+
+static str anonymous_break_label(u16 index) {
+    char buf[32];
+    const int len = snprintf(buf, sizeof buf, "block.%u" BREAK_SUFFIX, index);
+    return label_arena_str(buf, (size_t)len);
+}
+
+static block_scope *block_push(parser_context *context, str name, str break_label, u8 body_indent) {
+    return arr_block_scope_push(&context->blocks, (block_scope){
+        .name = name,
+        .break_label = break_label,
+        .body_indent = body_indent,
+    });
+}
+
+// the function's own scope, which `ret` breaks out of
+static block_scope *block_fn(parser_context *context) {
+    if (arr_block_scope_len(&context->blocks) == 0)
+        return NULL;
+    return &context->blocks.data[0];
+}
+
+// resolves `<name>.break` to the innermost enclosing block called <name>
+static block_scope *block_find_break(parser_context *context, str target) {
+    if (str_len(target) <= BREAK_SUFFIX_LEN)
+        return NULL;
+    if (memcmp(target.end - BREAK_SUFFIX_LEN, BREAK_SUFFIX, BREAK_SUFFIX_LEN) != 0)
+        return NULL;
+
+    const str name = { .data = target.data, .end = target.end - BREAK_SUFFIX_LEN };
+    const block_scope *const bottom = context->blocks.data;
+    for (block_scope *it = context->blocks.cur; it-- > bottom;) {
+        if (str_eq(it->name, name))
+            return it;
+    }
+    return NULL;
+}
+
+// out is left alone when target is not a break out of an enclosing block
+static bool block_break_target(parser_context *context, str target, str *out) {
+    block_scope *const scope = block_find_break(context, target);
+    if (scope == NULL)
+        return false;
+    scope->break_used = true;
+    *out = scope->break_label;
+    return true;
+}
+
+static str block_fn_break(parser_context *context) {
+    block_scope *const scope = block_fn(context);
+    if (scope == NULL)
+        return STR("break");
+    scope->break_used = true;
+    return scope->break_label;
+}
+
+static void block_pop(parser_context *context) {
+    const block_scope *const scope = arr_block_scope_top(&context->blocks);
+    if (scope == NULL)
+        return;
+    if (scope->break_used && !scope->break_emitted)
+        emit_label(context->name, scope->break_label, 0);
+    arr_block_scope_pop(&context->blocks);
+}
+
+// a dedent past a block's body ends it, which is where its break label goes.
+// the function's own scope outlives every dedent; block_close_all ends it
+static void block_close_to_indent(parser_context *context, u8 new_indent) {
+    while (arr_block_scope_len(&context->blocks) > 1) {
+        const block_scope *const top = arr_block_scope_top(&context->blocks);
+        if (top->body_indent <= new_indent)
+            return;
+        block_pop(context);
+    }
+}
+
+static void block_close_all(parser_context *context) {
+    while (arr_block_scope_len(&context->blocks) != 0)
+        block_pop(context);
+}
+
 // [ Type System & Safety Features ]
 
 const char *fund_type_names[] = {
@@ -620,10 +723,10 @@ bool checkop(parser_context *restrict context, const reg_t *restrict index_reg, 
 
     if (stmt_ret_cond(context, cond, index_reg, against)) {
         context->check_fail_fn = context->symbol->name;
-        context->check_fail_label = STR("ret");
+        context->check_fail_label = block_fn_break(context);
     } else if (stmt_eret_cond(context, cond, *index_reg, *against)) {
         context->check_fail_fn = context->symbol->name;
-        context->check_fail_label = STR("ret");
+        context->check_fail_label = block_fn_break(context);
     } else if (streq(cur_str->end - 2, "->")) {
         expr_cmp(index_reg, against, cond);
         named_bcond(context, cond);
@@ -941,6 +1044,11 @@ void stmt_label(parser_context *context) {
 
     if (!symbol->is_fn && context->symbol && !str_empty(&symbol->name)) {
         emit_label(context->symbol->name, symbol->name, 0);
+        block_scope *const explicit_break = block_find_break(context, symbol->name);
+        if (explicit_break)
+            explicit_break->break_emitted = true;
+        else if (context->cur_token.eob == SOB)
+            block_push(context, symbol->name, named_break_label(symbol->name), indent);
         return;
     }
 
@@ -2238,8 +2346,7 @@ bool stmt_ret(parser_context *context) {
         return false;
     context->returns_on_exit = true;
     if (!context->ended) {
-        context->has_branched_ret = true;
-        emit_branch(context->symbol->name, STR("ret"), 0);
+        emit_branch(context->symbol->name, block_fn_break(context), 0);
     }
     return true;
 }
@@ -2252,9 +2359,8 @@ bool stmt_ret_cond(parser_context *restrict context, cond_t cond, const reg_t *r
         return false;
 
     expr_cmp(cmp_reg, against, cond);
-    
-    context->has_branched_ret = true;
-    emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
+
+    emit_branch_cond(cond, context->symbol->name, block_fn_break(context), 0);
     return true;
 }
 
@@ -2271,9 +2377,8 @@ bool stmt_eret(parser_context *context) {
     }
     
     emit_mov(ret, decl.amount);
-    context->has_branched_ret = true;
     context->returns_on_exit = true;
-    emit_branch(context->symbol->name, STR("ret"), 0);
+    emit_branch(context->symbol->name, block_fn_break(context), 0);
     return true;
 }
 
@@ -2293,8 +2398,7 @@ bool stmt_eret_cond(parser_context *context, cond_t cond, reg_t cmp_reg, regable
 
     expr_cmp(&cmp_reg, &against, cond);
 
-    context->has_branched_ret = true;
-    emit_branch_cond(cond, context->symbol->name, STR("ret"), 0);
+    emit_branch_cond(cond, context->symbol->name, block_fn_break(context), 0);
     return true;
 }
 
@@ -2605,6 +2709,7 @@ void parse_block(parser_context *context) {
         parse(context);
 
         if (cur_token->eob == EOB) {
+            block_close_to_indent(context, indent);
             if (cur_token->indent == block_indent) {
                 printd("end of a block ret\n\n");
                 return;
@@ -2652,6 +2757,7 @@ void function(src_t *src) {
     }
 
     arr_target_init(&context->targets);
+    arr_block_scope_init(&context->blocks);
 
     u8 label_indent = 0;
     if (!is_main) {
@@ -2675,6 +2781,7 @@ void function(src_t *src) {
     }
 
     context->indent = indent;
+    block_push(context, context->name, STR("break"), indent);
     printd(CSI_GREEN"\n--- start of label: ");
     str_printd(context->name);
     printd(CSI_RESET);
@@ -2689,9 +2796,7 @@ void function(src_t *src) {
         return;
     if (!context->symbol->is_fn)
         return;
-    if (context->has_branched_ret) {
-        emit_label(context->name, STR("ret"), 0);
-    }
+    block_close_all(context);
 
     if (do_airity_check && !context->returns_on_exit) {
         if (context->symbol->ret_airity != 0) {
@@ -2713,6 +2818,7 @@ bool control_flow(parser_context *context) {
 
     if (streq(token->end - 2, "->")) {
         str label = {.data = token->data, .end = token->end - 2};
+        block_break_target(context, label, &label);
         emit_branch(context->symbol->name, label, 0);
     } else if (isalnum(token->end[-1]) || token->end[-1] == '_') {
         fn_call(context);
@@ -2772,9 +2878,11 @@ void named_bcond(parser_context *context, cond_t cond) {
         compile_err(&jump_target, "-> expected at the end of a conditional branch");
     }
     jump_target.end -= 2;
+    str label = jump_target.id;
+    block_break_target(context, label, &label);
     context->check_fail_fn = context->name;
-    context->check_fail_label = jump_target.id;
-    emit_branch_cond(cond, context->name, jump_target.id, 0);
+    context->check_fail_label = label;
+    emit_branch_cond(cond, context->name, label, 0);
 }
 
 void anonymous_bcond_block(parser_context *context) {
@@ -2801,13 +2909,12 @@ void anonymous_bcond_block(parser_context *context) {
 }
 
 void anonymous_bcond(parser_context *context, cond_t cond) {
-    str name = STR("lbb");
-    int index = context->unnamed_labels++;
-    emit_branch_cond(cond, context->name, name, index);
+    const str name = anonymous_break_label(context->unnamed_labels++);
+    emit_branch_cond(cond, context->name, name, 0);
 
     anonymous_bcond_block(context);
 
-    emit_label(context->name, name, index);
+    emit_label(context->name, name, 0);
 }
 
 void compare_branch(parser_context *context, cond_t cond, const regable *restrict lhs,
@@ -3095,6 +3202,7 @@ int main(int argc, const char *argv[]) {
     emit_init();
     register_fund_types();
     allocator_init(&symbol_arena, symbol_arena_buf, sizeof symbol_arena_buf);
+    allocator_init(&label_arena, label_arena_buf, sizeof label_arena_buf);
     TIMER_START(clock_parse_all);
 
     src_t src = read_source(source_name);
